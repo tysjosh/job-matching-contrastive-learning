@@ -1,0 +1,101 @@
+{
+  "enhanced_validation": {
+    "enabled": true,
+    "similarity_thresholds": {
+      "upward": {
+        "min": 0.5,
+        "max": 0.8
+      },
+      "downward": {
+        "min": 0.4,
+        "max": 0.85
+      }
+    },
+    "quality_gates": {
+      "min_transformation_quality": 0.4,
+      "min_metadata_consistency": 0.7,
+      "min_technical_preservation": 0.8
+    },
+    "diversity_requirements": {
+      "min_pairwise_distance": 0.3,
+      "max_collapse_risk": 0.2,
+      "min_diversity_threshold": 0.3
+    },
+    "length_constraints": {
+      "max_length_ratio": 2.0
+    }
+  },
+  "metadata_synchronization": {
+    "enabled": true,
+    "experience_level_alignment": true,
+    "skill_proficiency_alignment": true,
+    "job_title_coherence_check": true,
+    "auto_correction": true
+  },
+  "paraphrasing": {
+    "enabled": true,
+    "preserve_technical_terms": true,
+    "min_diversity_score": 0.3,
+    "max_semantic_drift": 0.8,
+    "career_level_aware": true
+  },
+  "transformation_parameters": {
+    "upward_transformer": {
+      "impact_phrase_variety": 10,
+      "leadership_context_probability": 0.7,
+      "technical_term_preservation": true,
+      "skill_enhancement_strategy": "gradual",
+      "enable_paraphrasing": true
+    },
+    "downward_transformer": {
+      "learning_context_variety": 8,
+      "support_language_probability": 0.8,
+      "skill_reduction_strategy": "gradual",
+      "preserve_core_competencies": true,
+      "enable_paraphrasing": true
+    }
+  },
+  "fallback_handling": {
+    "enabled": true,
+    "max_attempts": 3,
+    "progressive_relaxation": true,
+    "exclude_on_failure": true,
+    "diversity_tracking": true
+  },
+  "quality_vs_speed_profiles": {
+    "high_quality": {
+      "enhanced_validation": true,
+      "strict_thresholds": true,
+      "comprehensive_metadata_sync": true,
+      "max_fallback_attempts": 3,
+      "diversity_monitoring": true,
+      "paraphrasing_enabled": true,
+      "paraphrasing_diversity_target": 0.4
+    },
+    "balanced": {
+      "enhanced_validation": true,
+      "moderate_thresholds": true,
+      "basic_metadata_sync": true,
+      "max_fallback_attempts": 2,
+      "diversity_monitoring": true,
+      "paraphrasing_enabled": true,
+      "paraphrasing_diversity_target": 0.3
+    },
+    "fast": {
+      "enhanced_validation": false,
+      "relaxed_thresholds": true,
+      "minimal_metadata_sync": true,
+      "max_fallback_attempts": 1,
+      "diversity_monitoring": false,
+      "paraphrasing_enabled": false,
+      "paraphrasing_diversity_target": 0.2
+    }
+  },
+  "reporting": {
+    "detailed_quality_metrics": true,
+    "batch_level_validation": true,
+    "embedding_diversity_monitoring": true,
+    "transformation_statistics": true,
+    "failure_analysis": true
+  }
+}

@@ -1,0 +1,165 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyCharm
+.idea/
+
+# Large data files (keep small config/sample files)
+# JSONL files - typically contain large datasets
+*.jsonl
+augmented_combined_data*.jsonl
+matched_datasets_pairs_full.jsonl
+processed_combined_data.jsonl
+training_small_with_uri.jsonl
+dataset/preprocessed_resumes.jsonl
+dataset/processed_jobs.jsonl
+preprocess/processed_combined_enriched_data.jsonl
+dataset/Indian_guy_dataset_final.csv
+dataset/Indian_guy_dataset_final.csv.backup
+dataset/indian_guy_cs_filtered.csv*
+dataset/non_ict_samples_for_Indian_guy_dataset_matched_wit_jobhop.csv
+
+# Entire folders to ignore
+.kiro/
+dataset/
+docs/
+preprocess/
+
+# Model files
+*.model
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.weights
+*.h5
+
+# Training outputs
+logs/
+checkpoints/
+models/
+experiments/
+wandb/
+mlruns/
+
+# Compressed files
+*.zip
+*.tar.gz
+*.tar.bz2
+*.rar
+*.7z
+colab_package.tar.gz
+
+# Colab files (exclude all except colab_data_prep.py and config files)
+colab_setup.py
+colab_training.py
+colab_package/
+Career_Progression_ML_Pipeline_Colab.ipynb
+colab_training_notebook.ipynb
+colab_data_prep_backup.py
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Configuration files with secrets
+secrets.json
+*.env
+.env.local
+.env.*.local
+
+# Cache
+.cache/
+*.cache
+
+# Coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Documentation builds
+docs/_build/
+
+# Backup files
+*.backup
+*.pre_shuffle_backup
+*_backup.py
+
+# Debug and diagnostic files
+diagnostic.log
+diagnostic/
+diagnostic_output/
+debug_*.py
+fix_*.py
+
+# Development/testing scripts (not needed for training)
+analyze_matches.py
+run_loss_validation.py
+match_datasets_fixed.py
+
+# Training diagnostic outputs
+training_output/diagnostic_report.json
+training_output/training_diagnostics.png
+training_output/*.png
+
+# Documentation (can be excluded if not needed for training)
+PIPELINE_STRATEGY.md
+PIPELINE_USAGE_GUIDE.md
+# TRAINING_INTEGRATION_GUIDE.md

@@ -1,0 +1,68 @@
+# Skill Proficiency Mappings for Metadata Synchronization
+# Used by MetadataSynchronizer
+
+proficiency_levels:
+  beginner:
+    keywords:
+      - basic
+      - beginner
+      - learning
+      - familiar
+      - introductory
+      - novice
+    experience_indicators:
+      - new to
+      - learning
+      - getting started with
+      - basic understanding
+    years_range:
+      min: 0
+      max: 1
+
+  intermediate:
+    keywords:
+      - intermediate
+      - proficient
+      - experienced
+      - solid
+      - competent
+    experience_indicators:
+      - working knowledge
+      - hands-on experience
+      - proficient in
+    years_range:
+      min: 1
+      max: 3
+
+  advanced:
+    keywords:
+      - advanced
+      - expert
+      - deep
+      - extensive
+      - strong
+      - skilled
+    experience_indicators:
+      - extensive experience
+      - deep knowledge
+      - advanced skills
+    years_range:
+      min: 3
+      max: 7
+
+  expert:
+    keywords:
+      - expert
+      - mastery
+      - thought leader
+      - architect
+      - guru
+      - specialist
+    experience_indicators:
+      - expert in
+      - mastery of
+      - thought leader
+      - architect
+    years_range:
+      min: 7
+      max: 15

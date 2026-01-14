@@ -1,0 +1,99 @@
+# Transformation Patterns for Metadata Extraction
+# Used by MetadataSynchronizer for regex-based extraction
+
+# Patterns for extracting years of experience
+years_experience:
+  - '(\d+)\+?\s*years?\s+(?:of\s+)?experience'
+  - '(\d+)\+?\s*years?\s+(?:in|with)'
+  - 'over\s+(\d+)\s+years?'
+  - 'more\s+than\s+(\d+)\s+years?'
+
+# Patterns for extracting skill proficiency
+skill_proficiency:
+  - '(expert|advanced|proficient|experienced|beginner|basic)\s+(?:in|with|at)'
+  - '(deep|extensive|solid|basic)\s+(?:knowledge|experience|understanding)'
+  - '(mastery|expertise)\s+(?:in|of|with)'
+
+# Patterns for extracting seniority indicators
+seniority_indicators:
+  - '(senior|lead|principal|junior|entry)\s+(?:developer|engineer|analyst)'
+  - '(sr\.|jr\.)\s*(?:developer|engineer)'
+  - '(staff|principal|senior|junior)\s+(?:software|data|systems)'
+
+# Domain keywords for classification
+domain_keywords:
+  software_development:
+    - developer
+    - engineer
+    - programming
+    - coding
+    - software
+    - web
+    - mobile
+    - frontend
+    - backend
+    - fullstack
+    - javascript
+    - python
+    - java
+    - react
+    - angular
+    - vue
+    - node
+    - api
+    - microservices
+  data_science:
+    - data scientist
+    - data analyst
+    - machine learning
+    - ml
+    - ai
+    - analytics
+    - statistics
+    - modeling
+    - python
+    - r
+    - tensorflow
+    - pytorch
+    - pandas
+    - numpy
+    - visualization
+  cybersecurity:
+    - security
+    - cybersecurity
+    - infosec
+    - penetration
+    - vulnerability
+    - threat
+    - compliance
+    - soc
+    - siem
+    - firewall
+    - encryption
+    - authentication
+  systems_administration:
+    - sysadmin
+    - system administrator
+    - devops
+    - infrastructure
+    - linux
+    - windows
+    - networking
+    - cloud
+    - aws
+    - azure
+    - gcp
+    - kubernetes
+    - docker
+    - terraform
+  product_management:
+    - product manager
+    - product owner
+    - roadmap
+    - stakeholder
+    - agile
+    - scrum
+    - user research
+    - requirements
+    - backlog
+    - sprint

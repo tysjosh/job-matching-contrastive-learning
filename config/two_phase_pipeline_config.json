@@ -1,0 +1,82 @@
+{
+  "data_splitting": {
+    "strategy": "sequential",
+    "ratios": {
+      "train": 0.7,
+      "validation": 0.15,
+      "test": 0.15
+    },
+    "seed": 42,
+    "min_samples_per_split": 1,
+    "validate_splits": true,
+    "output_dir": "data_splits"
+  },
+  "training_config_path": "config/colab_enhanced_training_config.json",
+  "output_base_dir": "two_phase_experiments",
+  "experiment_name": "two_phase_career_learning",
+  "device": "cpu",
+  "two_phase_training": {
+    "enabled": true,
+    "phase1_config_path": "config/phase1_pretraining_config.json",
+    "phase2_config_path": "config/phase2_finetuning_config.json",
+    "phase1_output_dir": "phase1_pretraining",
+    "phase2_output_dir": "phase2_finetuning",
+    "phase1_data_strategy": "augmentation_only",
+    "phase2_data_strategy": "labeled_only",
+    "checkpoint_save_strategy": "best_only"
+  },
+  "early_stopping": {
+    "enabled": true,
+    "patience": 5,
+    "metric": "contrastive_loss",
+    "mode": "min",
+    "min_delta": 0.001,
+    "restore_best_weights": true
+  },
+  "checkpointing": {
+    "save_best": true,
+    "save_last": true,
+    "save_frequency": 1,
+    "metric": "validation_contrastive_accuracy",
+    "mode": "max"
+  },
+  "validation": {
+    "frequency": "every_epoch",
+    "frequency_value": 1,
+    "metrics": [
+      "contrastive_accuracy",
+      "precision",
+      "recall",
+      "f1_score",
+      "auc_roc",
+      "precision_at_k",
+      "recall_at_k",
+      "map_score",
+      "ndcg_score",
+      "embedding_quality",
+      "classification_accuracy"
+    ],
+    "save_predictions": true,
+    "generate_plots": true,
+    "batch_size": null
+  },
+  "testing": {
+    "load_best_model": true,
+    "comprehensive_report": true,
+    "save_embeddings": false,
+    "save_predictions": true,
+    "error_analysis": true,
+    "generate_visualizations": true
+  },
+  "reporting": {
+    "formats": [
+      "json",
+      "html"
+    ],
+    "include_visualizations": true,
+    "include_model_analysis": true,
+    "include_training_history": true,
+    "include_hyperparameters": true,
+    "output_dir": "pipeline_reports"
+  }
+}

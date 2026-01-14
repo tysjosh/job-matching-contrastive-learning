@@ -1,0 +1,288 @@
+# Learning Phrases by Domain and Experience Level
+# Used by DownwardTransformer for adding learning/support language
+
+# Domain-specific learning phrases
+by_domain:
+  software_development:
+    entry:
+      - under senior developer guidance
+      - as part of the development team
+      - while learning coding best practices
+      - following established development procedures
+      - with mentorship from experienced developers
+      - as a junior team member
+      - under technical supervision
+      - through hands-on programming experience
+      - with continuous learning in software development
+      - following team coding standards
+    junior:
+      - collaborating with senior developers
+      - contributing to team development efforts
+      - applying learned programming principles
+      - following software development methodologies
+      - with guidance from technical leads
+      - as an active team contributor
+      - with increasing technical independence
+      - through practical software development experience
+      - while expanding technical knowledge
+      - adhering to established development practices
+
+  data_science:
+    entry:
+      - under data science mentor guidance
+      - as part of the analytics team
+      - while learning statistical methods
+      - following data analysis procedures
+      - with mentorship from senior data scientists
+      - as a junior analyst
+      - under analytical supervision
+      - through hands-on data exploration
+      - with continuous learning in data science
+      - following data quality standards
+    junior:
+      - collaborating with experienced data scientists
+      - contributing to analytical projects
+      - applying learned statistical techniques
+      - following data science methodologies
+      - with guidance from analytics leads
+      - as an active research contributor
+      - with growing analytical independence
+      - through practical data science experience
+      - while expanding statistical knowledge
+      - adhering to established analytical practices
+
+  cybersecurity:
+    entry:
+      - under security team guidance
+      - as part of the cybersecurity team
+      - while learning security protocols
+      - following established security procedures
+      - with mentorship from security professionals
+      - as a junior security analyst
+      - under security supervision
+      - through hands-on security monitoring
+      - with continuous learning in cybersecurity
+      - following security compliance standards
+    junior:
+      - collaborating with senior security analysts
+      - contributing to security initiatives
+      - applying learned security principles
+      - following cybersecurity frameworks
+      - with guidance from security leads
+      - as an active security contributor
+      - with increasing security expertise
+      - through practical security experience
+      - while expanding security knowledge
+      - adhering to established security practices
+
+  systems_administration:
+    entry:
+      - under system administrator guidance
+      - as part of the infrastructure team
+      - while learning system administration
+      - following established operational procedures
+      - with mentorship from senior administrators
+      - as a junior system administrator
+      - under operational supervision
+      - through hands-on system management
+      - with continuous learning in infrastructure
+      - following operational standards
+    junior:
+      - collaborating with experienced administrators
+      - contributing to infrastructure projects
+      - applying learned system administration principles
+      - following operational methodologies
+      - with guidance from infrastructure leads
+      - as an active operations contributor
+      - with growing operational independence
+      - through practical infrastructure experience
+      - while expanding system knowledge
+      - adhering to established operational practices
+
+  product_management:
+    entry:
+      - under product manager guidance
+      - as part of the product team
+      - while learning product development
+      - following established product procedures
+      - with mentorship from senior product managers
+      - as a junior product analyst
+      - under product supervision
+      - through hands-on product experience
+      - with continuous learning in product management
+      - following product development standards
+    junior:
+      - collaborating with experienced product managers
+      - contributing to product initiatives
+      - applying learned product principles
+      - following product development methodologies
+      - with guidance from product leads
+      - as an active product contributor
+      - with growing product expertise
+      - through practical product experience
+      - while expanding product knowledge
+      - adhering to established product practices
+
+# Context-aware support phrases
+by_context:
+  technical_implementation:
+    - assisted in implementing
+    - contributed to developing
+    - participated in building
+    - helped implement
+    - supported the development of
+    - worked under guidance to create
+    - collaborated on coding
+    - learned to develop
+    - gained experience implementing
+    - was mentored in building
+  problem_solving:
+    - assisted in troubleshooting
+    - contributed to resolving
+    - participated in debugging
+    - helped solve
+    - supported problem resolution
+    - worked under guidance to fix
+    - collaborated on investigating
+    - learned to diagnose
+    - gained experience resolving
+    - was trained in troubleshooting
+  project_management:
+    - assisted in coordinating
+    - contributed to planning
+    - participated in organizing
+    - helped manage
+    - supported project execution
+    - worked under supervision on
+    - collaborated on scheduling
+    - learned to coordinate
+    - gained experience managing
+    - was guided in organizing
+  research_analysis:
+    - assisted in researching
+    - contributed to analyzing
+    - participated in investigating
+    - helped examine
+    - supported data analysis
+    - worked under guidance to study
+    - collaborated on research
+    - learned to analyze
+    - gained experience researching
+    - was trained in evaluation
+  team_collaboration:
+    - assisted team members with
+    - contributed to team efforts on
+    - participated in team activities for
+    - helped colleagues with
+    - supported team initiatives in
+    - worked closely with team on
+    - collaborated with peers on
+    - learned from team members about
+    - gained experience working with team on
+    - was mentored by team in
+  general:
+    - assisted in
+    - contributed to
+    - participated in
+    - helped with
+    - supported the
+    - worked under guidance on
+    - collaborated on
+    - learned to
+    - gained experience in
+    - was trained in
+
+# Learning enhancement phrases by level and type
+enhancement:
+  entry_level:
+    technical:
+      - while learning programming fundamentals
+      - under senior developer mentorship
+      - following coding best practices guidance
+      - with continuous technical learning
+      - through hands-on development training
+      - while building foundational coding skills
+      - under technical supervision and guidance
+      - with step-by-step learning approach
+      - through structured development program
+      - while gaining practical coding experience
+    analytical:
+      - while learning analytical methods
+      - under data analysis mentorship
+      - following research methodology guidance
+      - with continuous analytical learning
+      - through hands-on analysis training
+      - while building foundational research skills
+      - under analytical supervision and guidance
+      - with step-by-step analysis approach
+      - through structured research program
+      - while gaining practical analysis experience
+    collaborative:
+      - while learning team dynamics
+      - under team leadership mentorship
+      - following collaboration best practices
+      - with continuous teamwork learning
+      - through hands-on team participation
+      - while building interpersonal skills
+      - under team supervision and guidance
+      - with supportive team environment
+      - through structured team integration
+      - while gaining collaborative experience
+  junior_level:
+    technical:
+      - while developing technical expertise
+      - with senior developer collaboration
+      - following established development practices
+      - with growing technical independence
+      - through progressive skill development
+      - while expanding programming knowledge
+      - under technical mentorship and review
+      - with increasing code complexity
+      - through practical development challenges
+      - while strengthening technical foundation
+    analytical:
+      - while developing analytical expertise
+      - with senior analyst collaboration
+      - following established research practices
+      - with growing analytical independence
+      - through progressive analysis skills
+      - while expanding research knowledge
+      - under analytical mentorship and review
+      - with increasing data complexity
+      - through practical research challenges
+      - while strengthening analytical foundation
+    collaborative:
+      - while developing leadership skills
+      - with cross-functional team collaboration
+      - following established team practices
+      - with growing team independence
+      - through progressive responsibility
+      - while expanding collaboration knowledge
+      - under team mentorship and guidance
+      - with increasing project involvement
+      - through practical team challenges
+      - while strengthening team contribution
+
+# Fallback phrases when domain-specific not available
+fallback:
+  - under senior guidance
+  - as part of the team
+  - while learning best practices
+  - following established procedures
+  - with mentorship from experienced colleagues
+  - as a junior team member
+  - under supervision
+  - through hands-on experience
+  - with continuous learning
+  - following team standards
+
+# Task-focused additions for downward transformation
+task_focused:
+  - completing assigned tasks
+  - following project requirements
+  - implementing specified features
+  - executing development tasks
+  - working on designated components
+  - handling routine maintenance
+  - performing code reviews
+  - updating documentation

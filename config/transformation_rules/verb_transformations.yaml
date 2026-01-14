@@ -1,0 +1,136 @@
+# Verb Transformations for Career Level Augmentation
+# Used by UpwardTransformer and DownwardTransformer
+
+# Upward transformations: junior verbs -> senior verbs
+upgrades:
+  wrote:
+    - architected
+    - designed
+    - engineered
+  built:
+    - architected
+    - designed
+    - engineered
+  created:
+    - designed
+    - developed
+    - engineered
+  made:
+    - developed
+    - engineered
+    - built
+  worked on:
+    - led
+    - owned
+    - drove
+  helped:
+    - collaborated
+    - partnered
+    - coordinated
+  fixed:
+    - optimized
+    - enhanced
+    - improved
+  tested:
+    - validated
+    - ensured quality
+    - implemented QA
+  coded:
+    - developed
+    - implemented
+    - engineered
+  debugged:
+    - troubleshot
+    - diagnosed
+    - resolved
+  implemented:
+    - architected
+    - designed
+    - delivered
+  contributed:
+    - led
+    - drove
+    - spearheaded
+  assisted:
+    - collaborated
+    - coordinated
+    - facilitated
+  learned:
+    - mastered
+    - specialized in
+    - became expert in
+  used:
+    - leveraged
+    - utilized
+    - employed
+  managed:
+    - oversaw
+    - directed
+    - supervised
+
+# Downward transformations: senior verbs -> junior verbs
+downgrades:
+  architected:
+    - developed
+    - built
+    - worked on
+  designed:
+    - created
+    - built
+    - worked on
+  engineered:
+    - developed
+    - coded
+    - built
+  led:
+    - contributed to
+    - participated in
+    - assisted with
+  owned:
+    - worked on
+    - contributed to
+    - helped with
+  drove:
+    - participated in
+    - contributed to
+    - worked on
+  spearheaded:
+    - contributed to
+    - participated in
+    - assisted with
+  orchestrated:
+    - helped coordinate
+    - assisted with
+    - participated in
+  directed:
+    - contributed to
+    - assisted with
+    - participated in
+  oversaw:
+    - worked under supervision on
+    - contributed to
+    - assisted with
+  managed:
+    - worked with
+    - collaborated on
+    - assisted with
+  optimized:
+    - improved
+    - worked on
+    - helped fix
+  enhanced:
+    - improved
+    - updated
+    - worked on
+  delivered:
+    - completed
+    - finished
+    - worked on
+  implemented:
+    - built
+    - coded
+    - created
+  established:
+    - set up
+    - created
+    - built

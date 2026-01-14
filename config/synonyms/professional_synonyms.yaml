@@ -1,0 +1,330 @@
+# Professional Synonyms for Resume Paraphrasing
+# Used by SentenceTransformerParaphraser
+
+# Word mappings with alternatives
+mappings:
+  develop:
+    - create
+    - build
+    - design
+    - implement
+    - construct
+    - engineer
+  developing:
+    - creating
+    - building
+    - designing
+    - implementing
+    - constructing
+    - engineering
+  manage:
+    - oversee
+    - supervise
+    - coordinate
+    - direct
+    - lead
+  managing:
+    - overseeing
+    - supervising
+    - coordinating
+    - directing
+    - leading
+  improve:
+    - enhance
+    - optimize
+    - upgrade
+    - refine
+    - advance
+  analyze:
+    - examine
+    - evaluate
+    - assess
+    - review
+    - study
+  implement:
+    - execute
+    - deploy
+    - establish
+    - install
+    - apply
+  collaborate:
+    - cooperate
+    - partner
+    - work
+    - coordinate
+    - team
+  responsible:
+    - accountable
+    - liable
+    - in-charge
+    - tasked
+    - assigned
+  experience:
+    - background
+    - expertise
+    - knowledge
+    - skills
+    - proficiency
+  project:
+    - initiative
+    - program
+    - assignment
+    - task
+    - undertaking
+  team:
+    - group
+    - squad
+    - unit
+    - crew
+    - staff
+  teams:
+    - groups
+    - squads
+    - units
+    - crews
+    - staff
+  client:
+    - customer
+    - patron
+    - consumer
+    - user
+    - stakeholder
+  solution:
+    - resolution
+    - answer
+    - approach
+    - method
+    - fix
+  system:
+    - platform
+    - framework
+    - infrastructure
+    - architecture
+    - setup
+  systems:
+    - platforms
+    - frameworks
+    - infrastructures
+    - architectures
+    - setups
+  process:
+    - procedure
+    - workflow
+    - method
+    - approach
+    - protocol
+  support:
+    - assist
+    - help
+    - aid
+    - facilitate
+    - enable
+  work:
+    - operate
+    - function
+    - perform
+    - execute
+    - handle
+  worked:
+    - operated
+    - functioned
+    - performed
+    - executed
+    - handled
+  build:
+    - construct
+    - create
+    - develop
+    - establish
+    - assemble
+  built:
+    - constructed
+    - created
+    - developed
+    - established
+    - assembled
+  scalable:
+    - expandable
+    - flexible
+    - adaptable
+    - extensible
+    - modular
+  web:
+    - online
+    - internet
+    - digital
+    - browser-based
+  application:
+    - program
+    - software
+    - tool
+    - platform
+    - solution
+  applications:
+    - programs
+    - software
+    - tools
+    - platforms
+    - solutions
+  utilize:
+    - use
+    - employ
+    - leverage
+    - apply
+    - implement
+  utilized:
+    - used
+    - employed
+    - leveraged
+    - applied
+    - implemented
+  create:
+    - develop
+    - build
+    - design
+    - establish
+    - generate
+  created:
+    - developed
+    - built
+    - designed
+    - established
+    - generated
+  maintain:
+    - sustain
+    - preserve
+    - uphold
+    - support
+    - manage
+  maintained:
+    - sustained
+    - preserved
+    - upheld
+    - supported
+    - managed
+  deliver:
+    - provide
+    - supply
+    - present
+    - execute
+    - complete
+  delivered:
+    - provided
+    - supplied
+    - presented
+    - executed
+    - completed
+  ensure:
+    - guarantee
+    - verify
+    - confirm
+    - secure
+    - establish
+  ensured:
+    - guaranteed
+    - verified
+    - confirmed
+    - secured
+    - established
+
+# Protected technical terms (should not be replaced)
+protected_terms:
+  programming_languages:
+    - python
+    - java
+    - javascript
+    - typescript
+    - react
+    - angular
+    - vue
+    - nodejs
+    - mongodb
+    - postgresql
+    - mysql
+    - docker
+    - kubernetes
+    - aws
+    - azure
+    - gcp
+    - api
+    - rest
+    - graphql
+    - json
+    - xml
+    - html
+    - css
+    - sql
+  certifications:
+    - phd
+    - mba
+    - msc
+    - bsc
+    - ba
+    - ma
+    - bachelor
+    - master
+    - doctorate
+  seniority_levels:
+    - senior
+    - junior
+    - lead
+    - principal
+    - staff
+
+# Stop words to skip during paraphrasing
+stop_words:
+  - the
+  - and
+  - or
+  - but
+  - in
+  - on
+  - at
+  - to
+  - for
+  - of
+  - with
+  - by
+  - a
+  - an
+
+# Words to avoid in professional context
+inappropriate_words:
+  - bad
+  - terrible
+  - awful
+  - horrible
+  - stupid
+  - dumb
+
+# Common abbreviations to preserve
+abbreviations:
+  - Mr
+  - Mrs
+  - Ms
+  - Dr
+  - Prof
+  - Inc
+  - Ltd
+  - Corp
+  - vs
+  - etc
+  - Jr
+  - Sr
+  - PhD
+  - MS
+  - BS
+  - MA
+  - BA
+  - MBA
+  - CEO
+  - CTO
+  - VP
+  - SVP
+  - API
+  - UI
+  - UX
+  - IT
+  - HR
+  - QA
+  - R&D

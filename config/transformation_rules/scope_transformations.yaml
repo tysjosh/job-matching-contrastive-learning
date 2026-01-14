@@ -1,0 +1,128 @@
+# Scope Transformations for Career Level Augmentation
+# Used by UpwardTransformer and DownwardTransformer
+
+# Upward transformations: small scope -> large scope
+amplifiers:
+  script:
+    - pipeline
+    - system
+    - platform
+  scripts:
+    - pipelines
+    - systems
+    - platforms
+  tool:
+    - system
+    - platform
+    - framework
+  tools:
+    - systems
+    - platforms
+    - frameworks
+  feature:
+    - system
+    - platform
+    - solution
+  features:
+    - systems
+    - platforms
+    - solutions
+  task:
+    - project
+    - initiative
+    - system
+  tasks:
+    - projects
+    - initiatives
+    - systems
+  component:
+    - system
+    - architecture
+    - platform
+  components:
+    - systems
+    - architectures
+    - platforms
+  function:
+    - system
+    - service
+    - platform
+  functions:
+    - systems
+    - services
+    - platforms
+  page:
+    - application
+    - platform
+    - system
+  pages:
+    - applications
+    - platforms
+    - systems
+  bug:
+    - system issue
+    - performance bottleneck
+    - architectural challenge
+  bugs:
+    - system issues
+    - performance bottlenecks
+    - architectural challenges
+
+# Downward transformations: large scope -> small scope
+reducers:
+  platform:
+    - application
+    - tool
+    - script
+  platforms:
+    - applications
+    - tools
+    - scripts
+  system:
+    - component
+    - feature
+    - tool
+  systems:
+    - components
+    - features
+    - tools
+  architecture:
+    - design
+    - structure
+    - component
+  architectures:
+    - designs
+    - structures
+    - components
+  framework:
+    - library
+    - tool
+    - utility
+  frameworks:
+    - libraries
+    - tools
+    - utilities
+  solution:
+    - feature
+    - component
+    - tool
+  solutions:
+    - features
+    - components
+    - tools
+  initiative:
+    - project
+    - task
+    - assignment
+  initiatives:
+    - projects
+    - tasks
+    - assignments
+  pipeline:
+    - script
+    - process
+    - workflow
+  pipelines:
+    - scripts
+    - processes
+    - workflows

@@ -1,0 +1,46 @@
+{
+  "batch_size": 64,
+  "learning_rate": 0.00005,
+  "num_epochs": 10,
+  "temperature": 0.2,
+  "negative_sampling_ratio": 0.7,
+  "pathway_weight": 0.8,
+  "use_pathway_negatives": true,
+  "use_view_augmentation": true,
+  "checkpoint_frequency": 1000,
+  "log_frequency": 10,
+  "shuffle_data": true,
+  "text_encoder_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "text_encoder_device": null,
+  "max_resume_views": 5,
+  "max_job_views": 5,
+  "fallback_on_augmentation_failure": true,
+  "hard_negative_max_distance": 2.0,
+  "medium_negative_max_distance": 4.0,
+  "esco_graph_path": "training_output/career_graph_data_driven.gexf",
+  "embedding_cache_size": 10000,
+  "clear_cache_between_epochs": true,
+  "augmentation_config_path": "config/augmentation_config.json",
+  "augmentation_quality_profile": "high_quality",
+  "enhanced_augmentation_validation": true,
+  "augmentation_diversity_monitoring": true,
+  "augmentation_metadata_sync": true,
+  "augmentation_quality_gates": {
+    "min_transformation_quality": 0.4,
+    "min_metadata_consistency": 0.7,
+    "min_technical_preservation": 0.8,
+    "min_diversity_threshold": 0.3,
+    "max_collapse_risk": 0.2
+  },
+  "augmentation_similarity_thresholds": {
+    "upward_min": 0.5,
+    "upward_max": 0.8,
+    "downward_min": 0.4,
+    "downward_max": 0.85
+  },
+  "augmentation_fallback_config": {
+    "max_attempts": 3,
+    "progressive_relaxation": true,
+    "exclude_on_failure": true
+  }
+}

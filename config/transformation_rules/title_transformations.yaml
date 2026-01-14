@@ -1,0 +1,56 @@
+# Title Transformations for Career Level Augmentation
+# Used by UpwardTransformer and DownwardTransformer
+
+# Upward transformations: junior titles -> senior titles
+upgrades:
+  analyst:
+    - senior analyst
+    - lead analyst
+    - principal analyst
+  developer:
+    - senior developer
+    - lead developer
+    - principal engineer
+  engineer:
+    - senior engineer
+    - staff engineer
+    - principal engineer
+  designer:
+    - senior designer
+    - lead designer
+    - principal designer
+  administrator:
+    - senior administrator
+    - lead administrator
+    - systems architect
+  specialist:
+    - senior specialist
+    - lead specialist
+    - principal specialist
+
+# Downward transformations: senior titles -> junior titles
+downgrades:
+  senior:
+    - ""
+    - junior
+    - associate
+  lead:
+    - ""
+    - senior
+    - associate
+  principal:
+    - senior
+    - lead
+    - ""
+  staff:
+    - senior
+    - ""
+    - associate
+  architect:
+    - senior engineer
+    - engineer
+    - developer
+  director:
+    - manager
+    - lead
+    - senior

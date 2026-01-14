@@ -1,0 +1,118 @@
+# Experience Level Mappings for Metadata Synchronization
+# Used by MetadataSynchronizer
+
+levels:
+  junior:
+    keywords:
+      - junior
+      - entry
+      - associate
+      - beginner
+      - new
+      - starting
+      - trainee
+    years_range:
+      min: 0
+      max: 2
+    skill_levels:
+      - beginner
+      - intermediate
+    title_indicators:
+      - jr
+      - junior
+      - associate
+      - entry
+      - trainee
+      - intern
+
+  mid:
+    keywords:
+      - mid
+      - intermediate
+      - experienced
+      - regular
+      - standard
+    years_range:
+      min: 2
+      max: 5
+    skill_levels:
+      - intermediate
+      - advanced
+    title_indicators:
+      - developer
+      - engineer
+      - analyst
+      - specialist
+
+  senior:
+    keywords:
+      - senior
+      - lead
+      - principal
+      - expert
+      - advanced
+      - seasoned
+    years_range:
+      min: 5
+      max: 10
+    skill_levels:
+      - advanced
+      - expert
+    title_indicators:
+      - senior
+      - lead
+      - principal
+      - staff
+      - expert
+
+  executive:
+    keywords:
+      - director
+      - vp
+      - cto
+      - head
+      - chief
+      - executive
+      - manager
+    years_range:
+      min: 10
+      max: 20
+    skill_levels:
+      - expert
+    title_indicators:
+      - director
+      - vp
+      - cto
+      - head
+      - chief
+      - manager
+
+# Title to experience level mapping for validation
+title_to_level:
+  junior:
+    - junior
+  mid:
+    - junior
+    - mid
+  senior:
+    - mid
+    - senior
+  executive:
+    - senior
+    - executive
+
+# Level proficiency expectations
+level_proficiencies:
+  entry:
+    - beginner
+  junior:
+    - beginner
+    - intermediate
+  mid:
+    - intermediate
+    - advanced
+  senior:
+    - advanced
+    - expert
+  executive:
+    - expert

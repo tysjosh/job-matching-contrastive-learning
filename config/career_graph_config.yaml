@@ -1,0 +1,510 @@
+# Configuration for the CareerGraph class
+# This file defines career paths, levels, transitions, and keywords for matching.
+
+# Graph construction parameters
+overlap_threshold: 0.80 # Minimum skill overlap for career progression (general)
+min_skills_threshold: 5 # Minimum number of skills required for meaningful comparison (general)
+
+# CS/IT specific overrides (to include more CS jobs in career graph)
+cs_it_config:
+  enabled: true
+  overlap_threshold: 0.50 # Lower threshold for CS jobs (50% vs 80%)
+  min_skills_threshold: 3 # Lower minimum for CS jobs (3 vs 5)
+  include_optional_skills: true # Include optional skills for richer CS profiles
+  enable_lateral_moves: true # Allow lateral moves between CS specializations
+
+  # ISCO groups that identify CS/IT occupations
+  isco_groups:
+    - "25" # ICT professionals (primary)
+    - "35" # ICT technicians (secondary)
+
+  # CS/IT occupation keywords for additional filtering
+  occupation_keywords:
+    - "software"
+    - "developer"
+    - "programmer"
+    - "engineer"
+    - "data scientist"
+    - "data analyst"
+    - "data engineer"
+    - "devops"
+    - "cloud"
+    - "security"
+    - "cybersecurity"
+    - "database"
+    - "system administrator"
+    - "network"
+    - "architect"
+    - "qa"
+    - "test"
+    - "ict"
+    - "it"
+    - "machine learning"
+    - "ai"
+    - "artificial intelligence"
+
+  # CS-specific seniority tier patterns
+  cs_seniority_tiers:
+    - "intern"
+    - "junior"
+    - "jr"
+    - "associate"
+    - "engineer i"
+    - "developer i"
+    - "l3"
+    - "l4"
+    - "" # Mid-level
+    - "engineer"
+    - "developer"
+    - "engineer ii"
+    - "developer ii"
+    - "l5"
+    - "senior"
+    - "sr"
+    - "engineer iii"
+    - "developer iii"
+    - "l6"
+    - "staff"
+    - "lead"
+    - "principal"
+    - "architect"
+    - "l7"
+    - "l8"
+    - "distinguished"
+    - "fellow"
+    - "director"
+    - "vp"
+    - "cto"
+    - "cio"
+    - "head of"
+    - "chief"
+
+  # CS-specific seniority skill keywords
+  cs_seniority_keywords:
+    - "system design"
+    - "software architecture"
+    - "technical architecture"
+    - "solution architecture"
+    - "distributed systems"
+    - "scalability"
+    - "technical leadership"
+    - "mentoring"
+    - "code review"
+    - "team coordination"
+    - "technical strategy"
+    - "cross-functional"
+    - "stakeholder management"
+    - "technical roadmap"
+    - "engineering excellence"
+    - "platform development"
+    - "infrastructure design"
+    - "api design"
+    - "design patterns"
+    - "best practices"
+
+  # CS specialization groups for lateral movement detection
+  specialization_groups:
+    software_engineering:
+      - "software developer"
+      - "programmer"
+      - "software engineer"
+      - "backend developer"
+      - "frontend developer"
+      - "fullstack developer"
+      - "application developer"
+
+    data_science:
+      - "data scientist"
+      - "data analyst"
+      - "ml engineer"
+      - "machine learning engineer"
+      - "ai engineer"
+      - "business intelligence analyst"
+      - "data engineer"
+
+    devops_sre:
+      - "devops engineer"
+      - "site reliability engineer"
+      - "sre"
+      - "cloud engineer"
+      - "infrastructure engineer"
+      - "platform engineer"
+
+    security:
+      - "security analyst"
+      - "security engineer"
+      - "cybersecurity"
+      - "information security"
+      - "penetration tester"
+      - "security consultant"
+
+    architecture:
+      - "software architect"
+      - "solution architect"
+      - "system architect"
+      - "technical architect"
+      - "enterprise architect"
+      - "principal engineer"
+      - "staff engineer"
+
+    database:
+      - "database administrator"
+      - "dba"
+      - "database engineer"
+      - "database architect"
+
+    web_development:
+      - "web developer"
+      - "frontend developer"
+      - "backend developer"
+      - "fullstack developer"
+
+    mobile_development:
+      - "mobile developer"
+      - "ios developer"
+      - "android developer"
+      - "mobile engineer"
+
+    qa_testing:
+      - "qa engineer"
+      - "test engineer"
+      - "quality assurance"
+      - "automation tester"
+      - "sdet"
+
+# Seniority tier hierarchy (ordered from junior to senior)
+seniority_tiers:
+  - "intern"
+  - "trainee"
+  - "junior"
+  - "assistant"
+  - "graduate"
+  - "associate"
+  - "specialist"
+  - "" # Mid-level (often no prefix)
+  - "senior"
+  - "lead"
+  - "principal"
+  - "staff"
+  - "manager"
+  - "senior manager"
+  - "director"
+  - "senior director"
+  - "head"
+  - "chief"
+  - "vice president"
+  - "president"
+
+# Keywords that indicate seniority and leadership responsibilities
+seniority_keywords:
+  - "manage"
+  - "mentor"
+  - "lead"
+  - "supervise"
+  - "governance"
+  - "strategy"
+  - "architect"
+  - "design"
+  - "budget"
+  - "planning"
+  - "roadmap"
+  - "business"
+  - "stakeholder"
+  - "client relations"
+  - "procurement"
+  - "leadership"
+  - "team management"
+  - "project management"
+  - "strategic planning"
+  - "decision making"
+  - "resource allocation"
+  - "performance management"
+  - "organizational development"
+  - "change management"
+  - "risk management"
+  - "business development"
+  - "partnership"
+  - "negotiation"
+  - "coaching"
+  - "training"
+  - "development"
+
+# Career path definitions with keywords for domain matching
+career_paths:
+  software_engineering:
+    keywords:
+      - developer
+      - programmer
+      - engineer
+      - software
+      - backend
+      - frontend
+      - fullstack
+      - full-stack
+      - web
+      - mobile
+      - application
+      - systems
+      - coding
+      - programming
+      - development
+
+  data_science:
+    keywords:
+      - data scientist
+      - data analyst
+      - machine learning
+      - artificial intelligence
+      - analytics
+      - statistician
+      - data engineer
+      - business intelligence
+      - research scientist
+
+  cybersecurity:
+    keywords:
+      - security
+      - cybersecurity
+      - information security
+      - penetration testing
+      - security analyst
+      - security engineer
+      - risk assessment
+      - compliance
+      - incident response
+
+  product_management:
+    keywords:
+      - product manager
+      - product owner
+      - product marketing
+      - product strategy
+      - roadmap
+      - user experience
+      - market research
+
+  marketing:
+    keywords:
+      - marketing
+      - digital marketing
+      - content marketing
+      - social media
+      - brand management
+      - advertising
+      - communications
+      - public relations
+
+  database_administration:
+    keywords:
+      - database administrator
+      - dba
+      - database
+      - sql
+      - mysql
+      - postgresql
+      - oracle
+      - mongodb
+      - database design
+      - performance tuning
+      - backup
+      - recovery
+      - data modeling
+
+  web_development:
+    keywords:
+      - web developer
+      - frontend developer
+      - backend developer
+      - fullstack developer
+      - html
+      - css
+      - javascript
+      - react
+      - angular
+      - vue
+      - node.js
+      - php
+      - django
+      - flask
+
+  mobile_development:
+    keywords:
+      - mobile developer
+      - ios developer
+      - android developer
+      - react native
+      - flutter
+      - swift
+      - kotlin
+      - xamarin
+      - mobile app
+
+  artificial_intelligence:
+    keywords:
+      - ai engineer
+      - machine learning engineer
+      - deep learning
+      - neural networks
+      - tensorflow
+      - pytorch
+      - computer vision
+      - natural language processing
+      - nlp
+      - ai researcher
+
+  cloud_engineering:
+    keywords:
+      - cloud engineer
+      - cloud architect
+      - aws
+      - azure
+      - google cloud
+      - gcp
+      - cloud infrastructure
+      - serverless
+      - microservices
+      - containerization
+
+  ui_ux_design:
+    keywords:
+      - ui designer
+      - ux designer
+      - user interface designer
+      - user experience designer
+      - graphic designer
+      - web designer
+      - interaction designer
+      - visual designer
+      - product designer
+      - design systems
+      - wireframing
+      - prototyping
+      - figma
+      - sketch
+      - adobe xd
+
+  systems_administration:
+    keywords:
+      - system administrator
+      - sysadmin
+      - network administrator
+      - it administrator
+      - server administration
+      - linux
+      - windows server
+      - active directory
+      - virtualization
+      - monitoring
+      - backup systems
+
+  software_architecture:
+    keywords:
+      - software architect
+      - solution architect
+      - system architect
+      - technical architect
+      - enterprise architect
+      - microservices
+      - distributed systems
+      - scalability
+      - design patterns
+      - system design
+
+  game_development:
+    keywords:
+      - game developer
+      - game programmer
+      - unity
+      - unreal engine
+      - game design
+      - 3d modeling
+      - animation
+      - graphics programming
+      - gameplay programming
+
+  robotics_engineering:
+    keywords:
+      - robotics engineer
+      - robotics technician
+      - automation engineer
+      - control systems
+      - embedded systems
+      - sensors
+      - actuators
+      - ros
+      - matlab
+      - simulink
+
+  education:
+    keywords:
+      - teacher
+      - professor
+      - educator
+      - instructor
+      - academic
+      - curriculum
+      - training
+      - learning
+      - educational
+      - tutor
+      - lecturer
+      - researcher
+
+  management:
+    keywords:
+      - manager
+      - director
+      - lead
+      - supervisor
+      - coordinator
+      - head
+      - chief
+      - vp
+      - vice president
+      - executive
+
+  devops:
+    keywords:
+      - devops
+      - sre
+      - infrastructure
+      - cloud
+      - deployment
+      - automation
+      - ci/cd
+      - kubernetes
+      - docker
+      - aws
+      - azure
+      - gcp
+
+  testing:
+    keywords:
+      - test
+      - testing
+      - qa
+      - quality
+      - automation
+      - selenium
+
+# General hierarchy for comparing levels across different career paths
+level_hierarchy:
+  intern: 0
+  junior: 1
+  entry: 2
+  entry-level: 2
+  analyst: 2
+  tester: 2
+  engineer: 2
+  coordinator: 2
+  mid: 3
+  scientist: 3
+  supervisor: 3
+  senior: 4
+  lead: 5
+  manager: 5
+  principal: 6
+  architect: 6
+  director: 7
+  vp: 8
+  executive: 9

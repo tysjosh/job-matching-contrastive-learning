@@ -1,0 +1,185 @@
+# Impact Phrases by Domain and Experience Level
+# Used by UpwardTransformer for adding business impact language
+
+software_development:
+  senior:
+    - resulting in improved code quality and maintainability
+    - leading to enhanced system performance and reliability
+    - driving technical excellence across development teams
+    - optimizing development workflows and productivity
+    - delivering scalable and robust software solutions
+    - enhancing system architecture and design patterns
+    - improving deployment efficiency and reliability
+    - strengthening security protocols and best practices
+    - accelerating feature delivery and time-to-market
+    - establishing comprehensive testing frameworks
+  lead:
+    - driving architectural decisions that improved system scalability
+    - leading cross-team initiatives that enhanced product quality
+    - establishing development standards that increased team efficiency
+    - architecting solutions that reduced technical debt significantly
+    - mentoring teams while delivering high-impact technical solutions
+    - orchestrating platform migrations that enhanced system reliability
+    - implementing DevOps practices that accelerated deployment cycles
+    - designing microservices architecture that improved system modularity
+    - establishing code review processes that elevated team capabilities
+    - leading technical roadmap planning that aligned with business objectives
+  principal:
+    - defining technical strategy that transformed organizational capabilities
+    - leading enterprise-wide initiatives that delivered strategic business value
+    - establishing architectural patterns adopted across multiple product lines
+    - driving innovation that positioned the company as a technology leader
+    - creating technical vision that enabled sustainable competitive advantage
+    - architecting cloud-native solutions that revolutionized system scalability
+    - establishing engineering culture that attracted top-tier talent
+    - designing technology stack decisions that reduced operational costs
+    - implementing technical governance that ensured enterprise compliance
+    - leading digital transformation initiatives that modernized legacy systems
+
+data_science:
+  senior:
+    - resulting in data-driven insights that improved business outcomes
+    - leading to enhanced model accuracy and predictive capabilities
+    - driving analytics initiatives that optimized business performance
+    - implementing machine learning solutions that automated decision-making
+    - developing predictive models that increased revenue forecasting accuracy
+    - establishing data pipelines that improved analytical efficiency
+    - creating visualization dashboards that enhanced stakeholder understanding
+    - optimizing algorithms that reduced computational costs
+    - implementing A/B testing frameworks that validated business hypotheses
+    - designing feature engineering processes that improved model performance
+  lead:
+    - architecting data infrastructure that scaled analytics capabilities
+    - leading ML engineering teams that delivered production-ready models
+    - establishing data governance frameworks that ensured quality standards
+    - designing experimentation platforms that accelerated innovation cycles
+    - implementing MLOps practices that streamlined model deployment
+    - orchestrating cross-functional analytics projects that drove strategic decisions
+    - mentoring data scientists while delivering enterprise-scale solutions
+    - establishing model monitoring systems that ensured production reliability
+    - leading data strategy initiatives that transformed business intelligence
+    - designing automated ML pipelines that reduced time-to-insight
+  principal:
+    - defining data strategy that transformed organizational decision-making capabilities
+    - leading enterprise AI initiatives that delivered measurable business impact
+    - establishing ML platforms adopted across multiple business units
+    - driving data innovation that created new revenue streams
+    - creating analytics vision that enabled competitive differentiation
+    - architecting real-time analytics systems that revolutionized customer experience
+    - establishing data science culture that attracted industry-leading talent
+    - designing ethical AI frameworks that ensured responsible innovation
+    - implementing data monetization strategies that generated significant ROI
+    - leading digital analytics transformation that modernized business operations
+
+cybersecurity:
+  senior:
+    - strengthening security posture and threat detection capabilities
+    - implementing robust security frameworks that protected critical assets
+    - enhancing incident response procedures that minimized security breaches
+    - establishing security monitoring systems that improved threat visibility
+    - developing security policies that ensured regulatory compliance
+    - optimizing vulnerability management processes that reduced risk exposure
+    - implementing zero-trust architecture that enhanced network security
+    - establishing penetration testing programs that identified security gaps
+    - creating security awareness training that reduced human error risks
+    - designing secure development practices that prevented security vulnerabilities
+  lead:
+    - architecting enterprise security solutions that protected organizational assets
+    - leading security transformation initiatives that modernized defense capabilities
+    - establishing security operations centers that enhanced threat response
+    - implementing security automation that improved incident response times
+    - orchestrating compliance programs that met regulatory requirements
+    - designing threat intelligence platforms that enhanced security awareness
+    - leading cross-functional security teams that delivered comprehensive protection
+    - establishing security metrics frameworks that measured program effectiveness
+    - implementing cloud security strategies that secured digital transformation
+    - mentoring security professionals while delivering enterprise-scale solutions
+  principal:
+    - defining security strategy that transformed organizational risk management
+    - leading enterprise security programs that delivered measurable risk reduction
+    - establishing security frameworks adopted across multiple business units
+    - driving security innovation that created competitive advantages
+    - creating security vision that enabled secure digital transformation
+    - architecting next-generation security platforms that revolutionized threat detection
+    - establishing security culture that embedded protection into business processes
+    - designing security governance that ensured enterprise-wide compliance
+    - implementing security-by-design principles that prevented systemic vulnerabilities
+    - leading security transformation that modernized organizational defense capabilities
+
+systems_administration:
+  senior:
+    - optimizing system performance and infrastructure reliability
+    - implementing automation solutions that improved operational efficiency
+    - enhancing monitoring systems that increased uptime and availability
+    - establishing backup and recovery procedures that ensured business continuity
+    - developing infrastructure as code that standardized deployment processes
+    - optimizing resource utilization that reduced operational costs
+    - implementing configuration management that improved system consistency
+    - establishing performance tuning practices that enhanced system responsiveness
+    - creating disaster recovery plans that minimized business disruption
+    - designing scalable infrastructure that supported business growth
+  lead:
+    - architecting cloud infrastructure that transformed operational capabilities
+    - leading infrastructure modernization initiatives that enhanced system reliability
+    - establishing DevOps practices that accelerated deployment cycles
+    - implementing container orchestration that improved application scalability
+    - orchestrating migration projects that modernized legacy systems
+    - designing high-availability architectures that ensured business continuity
+    - leading infrastructure teams that delivered enterprise-scale solutions
+    - establishing infrastructure monitoring that provided comprehensive visibility
+    - implementing cost optimization strategies that reduced infrastructure expenses
+    - mentoring system administrators while delivering critical infrastructure projects
+  principal:
+    - defining infrastructure strategy that transformed organizational technology capabilities
+    - leading enterprise infrastructure programs that delivered strategic business value
+    - establishing infrastructure frameworks adopted across multiple business units
+    - driving infrastructure innovation that created operational advantages
+    - creating infrastructure vision that enabled digital transformation
+    - architecting next-generation platforms that revolutionized system capabilities
+    - establishing infrastructure culture that embedded reliability into operations
+    - designing infrastructure governance that ensured enterprise standards
+    - implementing infrastructure automation that eliminated manual processes
+    - leading infrastructure transformation that modernized organizational operations
+
+product_management:
+  senior:
+    - driving product strategy that aligned with market demands
+    - implementing user research that informed product development decisions
+    - enhancing product roadmaps that accelerated feature delivery
+    - establishing metrics frameworks that measured product success
+    - developing go-to-market strategies that increased product adoption
+    - optimizing user experience that improved customer satisfaction
+    - implementing agile methodologies that enhanced development velocity
+    - creating product documentation that improved team alignment
+    - establishing stakeholder communication that ensured project success
+    - designing product analytics that provided actionable insights
+  lead:
+    - architecting product platforms that scaled across multiple markets
+    - leading cross-functional product teams that delivered innovative solutions
+    - establishing product development processes that improved time-to-market
+    - implementing product analytics that drove data-informed decisions
+    - orchestrating product launches that exceeded revenue targets
+    - designing product strategies that captured new market opportunities
+    - leading product portfolio management that optimized resource allocation
+    - establishing product quality frameworks that ensured customer satisfaction
+    - implementing competitive analysis that informed strategic positioning
+    - mentoring product managers while delivering high-impact product initiatives
+  principal:
+    - defining product vision that transformed organizational market position
+    - leading enterprise product programs that delivered strategic business outcomes
+    - establishing product frameworks adopted across multiple business units
+    - driving product innovation that created new revenue streams
+    - creating product strategy that enabled sustainable competitive advantage
+    - architecting product ecosystems that revolutionized customer experience
+    - establishing product culture that attracted top-tier talent
+    - designing product governance that ensured strategic alignment
+    - implementing product transformation that modernized business offerings
+    - leading product strategy that positioned the organization as market leader
+
+# Fallback phrases when domain-specific not available
+fallback:
+  - resulting in improved system performance
+  - leading to enhanced code quality
+  - driving team productivity improvements
+  - delivering measurable business value
+  - enhancing team productivity
