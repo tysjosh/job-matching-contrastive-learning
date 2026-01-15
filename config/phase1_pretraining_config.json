@@ -1,6 +1,6 @@
 {
   "batch_size": 32,
-  "learning_rate": 0.00008,
+  "learning_rate": 0.000075,
   "num_epochs": 10,
   "temperature": 0.2,
   "negative_sampling_ratio": 0.7,

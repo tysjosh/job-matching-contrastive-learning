@@ -29,6 +29,9 @@ class EvaluationConfig:
     generate_visualizations: bool = True
     batch_size: int = 32
     device: str = "cpu"
+    temperature: float = 0.2  # Match training temperature for scaled similarity
+    # Calibrated threshold (temp * 1.0) for positive prediction
+    similarity_threshold: float = 0.2
 
     def __post_init__(self):
         if self.metrics is None:
@@ -192,10 +195,15 @@ class ContrastiveEvaluator:
 
                 for i in range(similarities_length):
                     try:
+                        raw_similarity = float(similarities[i].item())
+                        # Apply temperature scaling to match training objective
+                        scaled_similarity = raw_similarity / self.config.temperature
+
                         prediction = {
-                            'similarity': float(similarities[i].item()),
+                            'similarity': raw_similarity,
+                            'scaled_similarity': scaled_similarity,
+                            'predicted_label': 'positive' if raw_similarity > self.config.similarity_threshold else 'negative',
                             'label': batch_labels[i],
-                            'predicted_label': 'positive' if similarities[i] > 0.5 else 'negative',
                             'resume_id': resume_ids[i],
                             'job_id': job_ids[i]
                         }

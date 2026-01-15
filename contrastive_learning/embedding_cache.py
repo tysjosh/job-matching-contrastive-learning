@@ -150,7 +150,8 @@ class EmbeddingCache:
 
             if content_key in self.cache:
                 # Cache hit - detach and clone to avoid computational graph reuse
-                cached_embeddings[content_key] = self.cache[content_key].detach().clone()
+                cached_embeddings[content_key] = self.cache[content_key].detach(
+                ).clone()
                 self._record_cache_access(content_key, hit=True)
             else:
                 # Cache miss - need to encode
@@ -393,7 +394,7 @@ class BatchEfficientEncoder:
                     convert_to_tensor=True,
                     device=self.device,
                     show_progress_bar=False,
-                    normalize_embeddings=True
+                    normalize_embeddings=False  # Projection head handles normalization
                 )
 
             # Step 3: Clone tensors to make them trainable (fix for frozen encoder)
@@ -527,7 +528,7 @@ class BatchEfficientEncoder:
                     convert_to_tensor=True,
                     device=self.device,
                     show_progress_bar=False,
-                    normalize_embeddings=True
+                    normalize_embeddings=False  # Projection head handles normalization
                 )
 
             # Clone to create trainable tensor from frozen encoder output
