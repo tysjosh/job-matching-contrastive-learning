@@ -619,7 +619,8 @@ def cmd_validate_config(args: argparse.Namespace) -> int:
         print(f"  Learning rate: {config.learning_rate}")
         print(f"  Epochs: {config.num_epochs}")
         print(f"  Temperature: {config.temperature}")
-        print(f"  Negative sampling ratio: {config.negative_sampling_ratio}")
+        print(
+            f"  Negative sampling ratio (deprecated, ignored): {config.negative_sampling_ratio}")
         print(f"  Pathway weight: {config.pathway_weight}")
         print(f"  Use pathway negatives: {config.use_pathway_negatives}")
         print(f"  Use view augmentation: {config.use_view_augmentation}")

@@ -41,6 +41,11 @@ class BatchProcessor:
         self.config = config
         self.negative_sampling_ratio = config.negative_sampling_ratio
         self.use_pathway_negatives = config.use_pathway_negatives
+        self.max_negatives_per_anchor = config.max_negatives_per_anchor
+
+        if not self.use_pathway_negatives and self.config.pathway_weight != 0:
+            logger.info("Pathway negatives disabled; setting pathway_weight to 0.0.")
+            self.config.pathway_weight = 0.0
 
         # Initialize or create CareerGraph with ESCO graph
         if career_graph is not None:
@@ -206,7 +211,7 @@ class BatchProcessor:
             return [dummy_negative], [self.config.medium_negative_max_distance]
 
         # Limit number of negatives to prevent memory issues
-        max_negatives = min(len(candidate_negatives), 10)
+        max_negatives = min(len(candidate_negatives), self.max_negatives_per_anchor)
 
         # Check if pathway-aware negative selection is enabled
         if not self.use_pathway_negatives:
