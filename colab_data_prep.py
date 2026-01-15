@@ -197,7 +197,7 @@ def create_pipeline_configs():
         "learning_rate": 0.00005,  # Conservative for stability
         "num_epochs": 20,
         "temperature": 0.2,  # Optimal for contrastive learning
-        "negative_sampling_ratio": 0.7,  # 70% random, 30% pathway
+        "negative_sampling_ratio": 0.7,  # Deprecated: mixed sampling disabled
         "pathway_weight": 0.8,  # Weight for career-aware negatives
         
         # Feature flags
@@ -272,7 +272,7 @@ def create_two_phase_configs(config_dir: Path):
         "learning_rate": 0.0001,
         "num_epochs": 10,
         "temperature": 0.2,
-        "negative_sampling_ratio": 0.7,
+        "negative_sampling_ratio": 0.7,  # Deprecated: mixed sampling disabled
         "pathway_weight": 0.8,
         "use_pathway_negatives": True,
         "use_view_augmentation": True,
@@ -313,7 +313,7 @@ def create_two_phase_configs(config_dir: Path):
         "learning_rate": 0.00005,  # Lower learning rate for fine-tuning
         "num_epochs": 10,
         "temperature": 0.2,
-        "negative_sampling_ratio": 0.7,
+        "negative_sampling_ratio": 0.7,  # Deprecated: mixed sampling disabled
         "pathway_weight": 0.8,
         "use_pathway_negatives": True,
         "use_view_augmentation": False,  # Disable augmentation in fine-tuning
