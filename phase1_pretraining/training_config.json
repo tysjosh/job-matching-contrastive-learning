@@ -39,5 +39,6 @@
   "augmentation_metadata_sync": true,
   "augmentation_quality_gates": null,
   "augmentation_similarity_thresholds": null,
-  "augmentation_fallback_config": null
+  "augmentation_fallback_config": null,
+  "max_negatives_per_anchor": 20
 }
