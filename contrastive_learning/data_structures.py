@@ -117,7 +117,9 @@ class TrainingConfig:
     learning_rate: float = 0.001
     num_epochs: int = 10
     temperature: float = 0.1
-    negative_sampling_ratio: float = 0.7  # 70% random, 30% pathway
+    # Deprecated: mixed sampling is not used; select one strategy via use_pathway_negatives.
+    # Kept for backward compatibility with existing configs.
+    negative_sampling_ratio: float = 0.7
     pathway_weight: float = 2.0
     use_pathway_negatives: bool = True
     use_view_augmentation: bool = True
@@ -142,6 +144,8 @@ class TrainingConfig:
     hard_negative_max_distance: float = 2.0  # Maximum distance for hard negatives
     # Maximum distance for medium negatives
     medium_negative_max_distance: float = 4.0
+    # Maximum negatives sampled per anchor
+    max_negatives_per_anchor: int = 20
     # ESCO graph configuration
     # Path to ESCO graph file (.gexf format)
     esco_graph_path: Optional[str] = None
@@ -220,6 +224,9 @@ class TrainingConfig:
         if self.medium_negative_max_distance <= self.hard_negative_max_distance:
             raise ValueError(
                 "Medium negative max distance must be greater than hard negative max distance")
+
+        if self.max_negatives_per_anchor <= 0:
+            raise ValueError("Max negatives per anchor must be positive")
         
         # NEW: Validate 2-phase training configuration
         self._validate_training_phase_config()
