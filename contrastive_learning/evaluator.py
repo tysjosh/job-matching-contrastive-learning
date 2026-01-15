@@ -30,8 +30,8 @@ class EvaluationConfig:
     batch_size: int = 32
     device: str = "cpu"
     temperature: float = 0.2  # Match training temperature for scaled similarity
-    # Calibrated threshold (temp * 1.0) for positive prediction
-    similarity_threshold: float = 0.2
+    # Optional fixed threshold; when None, auto-calibrate from evaluation data.
+    similarity_threshold: Optional[float] = None
 
     def __post_init__(self):
         if self.metrics is None:
@@ -202,7 +202,6 @@ class ContrastiveEvaluator:
                         prediction = {
                             'similarity': raw_similarity,
                             'scaled_similarity': scaled_similarity,
-                            'predicted_label': 'positive' if raw_similarity > self.config.similarity_threshold else 'negative',
                             'label': batch_labels[i],
                             'resume_id': resume_ids[i],
                             'job_id': job_ids[i]
@@ -231,9 +230,17 @@ class ContrastiveEvaluator:
                 visualization_paths=[]
             )
 
+        similarity_threshold = self._determine_similarity_threshold(
+            all_similarities, all_labels)
+
+        for prediction in all_predictions:
+            prediction['predicted_label'] = (
+                'positive' if prediction['similarity'] > similarity_threshold else 'negative'
+            )
+
         # Calculate metrics
         metrics = self._calculate_all_metrics(
-            all_predictions, all_similarities, all_labels)
+            all_predictions, all_similarities, all_labels, similarity_threshold)
 
         # Generate detailed analysis
         detailed_metrics = self._calculate_detailed_metrics(
@@ -274,10 +281,11 @@ class ContrastiveEvaluator:
         )
 
     def _calculate_all_metrics(self, predictions: List[Dict], similarities: List[float],
-                               labels: List[str]) -> Dict[str, float]:
+                               labels: List[str], similarity_threshold: float) -> Dict[str, float]:
         """Calculate all requested metrics"""
 
         metrics = {}
+        metrics["similarity_threshold"] = similarity_threshold
 
         # Convert labels to binary - handle both string and numeric labels
         def label_to_binary(label):
@@ -383,6 +391,50 @@ class ContrastiveEvaluator:
 
         return metrics
 
+    def _determine_similarity_threshold(self, similarities: List[float],
+                                        labels: List[str]) -> float:
+        """Determine similarity threshold from data, falling back to config if needed."""
+        if self.config.similarity_threshold is not None:
+            return self.config.similarity_threshold
+
+        if not similarities or not labels or len(similarities) != len(labels):
+            return 0.0
+
+        def label_to_binary(label):
+            if isinstance(label, str):
+                label_lower = label.lower()
+                if label_lower in ['positive', 'pos', '1', 'true']:
+                    return 1
+                if label_lower in ['negative', 'neg', '0', 'false']:
+                    return 0
+                try:
+                    return 1 if float(label) > 0.5 else 0
+                except (ValueError, TypeError):
+                    return 0
+            try:
+                return 1 if float(label) > 0.5 else 0
+            except (ValueError, TypeError):
+                return 0
+
+        binary_labels = np.array([label_to_binary(label) for label in labels])
+
+        if len(np.unique(binary_labels)) < 2:
+            return 0.0
+
+        similarities_array = np.array(similarities)
+        thresholds = np.unique(similarities_array)
+        best_threshold = float(thresholds[0])
+        best_f1 = -1.0
+
+        for threshold in thresholds:
+            predicted = (similarities_array > threshold).astype(int)
+            score = f1_score(binary_labels, predicted, zero_division=0)
+            if score > best_f1:
+                best_f1 = score
+                best_threshold = float(threshold)
+
+        return best_threshold
+
     def _calculate_detailed_metrics(self, predictions: List[Dict], embeddings: np.ndarray,
                                     similarities: List[float], labels: List[str]) -> Dict[str, Any]:
         """Calculate detailed metrics for analysis"""
@@ -390,7 +442,23 @@ class ContrastiveEvaluator:
         detailed = {}
 
         # Confusion matrix data
-        binary_labels = [1 if label == 'positive' else 0 for label in labels]
+        def label_to_binary(label):
+            if isinstance(label, str):
+                label_lower = label.lower()
+                if label_lower in ['positive', 'pos', '1', 'true']:
+                    return 1
+                if label_lower in ['negative', 'neg', '0', 'false']:
+                    return 0
+                try:
+                    return 1 if float(label) > 0.5 else 0
+                except (ValueError, TypeError):
+                    return 0
+            try:
+                return 1 if float(label) > 0.5 else 0
+            except (ValueError, TypeError):
+                return 0
+
+        binary_labels = [label_to_binary(label) for label in labels]
         predicted_labels = [1 if pred['predicted_label']
                             == 'positive' else 0 for pred in predictions]
 
