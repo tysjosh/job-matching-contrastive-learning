@@ -1057,8 +1057,8 @@ class ContrastiveLearningTrainer:
                 # Simple projection (no complex encoding needed)
                 projected = self.projection_head(x)
 
-                # Return raw projections - let the loss function handle normalization if needed
-                return projected
+                # L2-normalize to align with contrastive loss cosine similarity assumptions
+                return F.normalize(projected, p=2, dim=-1)
 
             def get_embedding_dim(self) -> int:
                 """Get the output embedding dimension."""
