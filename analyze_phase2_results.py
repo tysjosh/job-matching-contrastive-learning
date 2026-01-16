@@ -29,16 +29,19 @@ print(f"  Final Loss: {results['final_loss']:.6f}")
 print(f"  Best Accuracy: {results['best_accuracy']*100:.2f}%")
 print(f"  Best Loss: {results['best_loss']:.6f}")
 
-print(f"\n⏱️  Training Time: {results['training_time']:.1f} seconds ({results['training_time']/60:.1f} minutes)")
+print(
+    f"\n⏱️  Training Time: {results['training_time']:.1f} seconds ({results['training_time']/60:.1f} minutes)")
 print(f"  Total Batches: {results['total_batches']}")
 print(f"  Total Samples: {results['total_samples']}")
 
 print(f"\n🎯 Model Configuration:")
 print(f"  Embedding Dim: {results['model_info']['embedding_dim']}")
 print(f"  Total Parameters: {results['model_info']['total_parameters']:,}")
-print(f"  Trainable Parameters: {results['model_info']['trainable_parameters']:,}")
+print(
+    f"  Trainable Parameters: {results['model_info']['trainable_parameters']:,}")
 print(f"  Frozen Parameters: {results['model_info']['frozen_parameters']:,}")
-print(f"  Classification Dropout: {results['model_info']['classification_dropout']}")
+print(
+    f"  Classification Dropout: {results['model_info']['classification_dropout']}")
 
 print("\n" + "=" * 80)
 print("EPOCH-BY-EPOCH PROGRESSION")
@@ -54,14 +57,14 @@ for i in range(len(epoch_losses)):
     epoch = i + 1
     loss = epoch_losses[i]
     acc = epoch_accs[i]
-    
+
     if i == 0:
         loss_delta = "-"
         acc_delta = "-"
     else:
         loss_delta = f"{loss - epoch_losses[i-1]:+.6f}"
         acc_delta = f"{(acc - epoch_accs[i-1])*100:+.2f}%"
-    
+
     print(f"{epoch:<8} {loss:<12.6f} {acc*100:<11.2f}% {loss_delta:<12} {acc_delta:<12}")
 
 print("\n" + "=" * 80)
@@ -131,8 +134,10 @@ last_5_losses = epoch_losses[-5:]
 avg_acc = sum(last_5_accs) / len(last_5_accs)
 avg_loss = sum(last_5_losses) / len(last_5_losses)
 
-acc_std = (sum((x - avg_acc) ** 2 for x in last_5_accs) / len(last_5_accs)) ** 0.5
-loss_std = (sum((x - avg_loss) ** 2 for x in last_5_losses) / len(last_5_losses)) ** 0.5
+acc_std = (sum((x - avg_acc) ** 2 for x in last_5_accs) /
+           len(last_5_accs)) ** 0.5
+loss_std = (sum((x - avg_loss) ** 2 for x in last_5_losses) /
+            len(last_5_losses)) ** 0.5
 
 print(f"\nLast 5 Epochs Stability:")
 print(f"  Accuracy: {avg_acc*100:.2f}% ± {acc_std*100:.2f}%")
@@ -141,10 +146,12 @@ print(f"  Min Accuracy: {min(last_5_accs)*100:.2f}%")
 print(f"  Max Accuracy: {max(last_5_accs)*100:.2f}%")
 
 # Check for monotonic improvement
-improving_epochs = sum(1 for i in range(1, len(epoch_accs)) if epoch_accs[i] > epoch_accs[i-1])
+improving_epochs = sum(1 for i in range(1, len(epoch_accs))
+                       if epoch_accs[i] > epoch_accs[i-1])
 print(f"\nMonotonic Improvement:")
 print(f"  Epochs with accuracy increase: {improving_epochs}/9")
-print(f"  Convergence pattern: {'Steady' if improving_epochs >= 7 else 'Oscillating' if improving_epochs >= 4 else 'Unstable'}")
+print(
+    f"  Convergence pattern: {'Steady' if improving_epochs >= 7 else 'Oscillating' if improving_epochs >= 4 else 'Unstable'}")
 
 print("\n" + "=" * 80)
 print("DIAGNOSTIC INSIGHTS")
@@ -214,12 +221,12 @@ if current_acc < 0.60:
     print("   - Retrain with more epochs (target loss < 0.3)")
     print("   - Consider lower learning rate (3e-5)")
     print("   - Verify all fixes are active")
-    
+
     print("\n2. Enhance Phase 2:")
     print("   - Increase classification head capacity")
     print("   - Try different dropout rates (0.05, 0.15)")
     print("   - Train for more epochs (15-20)")
-    
+
     print("\n3. Debug:")
     print("   - Check if evaluation threshold is being used correctly")
     print("   - Verify embeddings are normalized in inference")
@@ -241,7 +248,8 @@ print("\n" + "=" * 80)
 print("NEXT STEPS")
 print("=" * 80)
 
-print(f"\nCurrent Status: Phase 2 trained with {current_acc*100:.2f}% accuracy")
+print(
+    f"\nCurrent Status: Phase 2 trained with {current_acc*100:.2f}% accuracy")
 
 if current_acc >= 0.65:
     print("\n✅ Proceed to comprehensive evaluation:")
