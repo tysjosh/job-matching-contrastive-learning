@@ -24,7 +24,8 @@ print("CURRENT TRAINING RESULTS")
 print("=" * 80)
 
 print(f"\nFinal Loss: {results['final_loss']:.6f}")
-print(f"Training Time: {results['training_time']:.1f} seconds ({results['training_time']/60:.1f} minutes)")
+print(
+    f"Training Time: {results['training_time']:.1f} seconds ({results['training_time']/60:.1f} minutes)")
 print(f"Total Epochs: {len(results['epoch_losses'])}")
 print(f"Total Batches: {results['total_batches']}")
 print(f"Total Samples: {results['total_samples']}")
@@ -34,7 +35,8 @@ print(f"\nKey Configuration:")
 print(f"  Learning Rate: {config['learning_rate']}")
 print(f"  Temperature: {config['temperature']}")
 print(f"  Pathway Weight: {config['pathway_weight']}")
-print(f"  Augmentation Positive Ratio: {config['augmentation_positive_ratio']}")
+print(
+    f"  Augmentation Positive Ratio: {config['augmentation_positive_ratio']}")
 print(f"  Batch Size: {config['batch_size']}")
 print(f"  Projection Dim: {config['projection_dim']}")
 
@@ -53,7 +55,7 @@ for i, loss in enumerate(epoch_losses, 1):
     else:
         delta = f"{loss - epoch_losses[i-2]:+.6f}"
         pct_change = f"{((loss - epoch_losses[i-2]) / epoch_losses[i-2] * 100):+.2f}%"
-    
+
     print(f"{i:<8} {loss:<12.6f} {delta:<12} {pct_change:<12}")
 
 # Calculate convergence metrics
@@ -83,7 +85,8 @@ print("=" * 80)
 # Check last 5 epochs for convergence
 last_5_losses = epoch_losses[-5:]
 last_5_avg = sum(last_5_losses) / len(last_5_losses)
-last_5_std = (sum((x - last_5_avg) ** 2 for x in last_5_losses) / len(last_5_losses)) ** 0.5
+last_5_std = (sum((x - last_5_avg) ** 2 for x in last_5_losses) /
+              len(last_5_losses)) ** 0.5
 
 print(f"\nLast 5 Epochs:")
 print(f"  Average Loss: {last_5_avg:.6f}")
@@ -101,11 +104,12 @@ for i in range(1, len(epoch_losses) - 1):
 print(f"\nOscillation Count: {oscillations} (higher = less stable)")
 
 # Check if loss increased in final epochs
-final_increasing = sum(1 for i in range(len(epoch_losses)-3, len(epoch_losses)-1) 
-                      if epoch_losses[i+1] > epoch_losses[i])
+final_increasing = sum(1 for i in range(len(epoch_losses)-3, len(epoch_losses)-1)
+                       if epoch_losses[i+1] > epoch_losses[i])
 
 if final_increasing >= 2:
-    print(f"⚠️  WARNING: Loss increased in final epochs ({final_increasing}/3)")
+    print(
+        f"⚠️  WARNING: Loss increased in final epochs ({final_increasing}/3)")
     print("   This suggests training may not have fully converged")
 
 print(f"\n" + "=" * 80)
@@ -121,7 +125,8 @@ print("  Configuration: All normalization fixes applied")
 print(f"\nCurrent Result:")
 print(f"  Actual Final Loss: {final_loss:.6f}")
 print(f"  Learning Rate: {config['learning_rate']}")
-print(f"  Loss Difference: {(final_loss - 0.062):.6f} ({((final_loss - 0.062) / 0.062 * 100):+.1f}%)")
+print(
+    f"  Loss Difference: {(final_loss - 0.062):.6f} ({((final_loss - 0.062) / 0.062 * 100):+.1f}%)")
 
 if final_loss > 0.1:
     print("\n⚠️  ISSUE: Final loss is significantly higher than expected!")
@@ -171,7 +176,8 @@ if final_loss < best_loss * 1.05:  # Within 5% of best
     print("\n✅ Training converged successfully")
     print("   Proceed to Phase 2 fine-tuning")
 else:
-    print(f"\n⚠️  Final loss is {((final_loss - best_loss) / best_loss * 100):.1f}% worse than best")
+    print(
+        f"\n⚠️  Final loss is {((final_loss - best_loss) / best_loss * 100):.1f}% worse than best")
     print("   Consider:")
     print("   - Retraining from best checkpoint")
     print("   - Running additional epochs")

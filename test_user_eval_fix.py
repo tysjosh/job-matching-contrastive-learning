@@ -14,12 +14,15 @@ np.random.seed(42)
 positive_similarities = np.random.uniform(0.25, 0.85, 50)
 negative_similarities = np.random.uniform(0.05, 0.35, 50)
 
-all_similarities = np.concatenate([positive_similarities, negative_similarities])
+all_similarities = np.concatenate(
+    [positive_similarities, negative_similarities])
 all_labels = ['positive'] * 50 + ['negative'] * 50
 
 print("\nSimulated Data:")
-print(f"  Positive samples: 50, similarity range [{positive_similarities.min():.2f}, {positive_similarities.max():.2f}]")
-print(f"  Negative samples: 50, similarity range [{negative_similarities.min():.2f}, {negative_similarities.max():.2f}]")
+print(
+    f"  Positive samples: 50, similarity range [{positive_similarities.min():.2f}, {positive_similarities.max():.2f}]")
+print(
+    f"  Negative samples: 50, similarity range [{negative_similarities.min():.2f}, {negative_similarities.max():.2f}]")
 
 temperature = 0.2
 
@@ -34,8 +37,10 @@ predictions_my = (all_similarities > my_threshold).astype(int)
 binary_labels = np.array([1] * 50 + [0] * 50)
 
 my_accuracy = np.mean(predictions_my == binary_labels)
-my_precision = np.sum((predictions_my == 1) & (binary_labels == 1)) / max(1, np.sum(predictions_my == 1))
-my_recall = np.sum((predictions_my == 1) & (binary_labels == 1)) / max(1, np.sum(binary_labels == 1))
+my_precision = np.sum((predictions_my == 1) & (
+    binary_labels == 1)) / max(1, np.sum(predictions_my == 1))
+my_recall = np.sum((predictions_my == 1) & (
+    binary_labels == 1)) / max(1, np.sum(binary_labels == 1))
 my_f1 = f1_score(binary_labels, predictions_my, zero_division=0)
 
 print(f"\nFixed Threshold: {my_threshold}")
@@ -75,8 +80,10 @@ user_threshold = best_threshold
 predictions_user = (all_similarities > user_threshold).astype(int)
 
 user_accuracy = np.mean(predictions_user == binary_labels)
-user_precision = np.sum((predictions_user == 1) & (binary_labels == 1)) / max(1, np.sum(predictions_user == 1))
-user_recall = np.sum((predictions_user == 1) & (binary_labels == 1)) / max(1, np.sum(binary_labels == 1))
+user_precision = np.sum((predictions_user == 1) & (
+    binary_labels == 1)) / max(1, np.sum(predictions_user == 1))
+user_recall = np.sum((predictions_user == 1) & (
+    binary_labels == 1)) / max(1, np.sum(binary_labels == 1))
 user_f1 = f1_score(binary_labels, predictions_user, zero_division=0)
 
 print(f"\nAuto-Calibrated Threshold: {user_threshold:.4f}")
@@ -103,10 +110,12 @@ print("=" * 80)
 print(f"\n{'Metric':<20} {'My Approach':<15} {'User Approach':<15} {'Winner':<10}")
 print("-" * 80)
 
+
 def winner(my_val, user_val):
     if abs(my_val - user_val) < 0.001:
         return "Tie"
     return "User" if user_val > my_val else "My"
+
 
 print(f"{'Accuracy':<20} {my_accuracy*100:>6.1f}%         {user_accuracy*100:>6.1f}%         {winner(my_accuracy, user_accuracy):<10}")
 print(f"{'Precision':<20} {my_precision*100:>6.1f}%         {user_precision*100:>6.1f}%         {winner(my_precision, user_precision):<10}")
@@ -148,11 +157,13 @@ print(f"  F1 Score: {old_f1:.3f}")
 print(f"\nMy Fix (threshold=0.2):")
 print(f"  Accuracy: {my_accuracy*100:.1f}%")
 print(f"  F1 Score: {my_f1:.3f}")
-print(f"  Improvement: +{(my_accuracy - old_accuracy)*100:.1f}% accuracy, +{(my_f1 - old_f1):.3f} F1")
+print(
+    f"  Improvement: +{(my_accuracy - old_accuracy)*100:.1f}% accuracy, +{(my_f1 - old_f1):.3f} F1")
 print(f"\nUser's Fix (threshold={user_threshold:.4f}):")
 print(f"  Accuracy: {user_accuracy*100:.1f}%")
 print(f"  F1 Score: {user_f1:.3f}")
-print(f"  Improvement: +{(user_accuracy - old_accuracy)*100:.1f}% accuracy, +{(user_f1 - old_f1):.3f} F1")
+print(
+    f"  Improvement: +{(user_accuracy - old_accuracy)*100:.1f}% accuracy, +{(user_f1 - old_f1):.3f} F1")
 
 print("\n" + "=" * 80)
 print("CONCLUSION")
@@ -161,13 +172,15 @@ print("=" * 80)
 if user_f1 > my_f1:
     improvement = ((user_f1 - my_f1) / my_f1) * 100
     print(f"\n✅ USER'S APPROACH IS BETTER!")
-    print(f"   - F1 Score: {user_f1:.3f} vs {my_f1:.3f} ({improvement:.1f}% better)")
+    print(
+        f"   - F1 Score: {user_f1:.3f} vs {my_f1:.3f} ({improvement:.1f}% better)")
     print(f"   - Adaptively finds optimal threshold from evaluation data")
     print(f"   - More robust to distribution shifts")
 elif my_f1 > user_f1:
     improvement = ((my_f1 - user_f1) / user_f1) * 100
     print(f"\n⚠️  MY APPROACH IS BETTER")
-    print(f"   - F1 Score: {my_f1:.3f} vs {user_f1:.3f} ({improvement:.1f}% better)")
+    print(
+        f"   - F1 Score: {my_f1:.3f} vs {user_f1:.3f} ({improvement:.1f}% better)")
     print(f"   - Aligned with training objective")
 else:
     print(f"\n🤝 BOTH APPROACHES PERFORM EQUALLY")
