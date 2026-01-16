@@ -1,6 +1,6 @@
 {
   "batch_size": 32,
-  "learning_rate": 0.00005,
+  "learning_rate": 5e-05,
   "num_epochs": 10,
   "temperature": 0.2,
   "negative_sampling_ratio": 0.7,
@@ -31,5 +31,6 @@
   "augmentation_positive_ratio": 1.0,
   "pretrained_model_path": "phase1_pretraining/best_checkpoint.pt",
   "freeze_contrastive_layers": true,
-  "classification_dropout": 0.1
+  "classification_dropout": 0.1,
+  "max_negatives_per_anchor": 20
 }
