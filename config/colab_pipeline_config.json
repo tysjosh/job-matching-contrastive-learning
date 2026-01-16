@@ -77,5 +77,6 @@
     "search_space": {},
     "pruning": true,
     "study_name": null
-  }
+  },
+  "max_negatives_per_anchor": 20
 }

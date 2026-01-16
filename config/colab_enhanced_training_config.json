@@ -1,6 +1,6 @@
 {
   "batch_size": 64,
-  "learning_rate": 0.00005,
+  "learning_rate": 5e-05,
   "num_epochs": 10,
   "temperature": 0.2,
   "negative_sampling_ratio": 0.7,
@@ -42,5 +42,6 @@
     "max_attempts": 3,
     "progressive_relaxation": true,
     "exclude_on_failure": true
-  }
+  },
+  "max_negatives_per_anchor": 20
 }
