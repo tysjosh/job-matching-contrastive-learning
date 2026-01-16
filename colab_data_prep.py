@@ -217,6 +217,7 @@ def create_pipeline_configs():
         # Career distance thresholds
         "hard_negative_max_distance": 2.0,
         "medium_negative_max_distance": 4.0,
+        "max_negatives_per_anchor": 20,
         
         # ESCO graph path
         "esco_graph_path": "training_output/career_graph_data_driven.gexf",
@@ -284,6 +285,7 @@ def create_two_phase_configs(config_dir: Path):
         "fallback_on_augmentation_failure": True,
         "hard_negative_max_distance": 2.0,
         "medium_negative_max_distance": 4.0,
+        "max_negatives_per_anchor": 20,
         "esco_graph_path": "training_output/career_graph_data_driven.gexf",
         "text_encoder_model": "sentence-transformers/all-MiniLM-L6-v2",
         "text_encoder_device": None,
@@ -325,6 +327,7 @@ def create_two_phase_configs(config_dir: Path):
         "fallback_on_augmentation_failure": True,
         "hard_negative_max_distance": 2.0,
         "medium_negative_max_distance": 4.0,
+        "max_negatives_per_anchor": 20,
         "esco_graph_path": "training_output/career_graph_data_driven.gexf",
         "text_encoder_model": "sentence-transformers/all-MiniLM-L6-v2",
         "text_encoder_device": None,

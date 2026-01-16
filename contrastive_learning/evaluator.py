@@ -32,6 +32,8 @@ class EvaluationConfig:
     temperature: float = 0.2  # Match training temperature for scaled similarity
     # Optional fixed threshold; when None, auto-calibrate from evaluation data.
     similarity_threshold: Optional[float] = None
+    # If True, evaluate using raw text encoder embeddings (baseline) instead of the contrastive model.
+    use_text_encoder_baseline: bool = False
 
     def __post_init__(self):
         if self.metrics is None:
@@ -68,20 +70,21 @@ class ContrastiveEvaluator:
         output_path = Path(output_dir)
         output_path.mkdir(exist_ok=True)
 
-        # Check if model is valid
-        if model is None:
-            logger.error("Model is None - cannot evaluate")
-            return EvaluationResults(
-                metrics={"error": "Model is None"},
-                detailed_metrics={},
-                predictions=[],
-                embeddings=None,
-                visualization_paths=[]
-            )
+        # Check if model is valid unless running text-encoder baseline
+        if not self.config.use_text_encoder_baseline:
+            if model is None:
+                logger.error("Model is None - cannot evaluate")
+                return EvaluationResults(
+                    metrics={"error": "Model is None"},
+                    detailed_metrics={},
+                    predictions=[],
+                    embeddings=None,
+                    visualization_paths=[]
+                )
 
-        model.eval()
-        # Ensure model is on the correct device
-        model = model.to(self.device)
+            model.eval()
+            # Ensure model is on the correct device
+            model = model.to(self.device)
 
         # Collect predictions and embeddings
         all_predictions = []
@@ -129,13 +132,18 @@ class ContrastiveEvaluator:
                     logger.error(f"Error encoding texts: {e}")
                     continue
 
-                # Pass through contrastive model to get final embeddings
-                try:
-                    resume_embeddings = model(resume_text_embeddings)
-                    job_embeddings = model(job_text_embeddings)
-                except Exception as e:
-                    logger.error(f"Error in model forward pass: {e}")
-                    continue
+                if self.config.use_text_encoder_baseline:
+                    # Use raw text encoder embeddings as a cosine-similarity baseline
+                    resume_embeddings = resume_text_embeddings
+                    job_embeddings = job_text_embeddings
+                else:
+                    # Pass through contrastive model to get final embeddings
+                    try:
+                        resume_embeddings = model(resume_text_embeddings)
+                        job_embeddings = model(job_text_embeddings)
+                    except Exception as e:
+                        logger.error(f"Error in model forward pass: {e}")
+                        continue
 
                 # Calculate similarities
                 similarities = F.cosine_similarity(
