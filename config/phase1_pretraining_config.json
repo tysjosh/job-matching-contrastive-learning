@@ -1,6 +1,6 @@
 {
   "batch_size": 32,
-  "learning_rate": 0.000075,
+  "learning_rate": 7.5e-05,
   "num_epochs": 10,
   "temperature": 0.2,
   "negative_sampling_ratio": 0.7,
@@ -31,5 +31,6 @@
   "augmentation_positive_ratio": 1.0,
   "pretrained_model_path": null,
   "freeze_contrastive_layers": false,
-  "classification_dropout": 0.0
+  "classification_dropout": 0.0,
+  "max_negatives_per_anchor": 20
 }

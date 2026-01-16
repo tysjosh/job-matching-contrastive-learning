@@ -24,5 +24,6 @@
   "augmentation_quality_profile": "fast",
   "enhanced_augmentation_validation": false,
   "augmentation_diversity_monitoring": false,
-  "augmentation_metadata_sync": false
+  "augmentation_metadata_sync": false,
+  "max_negatives_per_anchor": 20
 }
