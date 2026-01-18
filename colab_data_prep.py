@@ -197,7 +197,7 @@ def create_pipeline_configs():
         "learning_rate": 0.00005,  # Conservative for stability
         "num_epochs": 20,
         "temperature": 0.2,  # Optimal for contrastive learning
-        "negative_sampling_ratio": 0.7,  # 70% random, 30% pathway
+        "negative_sampling_ratio": 0.7,  # Deprecated: mixed sampling disabled
         "pathway_weight": 0.8,  # Weight for career-aware negatives
         
         # Feature flags
@@ -217,6 +217,7 @@ def create_pipeline_configs():
         # Career distance thresholds
         "hard_negative_max_distance": 2.0,
         "medium_negative_max_distance": 4.0,
+        "max_negatives_per_anchor": 20,
         
         # ESCO graph path
         "esco_graph_path": "training_output/career_graph_data_driven.gexf",
@@ -272,7 +273,7 @@ def create_two_phase_configs(config_dir: Path):
         "learning_rate": 0.0001,
         "num_epochs": 10,
         "temperature": 0.2,
-        "negative_sampling_ratio": 0.7,
+        "negative_sampling_ratio": 0.7,  # Deprecated: mixed sampling disabled
         "pathway_weight": 0.8,
         "use_pathway_negatives": True,
         "use_view_augmentation": True,
@@ -284,6 +285,7 @@ def create_two_phase_configs(config_dir: Path):
         "fallback_on_augmentation_failure": True,
         "hard_negative_max_distance": 2.0,
         "medium_negative_max_distance": 4.0,
+        "max_negatives_per_anchor": 20,
         "esco_graph_path": "training_output/career_graph_data_driven.gexf",
         "text_encoder_model": "sentence-transformers/all-MiniLM-L6-v2",
         "text_encoder_device": None,
@@ -313,7 +315,7 @@ def create_two_phase_configs(config_dir: Path):
         "learning_rate": 0.00005,  # Lower learning rate for fine-tuning
         "num_epochs": 10,
         "temperature": 0.2,
-        "negative_sampling_ratio": 0.7,
+        "negative_sampling_ratio": 0.7,  # Deprecated: mixed sampling disabled
         "pathway_weight": 0.8,
         "use_pathway_negatives": True,
         "use_view_augmentation": False,  # Disable augmentation in fine-tuning
@@ -325,6 +327,7 @@ def create_two_phase_configs(config_dir: Path):
         "fallback_on_augmentation_failure": True,
         "hard_negative_max_distance": 2.0,
         "medium_negative_max_distance": 4.0,
+        "max_negatives_per_anchor": 20,
         "esco_graph_path": "training_output/career_graph_data_driven.gexf",
         "text_encoder_model": "sentence-transformers/all-MiniLM-L6-v2",
         "text_encoder_device": None,
