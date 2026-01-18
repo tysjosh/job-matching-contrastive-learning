@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Update augmentation_type in augmented_enriched_data_training.jsonl 
-by reading career_view from processed_combined_enriched_data_times3_v3.jsonl
+by reading career_view from processed_combined_enriched_data_times3_v4.jsonl
 
 Assumes both files have records in the same order.
 """
@@ -19,13 +19,17 @@ def map_career_view_to_augmentation_type(career_view: str) -> str:
     mapping = {
         'original': 'Original',
         'foundational': 'Foundational Match',
-        'aspirational': 'Aspirational Match'
+        'aspirational': 'Aspirational Match',
+        'foundational_resume__aspirational_job': 'Cross-Match Negative (Foundational→Aspirational)',
+        'aspirational_resume__foundational_job': 'Cross-Match Negative (Aspirational→Foundational)',
+        'original_resume__foundational_job': 'Cross-Match Negative (Original→Foundational)',
+        'original_resume__aspirational_job': 'Cross-Match Negative (Original→Aspirational)'
     }
     return mapping.get(career_view, 'Original')
 
 
 def update_augmentation_types(
-    source_file: str = 'preprocess/processed_combined_enriched_data_times3_v3.jsonl',
+    source_file: str = 'preprocess/processed_combined_enriched_data_times3_v4.jsonl',
     target_file: str = 'preprocess/augmented_enriched_data_training.jsonl',
     output_file: str = 'preprocess/augmented_enriched_data_training_updated.jsonl'
 ):
@@ -38,7 +42,11 @@ def update_augmentation_types(
     stats = {
         'Original': 0,
         'Foundational Match': 0,
-        'Aspirational Match': 0
+        'Aspirational Match': 0,
+        'Cross-Match Negative (Foundational→Aspirational)': 0,
+        'Cross-Match Negative (Aspirational→Foundational)': 0,
+        'Cross-Match Negative (Original→Foundational)': 0,
+        'Cross-Match Negative (Original→Aspirational)': 0
     }
 
     with open(source_file, 'r', encoding='utf-8') as src, \
@@ -97,6 +105,14 @@ def update_augmentation_types(
     logger.info(f"  Original: {stats['Original']}")
     logger.info(f"  Foundational Match: {stats['Foundational Match']}")
     logger.info(f"  Aspirational Match: {stats['Aspirational Match']}")
+    logger.info(
+        f"  Cross-Match Negative (Foundational→Aspirational): {stats['Cross-Match Negative (Foundational→Aspirational)']}")
+    logger.info(
+        f"  Cross-Match Negative (Aspirational→Foundational): {stats['Cross-Match Negative (Aspirational→Foundational)']}")
+    logger.info(
+        f"  Cross-Match Negative (Original→Foundational): {stats['Cross-Match Negative (Original→Foundational)']}")
+    logger.info(
+        f"  Cross-Match Negative (Original→Aspirational): {stats['Cross-Match Negative (Original→Aspirational)']}")
     logger.info(f"  Output: {output_file}")
 
     return output_file
