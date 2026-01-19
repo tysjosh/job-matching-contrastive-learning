@@ -12,7 +12,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 @dataclass
@@ -39,17 +39,41 @@ class TechnicalTermProtector:
     PLACEHOLDER_PREFIX = "__TECH_TERM_"
     PLACEHOLDER_SUFFIX = "__"
     
-    def __init__(self, cs_skills_path: str = "dataset/cs_skills.json"):
+    def __init__(
+        self,
+        cs_skills_path: str = "dataset/cs_skills.json",
+        llm_client: Optional[Any] = None
+    ):
         """
         Initialize with CS skills database.
         
         Args:
             cs_skills_path: Path to the CS skills JSON file
+            llm_client: Optional LLM client for dynamic term extraction
         """
         self.cs_skills_path = cs_skills_path
+        self.llm_client = llm_client
         self.technical_terms: Set[str] = set()
         self.case_sensitive_terms: Dict[str, str] = {}  # lowercase -> canonical
-        self._load_technical_terms()
+        if self.llm_client is None:
+            self._load_technical_terms()
+
+    def _extract_terms_with_llm(self, text: str) -> List[str]:
+        """Use LLM to extract technical terms from text."""
+        prompt = (
+            "Extract technical terms (programming languages, frameworks, tools, "
+            "platforms, databases, protocols) from the text below. "
+            "Return ONLY a JSON array of strings.\n\n"
+            f"Text:\n{text}"
+        )
+        response = self.llm_client.generate(prompt)
+        try:
+            parsed = json.loads(response.text.strip())
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+        except json.JSONDecodeError:
+            return []
+        return []
     
     def _load_technical_terms(self) -> None:
         """Load technical terms from the CS skills database."""
@@ -116,9 +140,11 @@ class TechnicalTermProtector:
         if not text:
             return text, {}
         
-        # Find all term occurrences with their positions
-        # Sort terms by length (longest first) to handle overlapping terms
-        sorted_terms = sorted(self.technical_terms, key=len, reverse=True)
+        if self.llm_client is not None:
+            extracted_terms = self._extract_terms_with_llm(text)
+            sorted_terms = sorted(extracted_terms, key=len, reverse=True)
+        else:
+            sorted_terms = sorted(self.technical_terms, key=len, reverse=True)
         
         # Track all matches: (start, end, original_text, term)
         all_matches: List[Tuple[int, int, str, str]] = []
@@ -230,6 +256,9 @@ class TechnicalTermProtector:
         if not text:
             return set()
         
+        if self.llm_client is not None:
+            return set(self._extract_terms_with_llm(text))
+
         found_terms: Set[str] = set()
         
         for term in self.technical_terms:
