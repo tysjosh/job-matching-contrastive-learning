@@ -96,6 +96,7 @@ Guidelines:
 - Upgrade proficiency levels to reflect senior expertise
 - Preserve all existing technical skills
 - Add skills like: System Design, Technical Leadership, Architecture, Mentoring
+- For CS roles, examples include Distributed Systems, Cloud Architecture, Incident Response, MLOps
 
 Original skills:
 {skills}
@@ -652,9 +653,12 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
             "developer", "engineer", "analyst", "designer", "scientist",
             "consultant", "administrator", "architect", "manager",
             "software", "data", "product", "ux", "ui", "qa", "test",
-            "frontend", "backend", "full stack", "mobile", "web",
+            "frontend", "backend", "full stack", "full-stack", "mobile",
+            "web", "ios", "android", "embedded", "firmware",
             "devops", "cloud", "security", "network", "database",
-            "machine learning", "ml", "ai", "artificial intelligence"
+            "platform", "infrastructure", "sre", "site reliability",
+            "data engineering", "etl", "mlops", "machine learning",
+            "ml", "ai", "artificial intelligence", "api", "microservices"
         ]
         
         original_lower = original.lower()
@@ -861,10 +865,21 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
         job_title = job_context.get("title", "").lower()
         
         domain_keywords = {
-            "data": ["data", "analytics", "ml", "machine learning", "ai"],
-            "devops": ["devops", "sre", "infrastructure", "platform", "cloud"],
-            "product": ["product", "ux", "design"],
-            "software": ["software", "developer", "engineer", "backend", "frontend"],
+            "data": [
+                "data", "analytics", "ml", "machine learning", "ai",
+                "data science", "data engineering", "etl"
+            ],
+            "devops": [
+                "devops", "sre", "site reliability", "infrastructure",
+                "platform", "cloud", "kubernetes", "ci/cd", "observability"
+            ],
+            "product": ["product", "ux", "ui", "design", "research"],
+            "software": [
+                "software", "developer", "engineer", "backend", "frontend",
+                "full stack", "full-stack", "mobile", "ios", "android",
+                "web", "api", "microservices", "embedded", "firmware"
+            ],
+            "security": ["security", "infosec", "appsec", "devsecops"]
         }
         
         for domain, keywords in domain_keywords.items():
