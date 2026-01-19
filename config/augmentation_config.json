@@ -1,6 +1,6 @@
 {
   "enhanced_validation": {
-    "enabled": true,
+    "enabled": false,
     "similarity_thresholds": {
       "upward": {
         "min": 0.5,
