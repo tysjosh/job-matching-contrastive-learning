@@ -31,6 +31,7 @@
   },
   "paths": {
     "cs_skills_path": "dataset/cs_skills.json",
+    "esco_domains_path": "esco_it_career_domains_refined.json",
     "input_file": "preprocess/processed_combined_enriched_data.jsonl",
     "output_file": "llm_augmentation/augmented_data.jsonl",
     "summary_file": "llm_augmentation/augmentation_summary.json"

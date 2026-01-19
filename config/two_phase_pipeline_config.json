@@ -78,5 +78,6 @@
     "include_training_history": true,
     "include_hyperparameters": true,
     "output_dir": "pipeline_reports"
-  }
+  },
+  "max_negatives_per_anchor": 20
 }

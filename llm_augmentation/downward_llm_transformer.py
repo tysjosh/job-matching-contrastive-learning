@@ -8,6 +8,7 @@ while preserving technical terms and maintaining semantic coherence.
 Requirements: 2.2, 3.2, 4.2, 5.3, 5.4
 """
 
+import json
 import logging
 import random
 import re
@@ -17,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .llm_client import LLMClient, LLMClientError
 from .models import TransformationConfig
 from .technical_term_protector import TechnicalTermProtector
+from .esco_context import ESCOContextBuilder, ESCOContext
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +61,7 @@ Original experience:
 {text}
 
 Context (role: {role}, domain: {domain})
+{esco_context}
 
 Transformed junior-level experience (respond with ONLY the transformed text, no explanations):"""
 
@@ -73,6 +76,7 @@ Guidelines:
 
 Original responsibilities:
 {responsibilities}
+{esco_context}
 
 Transformed junior-level responsibilities (respond with ONLY a numbered list, one per line):"""
 
@@ -100,47 +104,19 @@ Original skills:
 {skills}
 
 Domain context: {domain}
+{esco_context}
 
 Adjusted junior-level skills (respond with a JSON array of skill objects with 'name' and 'proficiency' keys):"""
-
-    # Advanced skills that should be masked for junior-level
-    ADVANCED_SKILLS_TO_MASK = [
-        "system architecture",
-        "technical leadership",
-        "team management",
-        "strategic planning",
-        "stakeholder management",
-        "enterprise architecture",
-        "solution architecture",
-        "technical mentoring",
-        "team mentoring",
-        "cross-functional collaboration",
-        "roadmap planning",
-        "budget management",
-        "vendor management",
-        "executive communication",
-        "organizational design",
-        "performance management",
-        "capacity planning",
-        "disaster recovery planning",
-    ]
-
-    # Proficiency downgrade mapping
-    PROFICIENCY_DOWNGRADES = {
-        "expert": "intermediate",
-        "advanced": "intermediate",
-        "proficient": "beginner",
-        "intermediate": "beginner",
-        "beginner": "beginner",
-        "basic": "basic",
-    }
 
     def __init__(
         self,
         llm_client: LLMClient,
         config: TransformationConfig,
         term_protector: Optional[TechnicalTermProtector] = None,
-        prompts: Optional[Dict[str, str]] = None
+        prompts: Optional[Dict[str, str]] = None,
+        esco_context_builder: Optional[ESCOContextBuilder] = None,
+        cs_skills_path: Optional[str] = None,
+        esco_domains_path: Optional[str] = None
     ):
         """
         Initialize the downward LLM transformer.
@@ -153,7 +129,14 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
         """
         self.llm_client = llm_client
         self.config = config
-        self.term_protector = term_protector or TechnicalTermProtector()
+        self.term_protector = term_protector or TechnicalTermProtector(
+            cs_skills_path=cs_skills_path or "dataset/cs_skills.json",
+            llm_client=llm_client
+        )
+        self.esco_context_builder = esco_context_builder or ESCOContextBuilder(
+            esco_domains_path=esco_domains_path or "esco_it_career_domains_refined.json",
+            cs_skills_path=cs_skills_path or "dataset/cs_skills.json"
+        )
         
         # Set up prompts (use custom or defaults)
         self.prompts = {
@@ -166,6 +149,57 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
         logger.info(
             f"DownwardLLMTransformer initialized with target level: {config.downward_target_level}"
         )
+
+    def _format_esco_context(self, context: Optional[ESCOContext]) -> str:
+        """Format ESCO context for prompt injection."""
+        if context is None:
+            return ""
+        block = context.to_prompt_block()
+        return f"\n{block}" if block else ""
+
+    def _extract_json_array(self, text: str) -> Optional[List[Dict[str, Any]]]:
+        """Extract and parse a JSON array from text."""
+        match = re.search(r"\[.*\]", text, re.DOTALL)
+        if not match:
+            return None
+        try:
+            parsed = json.loads(match.group(0))
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            return None
+        return None
+
+    def _validate_skill_objects(self, skills: List[Dict[str, Any]]) -> bool:
+        """Validate skill objects structure."""
+        if not skills:
+            return False
+        for skill in skills:
+            if not isinstance(skill, dict):
+                return False
+            if "name" not in skill:
+                return False
+            if "proficiency" not in skill and "level" not in skill:
+                return False
+        return True
+
+    def _generate_with_retry(
+        self,
+        prompt: str,
+        parse_fn,
+        max_attempts: int = 3
+    ):
+        """Generate with retries and parsing."""
+        for _ in range(max_attempts):
+            response = self.llm_client.generate(prompt)
+            parsed = parse_fn(response.text.strip())
+            if parsed is not None:
+                return parsed
+            prompt = (
+                prompt
+                + "\n\nReturn ONLY valid JSON. Do not add commentary or code fences."
+            )
+        return None
 
     def transform_experience(
         self,
@@ -198,6 +232,7 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
         context = context or {}
         role = context.get("role", "Professional")
         domain = context.get("domain", "Technology")
+        esco_context = context.get("esco_context")
         
         try:
             # Step 1: Protect technical terms
@@ -207,7 +242,8 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
             prompt = self.prompts["experience"].format(
                 text=protected_text,
                 role=role,
-                domain=domain
+                domain=domain,
+                esco_context=self._format_esco_context(esco_context)
             )
             
             # Step 3: Call LLM
@@ -255,7 +291,8 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
 
     def transform_responsibilities(
         self,
-        responsibilities: List[str]
+        responsibilities: List[str],
+        context: Optional[Dict[str, Any]] = None
     ) -> Tuple[List[str], TransformationResult]:
         """
         Transform responsibilities to support/learning language.
@@ -282,6 +319,8 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
         
         original_count = len(responsibilities)
         original_text = "\n".join(f"- {r}" for r in responsibilities)
+        context = context or {}
+        esco_context = context.get("esco_context")
         
         try:
             # Step 1: Protect technical terms in all responsibilities
@@ -303,15 +342,22 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
             
             # Step 2: Build prompt
             prompt = self.prompts["responsibilities"].format(
-                responsibilities=protected_text
+                responsibilities=protected_text,
+                esco_context=self._format_esco_context(esco_context)
             )
-            
-            # Step 3: Call LLM
-            response = self.llm_client.generate(prompt)
-            transformed_text = response.text.strip()
-            
-            # Step 4: Parse response into list
-            transformed_list = self._parse_responsibilities_response(transformed_text)
+
+            def parse_fn(text: str) -> Optional[List[str]]:
+                parsed = self._parse_responsibilities_response(text)
+                return parsed if parsed else None
+
+            transformed_list = self._generate_with_retry(prompt, parse_fn)
+            if transformed_list is None:
+                return responsibilities, TransformationResult(
+                    success=False,
+                    transformed_text=original_text,
+                    original_text=original_text,
+                    error_message="Failed to parse responsibilities output"
+                )
             
             # Step 5: Restore technical terms
             restored_list = []
@@ -658,7 +704,8 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
     def transform_skills(
         self,
         skills: List[Dict[str, Any]],
-        mask_ratio: Optional[float] = None
+        mask_ratio: Optional[float] = None,
+        context: Optional[Dict[str, Any]] = None
     ) -> Tuple[List[Dict[str, Any]], TransformationResult]:
         """
         Mask advanced skills and downgrade proficiency levels.
@@ -684,137 +731,48 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
                 term_preservation_rate=1.0
             )
         
-        original_text = str(skills)
-        
+        original_text = json.dumps(skills)
+        context = context or {}
+        domain = context.get("domain", "Technology")
+        esco_context = context.get("esco_context")
+
         try:
-            # Step 1: Determine mask ratio
-            if mask_ratio is None:
-                min_ratio = self.config.skills_mask_ratio_min
-                max_ratio = self.config.skills_mask_ratio_max
-                mask_ratio = random.uniform(min_ratio, max_ratio)
-            
-            # Step 2: Identify advanced skills to mask
-            advanced_skills_indices = self._identify_advanced_skills(skills)
-            
-            # Step 3: Calculate how many to mask
-            num_to_mask = max(1, int(len(advanced_skills_indices) * mask_ratio))
-            
-            # Step 4: Select skills to mask
-            skills_to_mask = set()
-            if advanced_skills_indices:
-                # Randomly select advanced skills to mask
-                mask_indices = random.sample(
-                    advanced_skills_indices,
-                    min(num_to_mask, len(advanced_skills_indices))
+            prompt = self.prompts["skills"].format(
+                skills=original_text,
+                domain=domain,
+                esco_context=self._format_esco_context(esco_context)
+            )
+            transformed_skills = self._generate_with_retry(
+                prompt, self._extract_json_array)
+
+            if transformed_skills and self._validate_skill_objects(transformed_skills):
+                return transformed_skills, TransformationResult(
+                    success=True,
+                    transformed_text=json.dumps(transformed_skills),
+                    original_text=original_text,
+                    term_preservation_rate=1.0
                 )
-                skills_to_mask = set(mask_indices)
-            
-            # Step 5: Build transformed skills list
-            transformed_skills = []
-            masked_count = 0
-            
-            for i, skill in enumerate(skills):
-                if i in skills_to_mask:
-                    masked_count += 1
-                    continue  # Skip this skill (mask it)
-                
-                # Downgrade proficiency for remaining skills
-                downgraded_skill = self._downgrade_skill(skill)
-                transformed_skills.append(downgraded_skill)
-            
-            logger.debug(
-                f"Skills transformation complete. "
-                f"Original: {len(skills)}, Transformed: {len(transformed_skills)}, "
-                f"Masked: {masked_count}, Mask ratio: {mask_ratio:.2%}"
-            )
-            
-            return transformed_skills, TransformationResult(
-                success=True,
-                transformed_text=str(transformed_skills),
+
+            return skills, TransformationResult(
+                success=False,
+                transformed_text=original_text,
                 original_text=original_text,
-                term_preservation_rate=1.0  # Core skills preserved, just reduced
+                term_preservation_rate=1.0,
+                error_message="Failed to parse LLM skills output"
             )
-            
+
         except Exception as e:
             logger.error(f"Error during skills transformation: {e}")
             return skills, TransformationResult(
                 success=False,
                 transformed_text=original_text,
                 original_text=original_text,
+                term_preservation_rate=1.0,
                 error_message=str(e)
             )
 
-    def _identify_advanced_skills(self, skills: List[Dict[str, Any]]) -> List[int]:
-        """
-        Identify indices of advanced/senior-level skills.
-        
-        Args:
-            skills: List of skill dictionaries
-            
-        Returns:
-            List of indices for advanced skills
-        """
-        advanced_indices = []
-        
-        for i, skill in enumerate(skills):
-            skill_name = ""
-            if isinstance(skill, dict):
-                skill_name = skill.get("name", "")
-            elif isinstance(skill, str):
-                skill_name = skill
-            
-            skill_name_lower = skill_name.lower()
-            
-            # Check if skill is in the advanced skills list
-            is_advanced = any(
-                adv_skill in skill_name_lower
-                for adv_skill in self.ADVANCED_SKILLS_TO_MASK
-            )
-            
-            # Also check proficiency level
-            if isinstance(skill, dict):
-                proficiency = skill.get("proficiency", "").lower()
-                if proficiency in ["expert", "advanced"]:
-                    is_advanced = True
-            
-            if is_advanced:
-                advanced_indices.append(i)
-        
-        return advanced_indices
+    # Rule-based fallback removed by request.
 
-    def _downgrade_skill(self, skill: Any) -> Dict[str, Any]:
-        """
-        Downgrade a single skill's proficiency level.
-        
-        Args:
-            skill: Skill dict or string
-            
-        Returns:
-            Downgraded skill dictionary
-        """
-        if isinstance(skill, str):
-            return {
-                "name": skill,
-                "proficiency": "beginner"
-            }
-        
-        if not isinstance(skill, dict):
-            return {"name": str(skill), "proficiency": "beginner"}
-        
-        downgraded = skill.copy()
-        
-        # Downgrade proficiency if present
-        if "proficiency" in downgraded:
-            current = downgraded["proficiency"].lower() if isinstance(downgraded["proficiency"], str) else "intermediate"
-            downgraded["proficiency"] = self.PROFICIENCY_DOWNGRADES.get(current, "beginner")
-        elif "level" in downgraded:
-            current = downgraded["level"].lower() if isinstance(downgraded["level"], str) else "intermediate"
-            downgraded["level"] = self.PROFICIENCY_DOWNGRADES.get(current, "beginner")
-        else:
-            # Add proficiency if not present
-            downgraded["proficiency"] = "beginner"
-        
-        return downgraded
 
     def transform_resume(
         self,
@@ -839,10 +797,16 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
         # Create a copy of the resume
         transformed = resume.copy()
         
+        esco_context = self.esco_context_builder.build_context(
+            role=resume.get("role", ""),
+            job_title=job_context.get("title", ""),
+            skills=resume.get("skills", [])
+        )
         # Determine context
         context = {
             "role": resume.get("role", job_context.get("title", "Professional")),
-            "domain": self._detect_domain(resume, job_context)
+            "domain": self._detect_domain(resume, job_context),
+            "esco_context": esco_context
         }
         
         # Transform experience
@@ -858,7 +822,8 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
         # Transform responsibilities
         if "responsibilities" in resume and resume["responsibilities"]:
             transformed_resp, result = self.transform_responsibilities(
-                resume["responsibilities"]
+                resume["responsibilities"],
+                context=context
             )
             transformed["responsibilities"] = transformed_resp
             results["responsibilities"] = result
@@ -871,7 +836,10 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
         
         # Transform skills
         if "skills" in resume and resume["skills"]:
-            transformed_skills, result = self.transform_skills(resume["skills"])
+            transformed_skills, result = self.transform_skills(
+                resume["skills"],
+                context=context
+            )
             transformed["skills"] = transformed_skills
             results["skills"] = result
         
