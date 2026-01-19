@@ -28,6 +28,7 @@ class ValidationResult:
     is_valid: bool
     semantic_similarity: float
     career_level_valid: bool
+    ontology_aligned: bool
     rejection_reason: Optional[str] = None
     
     def to_dict(self) -> Dict:
@@ -35,7 +36,8 @@ class ValidationResult:
         result = {
             "is_valid": self.is_valid,
             "semantic_similarity": self.semantic_similarity,
-            "career_level_valid": self.career_level_valid
+            "career_level_valid": self.career_level_valid,
+            "ontology_aligned": self.ontology_aligned
         }
         if self.rejection_reason:
             result["rejection_reason"] = self.rejection_reason
@@ -181,7 +183,8 @@ class SemanticCoherenceValidator:
         self,
         original: str,
         transformed: str,
-        target_level: str
+        target_level: str,
+        ontology_terms: Optional[Set[str]] = None
     ) -> ValidationResult:
         """
         Validate a transformation meets quality criteria.
@@ -213,6 +216,7 @@ class SemanticCoherenceValidator:
                 is_valid=False,
                 semantic_similarity=similarity,
                 career_level_valid=False,
+                ontology_aligned=True,
                 rejection_reason=f"Semantic similarity too low: {similarity:.4f} < {self.min_similarity}"
             )
         
@@ -225,6 +229,7 @@ class SemanticCoherenceValidator:
                 is_valid=False,
                 semantic_similarity=similarity,
                 career_level_valid=False,
+                ontology_aligned=True,
                 rejection_reason=f"Semantic similarity too high (insufficient transformation): {similarity:.4f} > {self.max_similarity}"
             )
         
@@ -239,19 +244,43 @@ class SemanticCoherenceValidator:
                 is_valid=False,
                 semantic_similarity=similarity,
                 career_level_valid=False,
+                ontology_aligned=True,
                 rejection_reason=f"Missing {target_level}-level career indicators"
             )
-        
+
         logger.debug(
             f"Transformation validated: similarity={similarity:.4f}, "
             f"career_level_valid={career_level_valid}"
         )
-        
+
+        ontology_aligned = self._check_ontology_alignment(
+            transformed, ontology_terms)
+        if not ontology_aligned:
+            return ValidationResult(
+                is_valid=False,
+                semantic_similarity=similarity,
+                career_level_valid=True,
+                ontology_aligned=False,
+                rejection_reason="Ontology alignment check failed"
+            )
+
         return ValidationResult(
             is_valid=True,
             semantic_similarity=similarity,
-            career_level_valid=True
+            career_level_valid=True,
+            ontology_aligned=True
         )
+
+    def _check_ontology_alignment(
+        self,
+        transformed: str,
+        ontology_terms: Optional[Set[str]]
+    ) -> bool:
+        """Check that at least one ontology term appears in the transformed text."""
+        if not ontology_terms:
+            return True
+        transformed_lower = transformed.lower()
+        return any(term.lower() in transformed_lower for term in ontology_terms)
     
     def validate_career_level(self, text: str, target_level: str) -> bool:
         """
