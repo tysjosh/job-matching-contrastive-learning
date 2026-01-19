@@ -306,6 +306,7 @@ class BatchConfig:
 class PathsConfig:
     """Configuration for file paths."""
     cs_skills_path: str = "dataset/cs_skills.json"
+    esco_domains_path: str = "esco_it_career_domains_refined.json"
     input_file: str = "preprocess/processed_combined_enriched_data.jsonl"
     output_file: str = "llm_augmentation/augmented_data.jsonl"
     summary_file: str = "llm_augmentation/augmentation_summary.json"
@@ -315,6 +316,7 @@ class PathsConfig:
         """Create PathsConfig from dictionary."""
         return cls(
             cs_skills_path=data.get("cs_skills_path", "dataset/cs_skills.json"),
+            esco_domains_path=data.get("esco_domains_path", "esco_it_career_domains_refined.json"),
             input_file=data.get("input_file", "preprocess/processed_combined_enriched_data.jsonl"),
             output_file=data.get("output_file", "llm_augmentation/augmented_data.jsonl"),
             summary_file=data.get("summary_file", "llm_augmentation/augmentation_summary.json")
@@ -392,6 +394,7 @@ class ValidationResult:
     semantic_similarity: float
     technical_preservation: float
     career_level_valid: bool
+    ontology_aligned: bool = True
     rejection_reason: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
@@ -400,7 +403,8 @@ class ValidationResult:
             "is_valid": self.is_valid,
             "semantic_similarity": self.semantic_similarity,
             "technical_preservation": self.technical_preservation,
-            "career_level_valid": self.career_level_valid
+            "career_level_valid": self.career_level_valid,
+            "ontology_aligned": self.ontology_aligned
         }
         if self.rejection_reason:
             result["rejection_reason"] = self.rejection_reason
