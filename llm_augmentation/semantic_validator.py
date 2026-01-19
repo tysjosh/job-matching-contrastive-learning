@@ -65,16 +65,19 @@ class SemanticCoherenceValidator:
         # Leadership verbs
         "led", "architected", "designed", "mentored", "directed",
         "spearheaded", "orchestrated", "championed", "pioneered",
-        "established", "drove", "transformed", "scaled",
+        "established", "drove", "transformed", "scaled", "oversaw",
+        "guided", "coordinated", "evangelized",
         # Strategic terms
         "strategic", "ownership", "leadership", "cross-functional",
         "enterprise", "organization-wide", "company-wide",
+        "roadmap", "vision", "long-term",
         # Impact terms
         "impact", "revenue", "growth", "optimization",
         "efficiency", "stakeholder", "executive",
+        "reliability", "performance", "scalability",
         # Seniority indicators
         "senior", "lead", "principal", "staff", "architect",
-        "manager", "director", "head"
+        "manager", "director", "head", "tech lead", "team lead"
     }
     
     # Junior-level indicators for downward transformations
@@ -85,12 +88,14 @@ class SemanticCoherenceValidator:
         # Guidance terms
         "under guidance", "supervised", "mentored by",
         "with support", "alongside", "team member",
+        "pair programmed", "shadowed", "reviewed with",
         # Task-focused terms
         "tasks", "assignments", "responsibilities",
         "day-to-day", "routine", "basic", "foundational",
+        "ticket", "bug fix", "small feature",
         # Entry-level indicators
         "junior", "entry", "associate", "trainee",
-        "intern", "graduate", "beginner"
+        "intern", "graduate", "beginner", "new hire"
     }
     
     def __init__(
