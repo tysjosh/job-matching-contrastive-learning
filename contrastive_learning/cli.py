@@ -14,6 +14,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, Union
 import json
+import torch
 
 try:
     import yaml
@@ -27,6 +28,7 @@ from .logging_utils import setup_training_logger
 from .data_adapter import DataAdapter, DataAdapterConfig
 from .pipeline import MLPipeline
 from .pipeline_config import PipelineConfig, create_default_pipeline_config, create_quick_pipeline_config
+from .evaluator import ContrastiveEvaluator, EvaluationConfig
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -56,6 +58,9 @@ Examples:
 
   # Generate example configuration files
   python -m contrastive_learning.cli generate-config --output config/example.yaml --format yaml
+
+  # Evaluate a checkpoint with text-encoder baseline (cosine similarity only)
+  python -m contrastive_learning evaluate --config config/phase2_finetuning_config.json --checkpoint phase2_finetuning/checkpoint_epoch_9.pt --output-dir baseline_evaluation --use-text-encoder-baseline
 
   # Convert new data format to training format
   python -m contrastive_learning.cli convert-data data/train_labeled_data.jsonl data/translated_eng_jd.csv data/translated_eng_resume.csv --output data/converted_training_data.jsonl
@@ -191,6 +196,24 @@ Environment Variables:
                                  help='Device to use (cpu, cuda, mps)')
     pipeline_parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                                  default='INFO', help='Logging level')
+
+    # Evaluate command
+    evaluate_parser = subparsers.add_parser(
+        'evaluate', help='Evaluate a checkpoint or text-encoder baseline')
+    evaluate_parser.add_argument('--config', '-c', type=str, required=True,
+                                 help='Path to training configuration file (YAML or JSON)')
+    evaluate_parser.add_argument('--checkpoint', type=str,
+                                 help='Path to model checkpoint (.pt)')
+    evaluate_parser.add_argument('--output-dir', '-o', type=str, default='evaluation_output',
+                                 help='Output directory for evaluation results')
+    evaluate_parser.add_argument('--dataset', type=str,
+                                 help='Path to evaluation dataset (JSONL format)')
+    evaluate_parser.add_argument('--batch-size', type=int,
+                                 help='Override evaluation batch size')
+    evaluate_parser.add_argument('--device', type=str,
+                                 help='Device to use (cpu, cuda, mps)')
+    evaluate_parser.add_argument('--use-text-encoder-baseline', action='store_true',
+                                 help='Skip contrastive model and evaluate using text encoder embeddings')
 
     return parser
 
@@ -833,6 +856,125 @@ def cmd_convert_data(args: argparse.Namespace) -> int:
         return 1
 
 
+def _create_jsonl_dataloader(data_path: str, batch_size: int):
+    """Create a DataLoader for JSONL evaluation data."""
+    from torch.utils.data import Dataset, DataLoader as PyTorchDataLoader
+
+    class JSONLDataset(Dataset):
+        def __init__(self, file_path: str):
+            self.samples = []
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            sample = json.loads(line)
+                            processed_sample = {
+                                'resume': sample.get('resume_text', ''),
+                                'job': sample.get('job_text', ''),
+                                'label': sample.get('label', 1)
+                            }
+                            self.samples.append(processed_sample)
+                        except json.JSONDecodeError:
+                            continue
+
+        def __len__(self):
+            return len(self.samples)
+
+        def __getitem__(self, idx: int):
+            return self.samples[idx]
+
+    dataset = JSONLDataset(data_path)
+    if len(dataset) == 0:
+        logger.warning(f"No valid samples found in {data_path}")
+        return None
+
+    return PyTorchDataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=0
+    )
+
+
+def _load_model_from_checkpoint(checkpoint_path: str, config: TrainingConfig, device: str):
+    """Load a model from checkpoint using the training config."""
+    if not checkpoint_path:
+        raise ValueError("Checkpoint path is required unless using baseline mode.")
+
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Model file not found: {checkpoint_path}")
+
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+
+    if isinstance(checkpoint, dict):
+        if 'model' in checkpoint:
+            model = checkpoint['model']
+        elif 'model_state_dict' in checkpoint:
+            from .trainer import ContrastiveLearningTrainer
+            temp_trainer = ContrastiveLearningTrainer(config)
+            model = temp_trainer.model
+            model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            raise ValueError("No model found in checkpoint")
+    else:
+        model = checkpoint
+
+    return model.to(device)
+
+
+def cmd_evaluate(args: argparse.Namespace) -> int:
+    """Execute the evaluate command."""
+    try:
+        config = load_config_from_file(args.config)
+
+        if args.batch_size:
+            config.batch_size = args.batch_size
+
+        device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
+
+        dataset_path = args.dataset or "data/converted_training_data.jsonl"
+        if not Path(dataset_path).exists():
+            raise FileNotFoundError(
+                f"Evaluation dataset not found: {dataset_path}. "
+                "Provide --dataset to specify the JSONL file.")
+
+        data_loader = _create_jsonl_dataloader(dataset_path, config.batch_size)
+        if data_loader is None:
+            raise ValueError("No valid samples found for evaluation.")
+
+        from sentence_transformers import SentenceTransformer
+        text_encoder = SentenceTransformer(config.text_encoder_model)
+        text_encoder.to(device)
+
+        eval_config = EvaluationConfig(
+            batch_size=config.batch_size,
+            device=device,
+            use_text_encoder_baseline=args.use_text_encoder_baseline
+        )
+
+        evaluator = ContrastiveEvaluator(eval_config, text_encoder=text_encoder)
+
+        model = None
+        if not args.use_text_encoder_baseline:
+            model = _load_model_from_checkpoint(args.checkpoint, config, device)
+
+        results = evaluator.evaluate_model(
+            model, data_loader, args.output_dir)
+
+        print("Evaluation metrics:")
+        for metric_name, value in results.metrics.items():
+            if isinstance(value, float):
+                print(f"  {metric_name}: {value:.4f}")
+            else:
+                print(f"  {metric_name}: {value}")
+
+        return 0
+    except Exception as e:
+        print(f"Evaluation failed: {e}")
+        logging.exception("Evaluation failed")
+        return 1
+
+
 def main() -> int:
     """Main CLI entry point."""
     parser = create_parser()
@@ -855,6 +997,8 @@ def main() -> int:
         return cmd_status(args)
     elif args.command == 'convert-data':
         return cmd_convert_data(args)
+    elif args.command == 'evaluate':
+        return cmd_evaluate(args)
     else:
         print(f"Unknown command: {args.command}")
         return 1

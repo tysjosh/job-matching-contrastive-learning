@@ -8,6 +8,7 @@ while preserving technical terms and maintaining semantic coherence.
 Requirements: 2.1, 3.1, 4.1, 5.1, 5.2
 """
 
+import json
 import logging
 import re
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .llm_client import LLMClient, LLMClientError
 from .models import TransformationConfig
 from .technical_term_protector import TechnicalTermProtector
+from .esco_context import ESCOContextBuilder, ESCOContext
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,7 @@ Original experience:
 {text}
 
 Context (role: {role}, domain: {domain})
+{esco_context}
 
 Transformed senior-level experience (respond with ONLY the transformed text, no explanations):"""
 
@@ -71,6 +74,7 @@ Guidelines:
 
 Original responsibilities:
 {responsibilities}
+{esco_context}
 
 Transformed senior-level responsibilities (respond with ONLY a numbered list, one per line):"""
 
@@ -97,6 +101,7 @@ Original skills:
 {skills}
 
 Domain context: {domain}
+{esco_context}
 
 Enhanced senior-level skills (respond with a JSON array of skill objects with 'name' and 'proficiency' keys):"""
 
@@ -127,7 +132,10 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
         llm_client: LLMClient,
         config: TransformationConfig,
         term_protector: Optional[TechnicalTermProtector] = None,
-        prompts: Optional[Dict[str, str]] = None
+        prompts: Optional[Dict[str, str]] = None,
+        esco_context_builder: Optional[ESCOContextBuilder] = None,
+        cs_skills_path: Optional[str] = None,
+        esco_domains_path: Optional[str] = None
     ):
         """
         Initialize the upward LLM transformer.
@@ -140,7 +148,14 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
         """
         self.llm_client = llm_client
         self.config = config
-        self.term_protector = term_protector or TechnicalTermProtector()
+        self.term_protector = term_protector or TechnicalTermProtector(
+            cs_skills_path=cs_skills_path or "dataset/cs_skills.json",
+            llm_client=llm_client
+        )
+        self.esco_context_builder = esco_context_builder or ESCOContextBuilder(
+            esco_domains_path=esco_domains_path or "esco_it_career_domains_refined.json",
+            cs_skills_path=cs_skills_path or "dataset/cs_skills.json"
+        )
         
         # Set up prompts (use custom or defaults)
         self.prompts = {
@@ -153,6 +168,57 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
         logger.info(
             f"UpwardLLMTransformer initialized with target level: {config.upward_target_level}"
         )
+
+    def _format_esco_context(self, context: Optional[ESCOContext]) -> str:
+        """Format ESCO context for prompt injection."""
+        if context is None:
+            return ""
+        block = context.to_prompt_block()
+        return f"\n{block}" if block else ""
+
+    def _extract_json_array(self, text: str) -> Optional[List[Dict[str, Any]]]:
+        """Extract and parse a JSON array from text."""
+        match = re.search(r"\[.*\]", text, re.DOTALL)
+        if not match:
+            return None
+        try:
+            parsed = json.loads(match.group(0))
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            return None
+        return None
+
+    def _validate_skill_objects(self, skills: List[Dict[str, Any]]) -> bool:
+        """Validate skill objects structure."""
+        if not skills:
+            return False
+        for skill in skills:
+            if not isinstance(skill, dict):
+                return False
+            if "name" not in skill:
+                return False
+            if "proficiency" not in skill and "level" not in skill:
+                return False
+        return True
+
+    def _generate_with_retry(
+        self,
+        prompt: str,
+        parse_fn,
+        max_attempts: int = 3
+    ):
+        """Generate with retries and parsing."""
+        for _ in range(max_attempts):
+            response = self.llm_client.generate(prompt)
+            parsed = parse_fn(response.text.strip())
+            if parsed is not None:
+                return parsed
+            prompt = (
+                prompt
+                + "\n\nReturn ONLY valid JSON. Do not add commentary or code fences."
+            )
+        return None
 
     def transform_experience(
         self,
@@ -185,6 +251,7 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
         context = context or {}
         role = context.get("role", "Professional")
         domain = context.get("domain", "Technology")
+        esco_context = context.get("esco_context")
         
         try:
             # Step 1: Protect technical terms
@@ -194,7 +261,8 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
             prompt = self.prompts["experience"].format(
                 text=protected_text,
                 role=role,
-                domain=domain
+                domain=domain,
+                esco_context=self._format_esco_context(esco_context)
             )
             
             # Step 3: Call LLM
@@ -242,7 +310,8 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
 
     def transform_responsibilities(
         self,
-        responsibilities: List[str]
+        responsibilities: List[str],
+        context: Optional[Dict[str, Any]] = None
     ) -> Tuple[List[str], TransformationResult]:
         """
         Transform responsibilities to ownership/leadership language.
@@ -269,6 +338,8 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
         
         original_count = len(responsibilities)
         original_text = "\n".join(f"- {r}" for r in responsibilities)
+        context = context or {}
+        esco_context = context.get("esco_context")
         
         try:
             # Step 1: Protect technical terms in all responsibilities
@@ -303,15 +374,22 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
             
             # Step 2: Build prompt
             prompt = self.prompts["responsibilities"].format(
-                responsibilities=protected_text
+                responsibilities=protected_text,
+                esco_context=self._format_esco_context(esco_context)
             )
-            
-            # Step 3: Call LLM
-            response = self.llm_client.generate(prompt)
-            transformed_text = response.text.strip()
-            
-            # Step 4: Parse response into list
-            transformed_list = self._parse_responsibilities_response(transformed_text)
+
+            def parse_fn(text: str) -> Optional[List[str]]:
+                parsed = self._parse_responsibilities_response(text)
+                return parsed if parsed else None
+
+            transformed_list = self._generate_with_retry(prompt, parse_fn)
+            if transformed_list is None:
+                return responsibilities, TransformationResult(
+                    success=False,
+                    transformed_text=original_text,
+                    original_text=original_text,
+                    error_message="Failed to parse responsibilities output"
+                )
             
             # Step 5: Restore technical terms
             restored_list = []
@@ -621,7 +699,8 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
     def transform_skills(
         self,
         skills: List[Dict[str, Any]],
-        domain: str = "Technology"
+        domain: str = "Technology",
+        context: Optional[Dict[str, Any]] = None
     ) -> Tuple[List[Dict[str, Any]], TransformationResult]:
         """
         Add senior skills and upgrade proficiency levels.
@@ -647,49 +726,69 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
                 term_preservation_rate=1.0
             )
         
-        original_text = str(skills)
-        
+        original_text = json.dumps(skills)
+        context = context or {}
+        esco_context = context.get("esco_context")
+
         try:
-            # Step 1: Upgrade proficiency levels for existing skills
-            upgraded_skills = []
-            for skill in skills:
-                upgraded_skill = self._upgrade_skill(skill)
-                upgraded_skills.append(upgraded_skill)
-            
-            # Step 2: Determine which senior skills to add
-            existing_skill_names = {
-                self._normalize_skill_name(s.get("name", "") if isinstance(s, dict) else str(s))
-                for s in skills
-            }
-            
-            # Select senior skills not already present
-            skills_to_add = self._select_senior_skills(existing_skill_names, domain)
-            
-            # Step 3: Add senior skills
-            for skill in skills_to_add:
-                upgraded_skills.append(skill)
-            
-            logger.debug(
-                f"Skills transformation complete. "
-                f"Original: {len(skills)}, Transformed: {len(upgraded_skills)}, "
-                f"Added: {len(skills_to_add)}"
+            prompt = self.prompts["skills"].format(
+                skills=original_text,
+                domain=domain,
+                esco_context=self._format_esco_context(esco_context)
             )
-            
-            return upgraded_skills, TransformationResult(
-                success=True,
-                transformed_text=str(upgraded_skills),
+            transformed_skills = self._generate_with_retry(
+                prompt, self._extract_json_array)
+
+            if transformed_skills and self._validate_skill_objects(transformed_skills):
+                merged_skills = self._merge_original_skills(skills, transformed_skills)
+                return merged_skills, TransformationResult(
+                    success=True,
+                    transformed_text=json.dumps(merged_skills),
+                    original_text=original_text,
+                    term_preservation_rate=1.0
+                )
+
+            return skills, TransformationResult(
+                success=False,
+                transformed_text=original_text,
                 original_text=original_text,
-                term_preservation_rate=1.0  # Skills are preserved, just enhanced
+                term_preservation_rate=1.0,
+                error_message="Failed to parse LLM skills output"
             )
-            
+
         except Exception as e:
             logger.error(f"Error during skills transformation: {e}")
             return skills, TransformationResult(
                 success=False,
                 transformed_text=original_text,
                 original_text=original_text,
+                term_preservation_rate=1.0,
                 error_message=str(e)
             )
+
+    def _merge_original_skills(
+        self,
+        original: List[Dict[str, Any]],
+        generated: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Ensure original skills are preserved in generated output."""
+        original_names = {
+            self._normalize_skill_name(s.get("name", "") if isinstance(s, dict) else str(s))
+            for s in original
+        }
+        generated_names = {
+            self._normalize_skill_name(s.get("name", "") if isinstance(s, dict) else str(s))
+            for s in generated
+        }
+        merged = list(generated)
+        for skill in original:
+            name = self._normalize_skill_name(
+                skill.get("name", "") if isinstance(skill, dict) else str(skill))
+            if name and name not in generated_names:
+                merged.append(self._upgrade_skill(skill))
+        return merged
+
+    # Rule-based fallback removed by request.
 
     def _upgrade_skill(self, skill: Any) -> Dict[str, Any]:
         """
@@ -823,10 +922,16 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
         # Create a copy of the resume
         transformed = resume.copy()
         
+        esco_context = self.esco_context_builder.build_context(
+            role=resume.get("role", ""),
+            job_title=job_context.get("title", ""),
+            skills=resume.get("skills", [])
+        )
         # Determine context
         context = {
             "role": resume.get("role", job_context.get("title", "Professional")),
-            "domain": self._detect_domain(resume, job_context)
+            "domain": self._detect_domain(resume, job_context),
+            "esco_context": esco_context
         }
         
         # Transform experience
@@ -842,7 +947,8 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
         # Transform responsibilities
         if "responsibilities" in resume and resume["responsibilities"]:
             transformed_resp, result = self.transform_responsibilities(
-                resume["responsibilities"]
+                resume["responsibilities"],
+                context=context
             )
             transformed["responsibilities"] = transformed_resp
             results["responsibilities"] = result
@@ -857,7 +963,8 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
         if "skills" in resume and resume["skills"]:
             transformed_skills, result = self.transform_skills(
                 resume["skills"],
-                domain=context["domain"]
+                domain=context["domain"],
+                context=context
             )
             transformed["skills"] = transformed_skills
             results["skills"] = result
