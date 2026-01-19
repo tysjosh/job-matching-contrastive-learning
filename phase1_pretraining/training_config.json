@@ -20,6 +20,7 @@
   "fallback_on_augmentation_failure": true,
   "hard_negative_max_distance": 2.0,
   "medium_negative_max_distance": 4.0,
+  "max_negatives_per_anchor": 20,
   "esco_graph_path": "training_output/career_graph_data_driven.gexf",
   "global_negative_sampling": false,
   "global_negative_pool_size": 1000,
@@ -39,6 +40,5 @@
   "augmentation_metadata_sync": true,
   "augmentation_quality_gates": null,
   "augmentation_similarity_thresholds": null,
-  "augmentation_fallback_config": null,
-  "max_negatives_per_anchor": 20
+  "augmentation_fallback_config": null
 }
