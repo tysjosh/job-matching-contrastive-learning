@@ -792,7 +792,7 @@ class ContrastiveEvaluator:
     def _save_metrics(self, metrics: Dict[str, float], detailed_metrics: Dict[str, Any],
                       output_path: Path):
         """Save metrics to file"""
-        
+
         # Convert numpy types to Python native types for JSON serialization
         def convert_to_serializable(obj):
             if isinstance(obj, dict):
@@ -807,7 +807,7 @@ class ContrastiveEvaluator:
                 return obj.tolist()
             else:
                 return obj
-        
+
         results = {
             "metrics": convert_to_serializable(metrics),
             "detailed_metrics": convert_to_serializable(detailed_metrics),
