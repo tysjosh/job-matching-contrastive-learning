@@ -35,7 +35,7 @@ def get_data_adapter_config(processed_file, final_file, is_augmentation=True):
         output_path=final_file,
         min_job_description_length=1,
         min_resume_experience_length=1,
-        max_samples_per_original=10000 if not is_augmentation else 5,
+        max_samples_per_original=20000 if not is_augmentation else 5,
         balance_labels=is_augmentation  # Balance only for augmentation
     )
 
