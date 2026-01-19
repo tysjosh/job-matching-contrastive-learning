@@ -149,7 +149,8 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
         self.llm_client = llm_client
         self.config = config
         self.term_protector = term_protector or TechnicalTermProtector(
-            cs_skills_path=cs_skills_path or "dataset/cs_skills.json"
+            cs_skills_path=cs_skills_path or "dataset/cs_skills.json",
+            llm_client=llm_client
         )
         self.esco_context_builder = esco_context_builder or ESCOContextBuilder(
             esco_domains_path=esco_domains_path or "esco_it_career_domains_refined.json",
