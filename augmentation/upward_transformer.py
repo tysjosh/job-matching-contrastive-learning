@@ -5,6 +5,8 @@ This transformer elevates resume descriptions to reflect how a more senior
 professional would describe the same work, adding ownership, impact, and scale.
 """
 
+from augmentation.career_aware_paraphraser import CareerAwareParaphraser, ParaphrasingResult
+from augmentation.transformation_config_loader import get_config_loader
 import logging
 import re
 from typing import Dict, List, Any, Optional
@@ -12,10 +14,8 @@ from typing import Dict, List, Any, Optional
 logger = logging.getLogger(__name__)
 
 # Import config loader - required dependency
-from augmentation.transformation_config_loader import get_config_loader
 
 # Import paraphraser
-from augmentation.career_aware_paraphraser import CareerAwareParaphraser, ParaphrasingResult
 
 
 class UpwardTransformer:
@@ -33,54 +33,60 @@ class UpwardTransformer:
                  config_dir: Optional[str] = None):
         """
         Initialize the upward transformer.
-        
+
         Args:
             enable_paraphrasing: Whether to enable paraphrasing for diversity
             paraphrasing_config: Configuration for paraphrasing behavior
             config_dir: Optional custom config directory path
-        
+
         Raises:
             RuntimeError: If configuration files cannot be loaded
         """
         # Initialize config loader
         self.config_loader = get_config_loader(config_dir)
-        
+
         self._load_transformation_rules()
-        
+
         # Initialize paraphrasing
         self.enable_paraphrasing = enable_paraphrasing
         if self.enable_paraphrasing:
             paraphrasing_config = paraphrasing_config or {}
             self.paraphraser = CareerAwareParaphraser(
-                preserve_technical_terms=paraphrasing_config.get('preserve_technical_terms', True),
-                min_diversity_score=paraphrasing_config.get('min_diversity_score', 0.3),
-                max_semantic_drift=paraphrasing_config.get('max_semantic_drift', 0.8)
+                preserve_technical_terms=paraphrasing_config.get(
+                    'preserve_technical_terms', True),
+                min_diversity_score=paraphrasing_config.get(
+                    'min_diversity_score', 0.3),
+                max_semantic_drift=paraphrasing_config.get(
+                    'max_semantic_drift', 0.8)
             )
-            logger.info("Upward transformer initialized with paraphrasing enabled")
+            logger.info(
+                "Upward transformer initialized with paraphrasing enabled")
         else:
             self.paraphraser = None
             logger.info("Upward transformer initialized without paraphrasing")
 
     def _load_transformation_rules(self):
         """Load transformation rules from config files"""
-        
+
         self.action_verb_upgrades = self.config_loader.load_verb_upgrades()
         self.scope_amplifiers = self.config_loader.load_scope_amplifiers()
         self.impact_phrases_by_domain = self.config_loader.load_all_impact_phrases()
         self.ownership_phrases = self.config_loader.get_ownership_phrases()
         self.strategic_additions = self.config_loader.get_strategic_additions()
         self.title_upgrades = self.config_loader.load_title_upgrades()
-        
+
         # Validate required data was loaded
         if not self.action_verb_upgrades:
-            raise RuntimeError("Failed to load verb upgrades from config. Check config/transformation_rules/verb_transformations.yaml")
+            raise RuntimeError(
+                "Failed to load verb upgrades from config. Check config/transformation_rules/verb_transformations.yaml")
         if not self.scope_amplifiers:
-            raise RuntimeError("Failed to load scope amplifiers from config. Check config/transformation_rules/scope_transformations.yaml")
-        
+            raise RuntimeError(
+                "Failed to load scope amplifiers from config. Check config/transformation_rules/scope_transformations.yaml")
+
         # Variety tracking to prevent repetitive patterns
         self._phrase_usage_history = {}
         self._max_phrase_reuse = 3
-        
+
         logger.info("Loaded transformation rules from config files")
 
     def _get_technical_terms_from_cs_database(self) -> List[str]:
@@ -144,10 +150,11 @@ class UpwardTransformer:
             # Sort by length (longest first) to prevent shorter terms from breaking longer words
             # This fixes the issue where "C" would corrupt "Coursera" → "__TECH_TERM_X__oursera"
             unique_terms.sort(key=len, reverse=True)
-            
+
             # Filter out single-character terms that could cause regex issues
             # Single chars like "C", "R" are too ambiguous and cause false matches
-            unique_terms = [term for term in unique_terms if len(term) > 1 or term in ['C#', 'C++']]
+            unique_terms = [term for term in unique_terms if len(term) > 1 or term in [
+                'C#', 'C++']]
 
             return unique_terms
 
@@ -281,10 +288,11 @@ class UpwardTransformer:
                                    job_context: Dict,
                                    resume: Dict[str, Any] = None) -> str:
         """Transform experience text to senior-level language with optional paraphrasing"""
-        
+
         # Step 1: Apply traditional career-level transformation
-        transformed_text = self._apply_career_level_transformation(text, target_level, job_context, resume)
-        
+        transformed_text = self._apply_career_level_transformation(
+            text, target_level, job_context, resume)
+
         # Step 2: Apply paraphrasing for diversity if enabled
         if self.enable_paraphrasing and self.paraphraser:
             paraphrasing_result = self.paraphraser.paraphrase_experience_text(
@@ -293,22 +301,23 @@ class UpwardTransformer:
                 preserve_technical=True,
                 diversity_target=0.3
             )
-            
+
             if paraphrasing_result.success:
                 logger.debug(f"Paraphrasing successful - diversity: {paraphrasing_result.diversity_score:.3f}, "
-                           f"technical terms preserved: {paraphrasing_result.technical_terms_preserved}")
+                             f"technical terms preserved: {paraphrasing_result.technical_terms_preserved}")
                 return paraphrasing_result.paraphrased_text
             else:
-                logger.debug(f"Paraphrasing failed or insufficient diversity - using traditional transformation")
+                logger.debug(
+                    f"Paraphrasing failed or insufficient diversity - using traditional transformation")
                 return transformed_text
         else:
             return transformed_text
 
     def _apply_career_level_transformation(self,
-                                         text: str,
-                                         target_level: str,
-                                         job_context: Dict,
-                                         resume: Dict[str, Any] = None) -> str:
+                                           text: str,
+                                           target_level: str,
+                                           job_context: Dict,
+                                           resume: Dict[str, Any] = None) -> str:
         """Apply traditional career-level transformation (original logic)"""
         transformed_text = text
 
@@ -368,17 +377,20 @@ class UpwardTransformer:
         if not any(phrase in transformed_text.lower() for phrase in
                    ['resulting', 'leading to', 'improving', 'enhancing', 'driving']):
             # Detect domain from context
-            domain = self._detect_domain_from_context(resume or {}, job_context)
-            
+            domain = self._detect_domain_from_context(
+                resume or {}, job_context)
+
             # Get impact phrases from domain-specific collection
-            impact_phrases = self._get_impact_phrases_for_domain(domain, target_level)
-            
+            impact_phrases = self._get_impact_phrases_for_domain(
+                domain, target_level)
+
             if impact_phrases:
                 # Create context key for diversity tracking
                 context_key = f"{domain}_{target_level}_{hash(text) % 1000}"
-                
+
                 # Select diverse impact phrase
-                impact_phrase = self._select_diverse_impact_phrase(impact_phrases, context_key)
+                impact_phrase = self._select_diverse_impact_phrase(
+                    impact_phrases, context_key)
                 transformed_text = f"{transformed_text.rstrip('.')}, {impact_phrase}"
 
         # Add strategic context for senior+ levels
@@ -395,7 +407,24 @@ class UpwardTransformer:
 
     def _elevate_job_title(self, title: str, target_level: str) -> str:
         """Elevate job title to reflect seniority"""
+        if not title:
+            return title
+
         title_lower = title.lower()
+
+        # Check if title already has seniority markers
+        seniority_markers = ['senior', 'lead', 'principal', 'chief', 'head',
+                             'director', 'vp', 'vice president', 'staff', 'expert']
+        has_seniority = any(
+            marker in title_lower for marker in seniority_markers)
+
+        # If already has appropriate level, return as-is
+        if target_level == 'senior' and any(marker in title_lower for marker in ['senior', 'lead']):
+            return title
+        elif target_level == 'lead' and any(marker in title_lower for marker in ['lead', 'principal', 'staff']):
+            return title
+        elif target_level == 'principal' and any(marker in title_lower for marker in ['principal', 'chief', 'director']):
+            return title
 
         # Apply title upgrades based on common patterns
         title_upgrades = {
@@ -404,9 +433,16 @@ class UpwardTransformer:
             'engineer': ['senior engineer', 'staff engineer', 'principal engineer'],
             'designer': ['senior designer', 'lead designer', 'design director'],
             'manager': ['senior manager', 'director', 'vice president'],
-            'scientist': ['senior scientist', 'lead scientist', 'principal scientist']
+            'scientist': ['senior scientist', 'lead scientist', 'principal scientist'],
+            'administrator': ['senior administrator', 'lead administrator', 'principal administrator'],
+            'architect': ['senior architect', 'lead architect', 'principal architect'],
+            'consultant': ['senior consultant', 'lead consultant', 'principal consultant'],
+            'specialist': ['senior specialist', 'lead specialist', 'principal specialist'],
+            'coordinator': ['senior coordinator', 'lead coordinator', 'manager'],
+            'technician': ['senior technician', 'lead technician', 'principal technician']
         }
 
+        # Try pattern matching first
         for base_title, upgrades in title_upgrades.items():
             if base_title in title_lower:
                 if target_level == 'senior':
@@ -416,19 +452,31 @@ class UpwardTransformer:
                 elif target_level == 'principal':
                     return upgrades[2] if len(upgrades) > 2 else upgrades[-1]
 
-        # Fallback: add senior prefix
-        if target_level == 'senior' and 'senior' not in title_lower:
-            return f"Senior {title}"
-        elif target_level == 'lead' and 'lead' not in title_lower:
-            return f"Lead {title}"
-        elif target_level == 'principal' and 'principal' not in title_lower:
-            return f"Principal {title}"
+        # Generic fallback: preserve capitalization and add prefix
+        # Handle titles that start with articles or adjectives
+        words = title.split()
+
+        # Determine the prefix based on target level
+        prefix = None
+        if target_level == 'senior':
+            prefix = 'Senior'
+        elif target_level == 'lead':
+            prefix = 'Lead'
+        elif target_level == 'principal':
+            prefix = 'Principal'
+
+        if prefix and not has_seniority:
+            # For multi-word titles, intelligently insert the prefix
+            # e.g., "Database Administrator" -> "Senior Database Administrator"
+            # e.g., "Construction Manager" -> "Senior Construction Manager"
+            if words[0].lower() in ['the', 'a', 'an']:
+                # "The Manager" -> "The Senior Manager"
+                return f"{words[0]} {prefix} {' '.join(words[1:])}"
+            else:
+                # Most common case: prepend prefix
+                return f"{prefix} {title}"
 
         return title
-
-
-
-
 
     def _transform_experience_item(self,
                                    item: Dict,
@@ -614,8 +662,6 @@ class UpwardTransformer:
         else:
             return summary
 
-
-
     def _elevate_technical_terms(self, terms: List[str], target_level: str) -> List[str]:
         """Elevate technical terms to more senior language"""
         elevated_terms = []
@@ -754,21 +800,21 @@ class UpwardTransformer:
     def _detect_domain_from_context(self, resume: Dict[str, Any], job_context: Dict[str, Any]) -> str:
         """
         Detect the most appropriate domain based on resume content and job context.
-        
+
         Args:
             resume: Resume data for context analysis
             job_context: Job context information
-            
+
         Returns:
             Detected domain string
         """
         # Try to get domain from job context first
         if job_context and 'domain' in job_context:
             return job_context['domain']
-        
+
         # Extract text for domain analysis
         analysis_text = ""
-        
+
         # Add job context text if available
         if job_context:
             if 'title' in job_context:
@@ -777,7 +823,7 @@ class UpwardTransformer:
                 analysis_text += f" {job_context['description']}"
             if 'requirements' in job_context:
                 analysis_text += f" {job_context['requirements']}"
-        
+
         # Add resume text for additional context
         if resume:
             if 'role' in resume:
@@ -798,7 +844,7 @@ class UpwardTransformer:
                             analysis_text += f" {skill}"
                         elif isinstance(skill, dict) and 'name' in skill:
                             analysis_text += f" {skill['name']}"
-        
+
         # Use ESCO domain detection if available
         try:
             from .progression_constraints import ESCODomainLoader
@@ -808,22 +854,22 @@ class UpwardTransformer:
                 return detected_domain
         except Exception as e:
             logger.warning(f"ESCO domain detection failed: {e}")
-        
+
         # Fallback to keyword-based detection
         return self._fallback_domain_detection(analysis_text)
-    
+
     def _fallback_domain_detection(self, text: str) -> str:
         """
         Fallback domain detection using keyword matching.
-        
+
         Args:
             text: Text to analyze for domain keywords
-            
+
         Returns:
             Detected domain string
         """
         text_lower = text.lower()
-        
+
         # Domain keyword mappings
         domain_keywords = {
             'software_development': [
@@ -852,18 +898,18 @@ class UpwardTransformer:
                 'product strategy', 'user experience', 'ux', 'ui', 'metrics', 'kpi', 'analytics'
             ]
         }
-        
+
         # Score each domain based on keyword matches
         domain_scores = {}
         for domain, keywords in domain_keywords.items():
             score = sum(1 for keyword in keywords if keyword in text_lower)
             if score > 0:
                 domain_scores[domain] = score
-        
+
         # Return domain with highest score, default to software_development
         if domain_scores:
             return max(domain_scores, key=domain_scores.get)
-        
+
         return 'software_development'  # Default fallback
 
     def _get_impact_phrases_for_domain(self, domain: str, target_level: str) -> List[str]:
@@ -883,47 +929,48 @@ class UpwardTransformer:
             return fallback_phrases
 
         return level_phrases
-    
+
     def _select_diverse_impact_phrase(self, phrases: List[str], context_key: str) -> str:
         """
         Select an impact phrase with diversity tracking to prevent repetitive patterns.
-        
+
         Args:
             phrases: List of available impact phrases
             context_key: Unique key for tracking usage (e.g., combination of domain, level, content hash)
-            
+
         Returns:
             Selected impact phrase
         """
         if not phrases:
             return "resulting in improved outcomes"
-        
+
         # Initialize usage tracking for this context if not exists
         if context_key not in self._phrase_usage_history:
             self._phrase_usage_history[context_key] = {}
-        
+
         usage_history = self._phrase_usage_history[context_key]
-        
+
         # Find phrases that haven't been overused
         available_phrases = []
         for phrase in phrases:
             usage_count = usage_history.get(phrase, 0)
             if usage_count < self._max_phrase_reuse:
                 available_phrases.append(phrase)
-        
+
         # If all phrases are overused, reset usage history and use all phrases
         if not available_phrases:
             self._phrase_usage_history[context_key] = {}
             available_phrases = phrases
-        
+
         # Select phrase based on content hash for consistency within same content
         # but with variety across different content
         phrase_index = hash(context_key) % len(available_phrases)
         selected_phrase = available_phrases[phrase_index]
-        
+
         # Update usage history
-        usage_history[selected_phrase] = usage_history.get(selected_phrase, 0) + 1
-        
+        usage_history[selected_phrase] = usage_history.get(
+            selected_phrase, 0) + 1
+
         return selected_phrase
 
     def _deep_copy_resume(self, resume: Dict[str, Any]) -> Dict[str, Any]:
@@ -1116,6 +1163,7 @@ class UpwardTransformer:
 
         # Title should be at or above target level for upward transformation
         return title_rank >= target_rank
+
     def get_paraphrasing_statistics(self) -> Dict[str, Any]:
         """Get statistics about paraphrasing usage"""
         if not self.enable_paraphrasing or not self.paraphraser:
@@ -1123,33 +1171,33 @@ class UpwardTransformer:
                 'paraphrasing_enabled': False,
                 'message': 'Paraphrasing is disabled'
             }
-        
+
         paraphrasing_stats = self.paraphraser.get_paraphrasing_statistics()
-        
+
         return {
             'paraphrasing_enabled': True,
             'paraphrasing_stats': paraphrasing_stats,
             'phrase_usage_history': len(self._phrase_usage_history),
             'max_phrase_reuse': self._max_phrase_reuse
         }
-    
+
     def reset_diversity_tracking(self):
         """Reset diversity tracking for new augmentation batch"""
         # Reset traditional diversity tracking
         self._phrase_usage_history.clear()
-        
+
         # Reset paraphrasing diversity tracking
         if self.enable_paraphrasing and self.paraphraser:
             self.paraphraser.reset_diversity_tracking()
-    
-    def configure_paraphrasing(self, 
-                             enable: bool = None,
-                             min_diversity_score: float = None,
-                             max_semantic_drift: float = None,
-                             preserve_technical_terms: bool = None):
+
+    def configure_paraphrasing(self,
+                               enable: bool = None,
+                               min_diversity_score: float = None,
+                               max_semantic_drift: float = None,
+                               preserve_technical_terms: bool = None):
         """
         Configure paraphrasing settings dynamically.
-        
+
         Args:
             enable: Enable or disable paraphrasing
             min_diversity_score: Minimum diversity score to achieve
@@ -1158,14 +1206,14 @@ class UpwardTransformer:
         """
         if enable is not None:
             self.enable_paraphrasing = enable
-            
+
             if enable and not self.paraphraser:
                 # Initialize paraphraser if enabling for the first time
                 self.paraphraser = CareerAwareParaphraser()
                 logger.info("Paraphrasing enabled and initialized")
             elif not enable:
                 logger.info("Paraphrasing disabled")
-        
+
         if self.paraphraser and enable is not False:
             # Update paraphraser configuration
             if min_diversity_score is not None:
@@ -1174,5 +1222,5 @@ class UpwardTransformer:
                 self.paraphraser.max_semantic_drift = max_semantic_drift
             if preserve_technical_terms is not None:
                 self.paraphraser.preserve_technical_terms = preserve_technical_terms
-            
+
             logger.info(f"Paraphrasing configuration updated")
