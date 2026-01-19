@@ -108,38 +108,6 @@ Domain context: {domain}
 
 Adjusted junior-level skills (respond with a JSON array of skill objects with 'name' and 'proficiency' keys):"""
 
-    # Advanced skills that should be masked for junior-level
-    ADVANCED_SKILLS_TO_MASK = [
-        "system architecture",
-        "technical leadership",
-        "team management",
-        "strategic planning",
-        "stakeholder management",
-        "enterprise architecture",
-        "solution architecture",
-        "technical mentoring",
-        "team mentoring",
-        "cross-functional collaboration",
-        "roadmap planning",
-        "budget management",
-        "vendor management",
-        "executive communication",
-        "organizational design",
-        "performance management",
-        "capacity planning",
-        "disaster recovery planning",
-    ]
-
-    # Proficiency downgrade mapping
-    PROFICIENCY_DOWNGRADES = {
-        "expert": "intermediate",
-        "advanced": "intermediate",
-        "proficient": "beginner",
-        "intermediate": "beginner",
-        "beginner": "beginner",
-        "basic": "basic",
-    }
-
     def __init__(
         self,
         llm_client: LLMClient,
@@ -805,77 +773,6 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
 
     # Rule-based fallback removed by request.
 
-    def _identify_advanced_skills(self, skills: List[Dict[str, Any]]) -> List[int]:
-        """
-        Identify indices of advanced/senior-level skills.
-        
-        Args:
-            skills: List of skill dictionaries
-            
-        Returns:
-            List of indices for advanced skills
-        """
-        advanced_indices = []
-        
-        for i, skill in enumerate(skills):
-            skill_name = ""
-            if isinstance(skill, dict):
-                skill_name = skill.get("name", "")
-            elif isinstance(skill, str):
-                skill_name = skill
-            
-            skill_name_lower = skill_name.lower()
-            
-            # Check if skill is in the advanced skills list
-            is_advanced = any(
-                adv_skill in skill_name_lower
-                for adv_skill in self.ADVANCED_SKILLS_TO_MASK
-            )
-            
-            # Also check proficiency level
-            if isinstance(skill, dict):
-                proficiency = skill.get("proficiency", "").lower()
-                if proficiency in ["expert", "advanced"]:
-                    is_advanced = True
-            
-            if is_advanced:
-                advanced_indices.append(i)
-        
-        return advanced_indices
-
-    def _downgrade_skill(self, skill: Any) -> Dict[str, Any]:
-        """
-        Downgrade a single skill's proficiency level.
-        
-        Args:
-            skill: Skill dict or string
-            
-        Returns:
-            Downgraded skill dictionary
-        """
-        if isinstance(skill, str):
-            return {
-                "name": skill,
-                "proficiency": "beginner"
-            }
-        
-        if not isinstance(skill, dict):
-            return {"name": str(skill), "proficiency": "beginner"}
-        
-        downgraded = skill.copy()
-        
-        # Downgrade proficiency if present
-        if "proficiency" in downgraded:
-            current = downgraded["proficiency"].lower() if isinstance(downgraded["proficiency"], str) else "intermediate"
-            downgraded["proficiency"] = self.PROFICIENCY_DOWNGRADES.get(current, "beginner")
-        elif "level" in downgraded:
-            current = downgraded["level"].lower() if isinstance(downgraded["level"], str) else "intermediate"
-            downgraded["level"] = self.PROFICIENCY_DOWNGRADES.get(current, "beginner")
-        else:
-            # Add proficiency if not present
-            downgraded["proficiency"] = "beginner"
-        
-        return downgraded
 
     def transform_resume(
         self,

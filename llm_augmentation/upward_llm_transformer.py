@@ -105,28 +105,6 @@ Domain context: {domain}
 
 Enhanced senior-level skills (respond with a JSON array of skill objects with 'name' and 'proficiency' keys):"""
 
-    # Senior-level skills to potentially add
-    SENIOR_SKILLS = [
-        {"name": "System Architecture", "proficiency": "expert"},
-        {"name": "Technical Leadership", "proficiency": "expert"},
-        {"name": "Team Mentoring", "proficiency": "advanced"},
-        {"name": "Cross-functional Collaboration", "proficiency": "expert"},
-        {"name": "Strategic Planning", "proficiency": "advanced"},
-        {"name": "Code Review & Best Practices", "proficiency": "expert"},
-        {"name": "Stakeholder Management", "proficiency": "advanced"},
-        {"name": "Technical Documentation", "proficiency": "expert"},
-    ]
-
-    # Proficiency upgrade mapping
-    PROFICIENCY_UPGRADES = {
-        "beginner": "intermediate",
-        "basic": "intermediate",
-        "intermediate": "advanced",
-        "proficient": "advanced",
-        "advanced": "expert",
-        "expert": "expert",
-    }
-
     def __init__(
         self,
         llm_client: LLMClient,
@@ -785,119 +763,12 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
             name = self._normalize_skill_name(
                 skill.get("name", "") if isinstance(skill, dict) else str(skill))
             if name and name not in generated_names:
-                merged.append(self._upgrade_skill(skill))
+                merged.append(skill if isinstance(skill, dict) else {"name": str(skill)})
         return merged
-
-    # Rule-based fallback removed by request.
-
-    def _upgrade_skill(self, skill: Any) -> Dict[str, Any]:
-        """
-        Upgrade a single skill's proficiency level.
-        
-        Args:
-            skill: Skill dict or string
-            
-        Returns:
-            Upgraded skill dictionary
-        """
-        if isinstance(skill, str):
-            return {
-                "name": skill,
-                "proficiency": "advanced"
-            }
-        
-        if not isinstance(skill, dict):
-            return {"name": str(skill), "proficiency": "advanced"}
-        
-        upgraded = skill.copy()
-        
-        # Upgrade proficiency if present
-        if "proficiency" in upgraded:
-            current = upgraded["proficiency"].lower() if isinstance(upgraded["proficiency"], str) else "intermediate"
-            upgraded["proficiency"] = self.PROFICIENCY_UPGRADES.get(current, "expert")
-        elif "level" in upgraded:
-            current = upgraded["level"].lower() if isinstance(upgraded["level"], str) else "intermediate"
-            upgraded["level"] = self.PROFICIENCY_UPGRADES.get(current, "expert")
-        else:
-            # Add proficiency if not present
-            upgraded["proficiency"] = "advanced"
-        
-        return upgraded
 
     def _normalize_skill_name(self, name: str) -> str:
         """Normalize skill name for comparison."""
         return name.lower().strip()
-
-    def _select_senior_skills(
-        self,
-        existing_skills: set,
-        domain: str
-    ) -> List[Dict[str, Any]]:
-        """
-        Select senior skills to add based on domain and existing skills.
-        
-        Args:
-            existing_skills: Set of normalized existing skill names
-            domain: Domain context
-            
-        Returns:
-            List of senior skills to add (2-3 skills)
-        """
-        # Domain-specific senior skills
-        domain_skills = {
-            "software": [
-                {"name": "System Architecture", "proficiency": "expert"},
-                {"name": "Technical Leadership", "proficiency": "expert"},
-                {"name": "Code Review & Best Practices", "proficiency": "expert"},
-            ],
-            "data": [
-                {"name": "Data Architecture", "proficiency": "expert"},
-                {"name": "ML Pipeline Design", "proficiency": "advanced"},
-                {"name": "Data Strategy", "proficiency": "advanced"},
-            ],
-            "devops": [
-                {"name": "Infrastructure Architecture", "proficiency": "expert"},
-                {"name": "Platform Engineering", "proficiency": "expert"},
-                {"name": "SRE Practices", "proficiency": "advanced"},
-            ],
-            "product": [
-                {"name": "Product Strategy", "proficiency": "expert"},
-                {"name": "Stakeholder Management", "proficiency": "expert"},
-                {"name": "Roadmap Planning", "proficiency": "advanced"},
-            ],
-        }
-        
-        # Determine domain category
-        domain_lower = domain.lower()
-        selected_domain = "software"  # default
-        
-        for key in domain_skills.keys():
-            if key in domain_lower:
-                selected_domain = key
-                break
-        
-        # Get domain-specific skills
-        candidate_skills = domain_skills.get(selected_domain, []) + self.SENIOR_SKILLS
-        
-        # Filter out existing skills
-        skills_to_add = []
-        for skill in candidate_skills:
-            skill_name_normalized = self._normalize_skill_name(skill["name"])
-            if skill_name_normalized not in existing_skills:
-                skills_to_add.append(skill)
-                if len(skills_to_add) >= 3:
-                    break
-        
-        # Ensure we add at least 2 skills
-        if len(skills_to_add) < 2:
-            for skill in self.SENIOR_SKILLS:
-                skill_name_normalized = self._normalize_skill_name(skill["name"])
-                if skill_name_normalized not in existing_skills and skill not in skills_to_add:
-                    skills_to_add.append(skill)
-                    if len(skills_to_add) >= 2:
-                        break
-        
-        return skills_to_add[:3]  # Return max 3 skills
 
     def transform_resume(
         self,
