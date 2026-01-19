@@ -747,12 +747,23 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
                     term_preservation_rate=1.0
                 )
 
-            logger.warning("Falling back to rule-based skill augmentation.")
-            return self._rule_based_transform_skills(skills, domain, original_text)
+            return skills, TransformationResult(
+                success=False,
+                transformed_text=original_text,
+                original_text=original_text,
+                term_preservation_rate=1.0,
+                error_message="Failed to parse LLM skills output"
+            )
 
         except Exception as e:
             logger.error(f"Error during skills transformation: {e}")
-            return self._rule_based_transform_skills(skills, domain, original_text, error=str(e))
+            return skills, TransformationResult(
+                success=False,
+                transformed_text=original_text,
+                original_text=original_text,
+                term_preservation_rate=1.0,
+                error_message=str(e)
+            )
 
     def _merge_original_skills(
         self,
@@ -776,33 +787,7 @@ Enhanced senior-level skills (respond with a JSON array of skill objects with 'n
                 merged.append(self._upgrade_skill(skill))
         return merged
 
-    def _rule_based_transform_skills(
-        self,
-        skills: List[Dict[str, Any]],
-        domain: str,
-        original_text: str,
-        error: Optional[str] = None
-    ) -> Tuple[List[Dict[str, Any]], TransformationResult]:
-        """Fallback rule-based skill upgrades."""
-        upgraded_skills = []
-        for skill in skills:
-            upgraded_skill = self._upgrade_skill(skill)
-            upgraded_skills.append(upgraded_skill)
-
-        existing_skill_names = {
-            self._normalize_skill_name(s.get("name", "") if isinstance(s, dict) else str(s))
-            for s in skills
-        }
-        skills_to_add = self._select_senior_skills(existing_skill_names, domain)
-        upgraded_skills.extend(skills_to_add)
-
-        return upgraded_skills, TransformationResult(
-            success=False,
-            transformed_text=json.dumps(upgraded_skills),
-            original_text=original_text,
-            term_preservation_rate=1.0,
-            error_message=error
-        )
+    # Rule-based fallback removed by request.
 
     def _upgrade_skill(self, skill: Any) -> Dict[str, Any]:
         """

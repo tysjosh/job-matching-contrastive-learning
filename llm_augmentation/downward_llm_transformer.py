@@ -784,50 +784,25 @@ Adjusted junior-level skills (respond with a JSON array of skill objects with 'n
                     term_preservation_rate=1.0
                 )
 
-            logger.warning("Falling back to rule-based skill masking.")
-            return self._rule_based_transform_skills(skills, mask_ratio, original_text)
+            return skills, TransformationResult(
+                success=False,
+                transformed_text=original_text,
+                original_text=original_text,
+                term_preservation_rate=1.0,
+                error_message="Failed to parse LLM skills output"
+            )
 
         except Exception as e:
             logger.error(f"Error during skills transformation: {e}")
-            return self._rule_based_transform_skills(skills, mask_ratio, original_text, error=str(e))
-
-    def _rule_based_transform_skills(
-        self,
-        skills: List[Dict[str, Any]],
-        mask_ratio: Optional[float],
-        original_text: str,
-        error: Optional[str] = None
-    ) -> Tuple[List[Dict[str, Any]], TransformationResult]:
-        """Fallback rule-based skill masking."""
-        if mask_ratio is None:
-            min_ratio = self.config.skills_mask_ratio_min
-            max_ratio = self.config.skills_mask_ratio_max
-            mask_ratio = random.uniform(min_ratio, max_ratio)
-
-        advanced_skills_indices = self._identify_advanced_skills(skills)
-        num_to_mask = max(1, int(len(advanced_skills_indices) * mask_ratio))
-        skills_to_mask = set()
-        if advanced_skills_indices:
-            mask_indices = random.sample(
-                advanced_skills_indices,
-                min(num_to_mask, len(advanced_skills_indices))
+            return skills, TransformationResult(
+                success=False,
+                transformed_text=original_text,
+                original_text=original_text,
+                term_preservation_rate=1.0,
+                error_message=str(e)
             )
-            skills_to_mask = set(mask_indices)
 
-        transformed_skills = []
-        for i, skill in enumerate(skills):
-            if i in skills_to_mask:
-                continue
-            downgraded_skill = self._downgrade_skill(skill)
-            transformed_skills.append(downgraded_skill)
-
-        return transformed_skills, TransformationResult(
-            success=False,
-            transformed_text=json.dumps(transformed_skills),
-            original_text=original_text,
-            term_preservation_rate=1.0,
-            error_message=error
-        )
+    # Rule-based fallback removed by request.
 
     def _identify_advanced_skills(self, skills: List[Dict[str, Any]]) -> List[int]:
         """
