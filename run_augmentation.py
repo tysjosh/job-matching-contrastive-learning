@@ -538,7 +538,8 @@ def run_augmentation(input_file='processed_combined_data.jsonl', output_file='au
                 esco_skills_hierarchy=esco_skills_hierarchy,
                 career_graph=career_graph,
                 lambda1=0.3,  # Weight for aspirational view
-                lambda2=0.2   # Weight for foundational view
+                lambda2=0.2,   # Weight for foundational view
+                enable_enhanced_validation=False  # Disable strict validation
             )
 
             # Run the complete augmentation strategy

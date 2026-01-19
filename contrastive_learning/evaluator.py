@@ -792,9 +792,25 @@ class ContrastiveEvaluator:
     def _save_metrics(self, metrics: Dict[str, float], detailed_metrics: Dict[str, Any],
                       output_path: Path):
         """Save metrics to file"""
+        
+        # Convert numpy types to Python native types for JSON serialization
+        def convert_to_serializable(obj):
+            if isinstance(obj, dict):
+                return {k: convert_to_serializable(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_to_serializable(item) for item in obj]
+            elif isinstance(obj, (np.integer, np.int32, np.int64)):
+                return int(obj)
+            elif isinstance(obj, (np.floating, np.float32, np.float64)):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            else:
+                return obj
+        
         results = {
-            "metrics": metrics,
-            "detailed_metrics": detailed_metrics,
+            "metrics": convert_to_serializable(metrics),
+            "detailed_metrics": convert_to_serializable(detailed_metrics),
             "evaluation_config": {
                 "metrics": self.config.metrics,
                 "k_values": self.config.k_values,
