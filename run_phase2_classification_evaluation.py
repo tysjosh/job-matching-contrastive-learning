@@ -14,6 +14,7 @@ from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     roc_auc_score, confusion_matrix, classification_report
 )
+from collections import defaultdict
 
 from contrastive_learning.contrastive_classification_model import ContrastiveClassificationModel
 from contrastive_learning.data_structures import TrainingConfig
@@ -138,6 +139,174 @@ def evaluate_classification_model(model, text_encoder, data_loader, device):
             all_labels.extend(labels)
 
     return np.array(all_predictions), np.array(all_probabilities), np.array(all_labels)
+
+
+def calculate_dcg(relevance_scores, k=None):
+    """Calculate Discounted Cumulative Gain"""
+    if k is not None:
+        relevance_scores = relevance_scores[:k]
+
+    if len(relevance_scores) == 0:
+        return 0.0
+
+    # DCG = sum(rel_i / log2(i+1)) for i from 1 to k
+    dcg = relevance_scores[0]  # First position doesn't get discounted
+    for i in range(1, len(relevance_scores)):
+        # i+2 because we're 0-indexed
+        dcg += relevance_scores[i] / np.log2(i + 2)
+    return dcg
+
+
+def calculate_ndcg(relevance_scores, k=None):
+    """Calculate Normalized Discounted Cumulative Gain"""
+    dcg = calculate_dcg(relevance_scores, k)
+    ideal_scores = sorted(relevance_scores, reverse=True)
+    idcg = calculate_dcg(np.array(ideal_scores), k)
+
+    if idcg == 0:
+        return 0.0
+    return dcg / idcg
+
+
+def calculate_average_precision(relevance_scores):
+    """Calculate Average Precision for a single query"""
+    if len(relevance_scores) == 0 or relevance_scores.sum() == 0:
+        return 0.0
+
+    # AP = sum(P(k) * rel(k)) / num_relevant
+    num_relevant = relevance_scores.sum()
+    precisions = []
+
+    for k in range(len(relevance_scores)):
+        if relevance_scores[k] == 1:
+            # Precision at k = number of relevant items in top k / k
+            precision_at_k = relevance_scores[:k+1].sum() / (k + 1)
+            precisions.append(precision_at_k)
+
+    if len(precisions) == 0:
+        return 0.0
+
+    return sum(precisions) / num_relevant
+
+
+def evaluate_ranking(model, text_encoder, dataset, device, mode='job'):
+    """
+    Evaluate ranking performance.
+
+    Args:
+        mode: 'job' for job ranking (given resume, rank jobs)
+              'resume' for resume ranking (given job, rank resumes)
+    """
+    print(f"\n{'='*80}")
+    print(f"EVALUATING {'JOB' if mode == 'job' else 'RESUME'} RANKING")
+    print(f"{'='*80}")
+
+    model.eval()
+
+    # Group samples by query (resume for job ranking, job for resume ranking)
+    query_groups = defaultdict(list)
+
+    for idx, sample in enumerate(dataset.samples):
+        if mode == 'job':
+            # Group by resume (each resume is a query, jobs are candidates)
+            query_key = sample['resume']
+        else:
+            # Group by job (each job is a query, resumes are candidates)
+            query_key = sample['job']
+
+        query_groups[query_key].append({
+            'index': idx,
+            'resume': sample['resume'],
+            'job': sample['job'],
+            'label': sample['label']
+        })
+
+    # Filter groups that have both positive and negative examples
+    valid_queries = {k: v for k, v in query_groups.items()
+                     if any(s['label'] == 1 for s in v) and any(s['label'] == 0 for s in v)}
+
+    print(f"Total unique queries: {len(query_groups)}")
+    print(
+        f"Valid queries (with both positive and negative): {len(valid_queries)}")
+
+    if len(valid_queries) == 0:
+        print("⚠️  No valid queries found for ranking evaluation!")
+        return None
+
+    # Calculate ranking metrics for each query
+    all_aps = []
+    all_ndcgs = []
+    all_ndcgs_at_10 = []
+
+    with torch.no_grad():
+        for query_idx, (query_text, candidates) in enumerate(valid_queries.items()):
+            # Get all candidate texts and labels
+            if mode == 'job':
+                # Query is resume, candidates are jobs
+                query_embedding = text_encoder.encode(
+                    [query_text], convert_to_tensor=True).to(device)
+                candidate_texts = [c['job'] for c in candidates]
+                candidate_embeddings = text_encoder.encode(
+                    candidate_texts, convert_to_tensor=True).to(device)
+
+                # Get scores
+                scores = []
+                for cand_emb in candidate_embeddings:
+                    logit = model(query_embedding, cand_emb.unsqueeze(0))
+                    score = torch.sigmoid(logit).item()
+                    scores.append(score)
+            else:
+                # Query is job, candidates are resumes
+                query_embedding = text_encoder.encode(
+                    [query_text], convert_to_tensor=True).to(device)
+                candidate_texts = [c['resume'] for c in candidates]
+                candidate_embeddings = text_encoder.encode(
+                    candidate_texts, convert_to_tensor=True).to(device)
+
+                # Get scores
+                scores = []
+                for cand_emb in candidate_embeddings:
+                    logit = model(cand_emb.unsqueeze(0), query_embedding)
+                    score = torch.sigmoid(logit).item()
+                    scores.append(score)
+
+            # Get true labels
+            true_labels = np.array([c['label'] for c in candidates])
+            scores = np.array(scores)
+
+            # Sort by scores (descending)
+            sorted_indices = np.argsort(-scores)
+            sorted_labels = true_labels[sorted_indices]
+
+            # Calculate metrics
+            ap = calculate_average_precision(sorted_labels)
+            ndcg = calculate_ndcg(sorted_labels)
+            ndcg_at_10 = calculate_ndcg(sorted_labels, k=10)
+
+            all_aps.append(ap)
+            all_ndcgs.append(ndcg)
+            all_ndcgs_at_10.append(ndcg_at_10)
+
+    # Calculate mean metrics
+    map_score = np.mean(all_aps)
+    mean_ndcg = np.mean(all_ndcgs)
+    mean_ndcg_at_10 = np.mean(all_ndcgs_at_10)
+
+    print(f"\n🎯 Ranking Metrics:")
+    print(f"  MAP (Mean Average Precision): {map_score:.4f}")
+    print(f"  NDCG:                         {mean_ndcg:.4f}")
+    print(f"  NDCG@10:                      {mean_ndcg_at_10:.4f}")
+    print(f"  Number of queries evaluated:  {len(all_aps)}")
+
+    return {
+        'map': float(map_score),
+        'ndcg': float(mean_ndcg),
+        'ndcg_at_10': float(mean_ndcg_at_10),
+        'num_queries': len(all_aps),
+        'ap_scores': [float(ap) for ap in all_aps],
+        'ndcg_scores': [float(ndcg) for ndcg in all_ndcgs],
+        'ndcg_at_10_scores': [float(ndcg) for ndcg in all_ndcgs_at_10]
+    }
 
 
 def main():
@@ -361,6 +530,34 @@ def main():
     with open(results_path, 'w') as f:
         json.dump(results, f, indent=2)
     print(f"\n✓ Results saved to: {results_path}")
+
+    # ==========================================
+    # RANKING EVALUATION
+    # ==========================================
+    print("\n" + "=" * 80)
+    print("RUNNING RANKING EVALUATION")
+    print("=" * 80)
+
+    # Job Ranking (given resume, rank relevant jobs)
+    job_ranking_results = evaluate_ranking(
+        model, text_encoder, dataset, device, mode='job'
+    )
+
+    # Resume Ranking (given job, rank relevant resumes)
+    resume_ranking_results = evaluate_ranking(
+        model, text_encoder, dataset, device, mode='resume'
+    )
+
+    # Add ranking results to output
+    if job_ranking_results:
+        results['job_ranking'] = job_ranking_results
+    if resume_ranking_results:
+        results['resume_ranking'] = resume_ranking_results
+
+    # Save updated results with ranking metrics
+    with open(results_path, 'w') as f:
+        json.dump(results, f, indent=2)
+    print(f"\n✓ Results with ranking metrics saved to: {results_path}")
 
     # Comparison with baseline and training accuracy
     print("\n" + "=" * 80)
