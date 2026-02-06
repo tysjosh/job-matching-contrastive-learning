@@ -7,6 +7,7 @@ Evaluates the trained Phase 2 classification model with proper metrics.
 import json
 import torch
 import numpy as np
+import argparse
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from torch.utils.data import Dataset, DataLoader as TorchDataLoader
@@ -18,6 +19,7 @@ from collections import defaultdict
 
 from contrastive_learning.contrastive_classification_model import ContrastiveClassificationModel
 from contrastive_learning.data_structures import TrainingConfig
+from contrastive_learning.structured_features import StructuredFeatureExtractor
 
 
 class JSONLDataset(Dataset):
@@ -50,6 +52,8 @@ class JSONLDataset(Dataset):
                     self.samples.append({
                         'resume': resume_text,
                         'job': job_text,
+                        'resume_raw': data['resume'],  # Keep raw data for structured features
+                        'job_raw': data['job'],
                         'label': label
                     })
                 except (json.JSONDecodeError, KeyError) as e:
@@ -99,7 +103,7 @@ class JSONLDataset(Dataset):
         return self.samples[idx]
 
 
-def evaluate_classification_model(model, text_encoder, data_loader, device):
+def evaluate_classification_model(model, text_encoder, data_loader, device, feature_extractor=None):
     """
     Evaluate the classification model using its actual outputs.
 
@@ -109,6 +113,8 @@ def evaluate_classification_model(model, text_encoder, data_loader, device):
     all_predictions = []
     all_probabilities = []
     all_labels = []
+    
+    use_structured_features = model.uses_structured_features() and feature_extractor is not None
 
     with torch.no_grad():
         for batch in data_loader:
@@ -117,19 +123,62 @@ def evaluate_classification_model(model, text_encoder, data_loader, device):
             job_texts = batch['job']
             labels = batch['label'].numpy()
 
-            # Encode texts
+            # Encode texts - clone to avoid inference tensor issues
             resume_embeddings = text_encoder.encode(
-                resume_texts, convert_to_tensor=True)
+                resume_texts, convert_to_tensor=True).clone()
             job_embeddings = text_encoder.encode(
-                job_texts, convert_to_tensor=True)
+                job_texts, convert_to_tensor=True).clone()
 
             # Move to device
             resume_embeddings = resume_embeddings.to(device)
             job_embeddings = job_embeddings.to(device)
 
-            # Get classification probabilities
-            logits = model(resume_embeddings, job_embeddings)
-            probabilities = torch.sigmoid(logits).cpu().numpy()
+            # Extract structured features if needed
+            if use_structured_features:
+                resume_exp_indices = []
+                resume_num_features = []
+                job_exp_indices = []
+                job_num_features = []
+                
+                for i in range(len(resume_texts)):
+                    resume_raw = batch['resume_raw'][i] if isinstance(batch['resume_raw'], list) else batch['resume_raw']
+                    job_raw = batch['job_raw'][i] if isinstance(batch['job_raw'], list) else batch['job_raw']
+                    
+                    # Handle dict conversion if needed
+                    if isinstance(resume_raw, str):
+                        resume_raw = json.loads(resume_raw) if resume_raw.startswith('{') else {'text': resume_raw}
+                    if isinstance(job_raw, str):
+                        job_raw = json.loads(job_raw) if job_raw.startswith('{') else {'text': job_raw}
+                    
+                    r_features = feature_extractor.extract_features(resume_raw, 'resume')
+                    j_features = feature_extractor.extract_features(job_raw, 'job')
+                    
+                    # Split into experience level (one-hot) and numerical
+                    r_exp_onehot = r_features[:10]
+                    r_numerical = r_features[10:]
+                    j_exp_onehot = j_features[:10]
+                    j_numerical = j_features[10:]
+                    
+                    resume_exp_indices.append(r_exp_onehot.argmax().item())
+                    resume_num_features.append(r_numerical)
+                    job_exp_indices.append(j_exp_onehot.argmax().item())
+                    job_num_features.append(j_numerical)
+                
+                resume_exp_batch = torch.tensor(resume_exp_indices, dtype=torch.long, device=device)
+                resume_num_batch = torch.stack(resume_num_features).to(device)
+                job_exp_batch = torch.tensor(job_exp_indices, dtype=torch.long, device=device)
+                job_num_batch = torch.stack(job_num_features).to(device)
+                
+                # Get classification probabilities with structured features
+                logits = model(resume_embeddings, job_embeddings,
+                              resume_exp_batch, resume_num_batch,
+                              job_exp_batch, job_num_batch)
+            else:
+                # Get classification probabilities without structured features
+                logits = model(resume_embeddings, job_embeddings)
+            
+            # Model already applies sigmoid, so logits are probabilities
+            probabilities = logits.cpu().numpy()
 
             # Convert to binary predictions (threshold = 0.5)
             predictions = (probabilities > 0.5).astype(int)
@@ -189,13 +238,184 @@ def calculate_average_precision(relevance_scores):
     return sum(precisions) / num_relevant
 
 
-def evaluate_ranking(model, text_encoder, dataset, device, mode='job'):
+def evaluate_job_ranking_global_pool(model, text_encoder, dataset, device, feature_extractor=None, max_candidates=50):
+    """
+    Evaluate job ranking using a global job pool approach.
+    
+    For each resume, ranks all unique jobs in the dataset as candidates.
+    The matching job gets label=1, all others get label=0.
+    
+    Args:
+        model: The classification model
+        text_encoder: Text encoder for embeddings
+        dataset: Dataset with samples
+        device: Computation device
+        feature_extractor: Optional structured feature extractor
+        max_candidates: Maximum number of candidate jobs per query (for efficiency)
+    """
+    import random
+    
+    model.eval()
+    
+    # Collect all unique jobs
+    all_jobs = {}
+    for sample in dataset.samples:
+        job_text = sample['job']
+        if job_text not in all_jobs:
+            all_jobs[job_text] = {
+                'job': job_text,
+                'job_raw': sample.get('job_raw', {})
+            }
+    
+    unique_jobs = list(all_jobs.values())
+    print(f"Total unique jobs in dataset: {len(unique_jobs)}")
+    
+    # Collect unique resume queries with their matching jobs
+    resume_queries = {}
+    for sample in dataset.samples:
+        resume_text = sample['resume']
+        if resume_text not in resume_queries:
+            resume_queries[resume_text] = {
+                'resume': resume_text,
+                'resume_raw': sample.get('resume_raw', {}),
+                'matching_job': sample['job'],
+                'label': sample['label']
+            }
+    
+    # Only evaluate resumes that have positive matches (label=1)
+    positive_queries = {k: v for k, v in resume_queries.items() if v['label'] == 1}
+    print(f"Resumes with positive matches: {len(positive_queries)}")
+    
+    if len(positive_queries) == 0:
+        print("⚠️  No positive resume-job pairs found!")
+        return None
+    
+    use_structured_features = model.uses_structured_features() and feature_extractor is not None
+    
+    all_aps = []
+    all_ndcgs = []
+    all_ndcgs_at_10 = []
+    all_mrrs = []
+    
+    with torch.no_grad():
+        for query_idx, (resume_text, query_info) in enumerate(positive_queries.items()):
+            matching_job = query_info['matching_job']
+            
+            # Build candidate pool: matching job + sample of other jobs
+            other_jobs = [j for j in unique_jobs if j['job'] != matching_job]
+            
+            # Sample negative candidates if we have too many
+            if len(other_jobs) > max_candidates - 1:
+                negative_candidates = random.sample(other_jobs, max_candidates - 1)
+            else:
+                negative_candidates = other_jobs
+            
+            # Include the matching job
+            matching_job_info = all_jobs[matching_job]
+            candidates = [matching_job_info] + negative_candidates
+            
+            # Shuffle to avoid position bias
+            random.shuffle(candidates)
+            
+            # Create labels (1 for matching job, 0 for others)
+            labels = [1 if c['job'] == matching_job else 0 for c in candidates]
+            
+            # Get resume embedding
+            query_embedding = text_encoder.encode(
+                [resume_text], convert_to_tensor=True).clone().to(device)
+            
+            # Score each candidate job
+            scores = []
+            for i, candidate in enumerate(candidates):
+                job_embedding = text_encoder.encode(
+                    [candidate['job']], convert_to_tensor=True).clone().to(device)
+                
+                if use_structured_features:
+                    # Extract structured features for resume
+                    r_raw = query_info.get('resume_raw', {})
+                    if isinstance(r_raw, str):
+                        r_raw = json.loads(r_raw) if r_raw.startswith('{') else {}
+                    r_features = feature_extractor.extract_features(r_raw, 'resume')
+                    r_exp_idx = torch.tensor([r_features[:10].argmax().item()], dtype=torch.long, device=device)
+                    r_num = r_features[10:].unsqueeze(0).to(device)
+                    
+                    # Extract structured features for job
+                    j_raw = candidate.get('job_raw', {})
+                    if isinstance(j_raw, str):
+                        j_raw = json.loads(j_raw) if j_raw.startswith('{') else {}
+                    j_features = feature_extractor.extract_features(j_raw, 'job')
+                    j_exp_idx = torch.tensor([j_features[:10].argmax().item()], dtype=torch.long, device=device)
+                    j_num = j_features[10:].unsqueeze(0).to(device)
+                    
+                    logit = model(query_embedding, job_embedding,
+                                 r_exp_idx, r_num, j_exp_idx, j_num)
+                else:
+                    logit = model(query_embedding, job_embedding)
+                
+                score = logit.item()
+                scores.append(score)
+            
+            # Sort by scores (descending)
+            true_labels = np.array(labels)
+            scores = np.array(scores)
+            sorted_indices = np.argsort(-scores)
+            sorted_labels = true_labels[sorted_indices]
+            
+            # Calculate metrics
+            ap = calculate_average_precision(sorted_labels)
+            ndcg = calculate_ndcg(sorted_labels)
+            ndcg_at_10 = calculate_ndcg(sorted_labels, k=10)
+            
+            # Calculate MRR (Mean Reciprocal Rank)
+            # Find the rank of the first relevant item
+            rank_of_positive = np.where(sorted_labels == 1)[0]
+            if len(rank_of_positive) > 0:
+                mrr = 1.0 / (rank_of_positive[0] + 1)
+            else:
+                mrr = 0.0
+            
+            all_aps.append(ap)
+            all_ndcgs.append(ndcg)
+            all_ndcgs_at_10.append(ndcg_at_10)
+            all_mrrs.append(mrr)
+    
+    # Calculate mean metrics
+    map_score = np.mean(all_aps)
+    mean_ndcg = np.mean(all_ndcgs)
+    mean_ndcg_at_10 = np.mean(all_ndcgs_at_10)
+    mean_mrr = np.mean(all_mrrs)
+    
+    print(f"\n🎯 Job Ranking Metrics (Global Pool):")
+    print(f"  MAP (Mean Average Precision): {map_score:.4f}")
+    print(f"  MRR (Mean Reciprocal Rank):   {mean_mrr:.4f}")
+    print(f"  NDCG:                         {mean_ndcg:.4f}")
+    print(f"  NDCG@10:                      {mean_ndcg_at_10:.4f}")
+    print(f"  Number of queries evaluated:  {len(all_aps)}")
+    print(f"  Avg candidates per query:     {max_candidates}")
+
+    return {
+        'map': float(map_score),
+        'mrr': float(mean_mrr),
+        'ndcg': float(mean_ndcg),
+        'ndcg_at_10': float(mean_ndcg_at_10),
+        'num_queries': len(all_aps),
+        'avg_candidates_per_query': max_candidates,
+        'evaluation_method': 'global_job_pool',
+        'ap_scores': [float(ap) for ap in all_aps],
+        'mrr_scores': [float(mrr) for mrr in all_mrrs],
+        'ndcg_scores': [float(ndcg) for ndcg in all_ndcgs],
+        'ndcg_at_10_scores': [float(ndcg) for ndcg in all_ndcgs_at_10]
+    }
+
+
+def evaluate_ranking(model, text_encoder, dataset, device, mode='job', feature_extractor=None):
     """
     Evaluate ranking performance.
 
     Args:
         mode: 'job' for job ranking (given resume, rank jobs)
               'resume' for resume ranking (given job, rank resumes)
+        feature_extractor: Optional structured feature extractor
     """
     print(f"\n{'='*80}")
     print(f"EVALUATING {'JOB' if mode == 'job' else 'RESUME'} RANKING")
@@ -218,6 +438,8 @@ def evaluate_ranking(model, text_encoder, dataset, device, mode='job'):
             'index': idx,
             'resume': sample['resume'],
             'job': sample['job'],
+            'resume_raw': sample.get('resume_raw', {}),
+            'job_raw': sample.get('job_raw', {}),
             'label': sample['label']
         })
 
@@ -230,8 +452,17 @@ def evaluate_ranking(model, text_encoder, dataset, device, mode='job'):
         f"Valid queries (with both positive and negative): {len(valid_queries)}")
 
     if len(valid_queries) == 0:
-        print("⚠️  No valid queries found for ranking evaluation!")
+        print("⚠️  No valid queries found for standard ranking evaluation!")
+        
+        # For job ranking, try global job pool approach
+        if mode == 'job':
+            print("Attempting global job pool ranking evaluation...")
+            return evaluate_job_ranking_global_pool(
+                model, text_encoder, dataset, device, feature_extractor
+            )
         return None
+    
+    use_structured_features = model.uses_structured_features() and feature_extractor is not None
 
     # Calculate ranking metrics for each query
     all_aps = []
@@ -244,30 +475,70 @@ def evaluate_ranking(model, text_encoder, dataset, device, mode='job'):
             if mode == 'job':
                 # Query is resume, candidates are jobs
                 query_embedding = text_encoder.encode(
-                    [query_text], convert_to_tensor=True).to(device)
+                    [query_text], convert_to_tensor=True).clone().to(device)
                 candidate_texts = [c['job'] for c in candidates]
                 candidate_embeddings = text_encoder.encode(
-                    candidate_texts, convert_to_tensor=True).to(device)
+                    candidate_texts, convert_to_tensor=True).clone().to(device)
 
                 # Get scores
                 scores = []
-                for cand_emb in candidate_embeddings:
-                    logit = model(query_embedding, cand_emb.unsqueeze(0))
-                    score = torch.sigmoid(logit).item()
+                for i, cand_emb in enumerate(candidate_embeddings):
+                    if use_structured_features:
+                        # Extract structured features for query (resume)
+                        query_raw = candidates[0].get('resume_raw', {})
+                        if isinstance(query_raw, str):
+                            query_raw = json.loads(query_raw) if query_raw.startswith('{') else {}
+                        r_features = feature_extractor.extract_features(query_raw, 'resume')
+                        r_exp_idx = torch.tensor([r_features[:10].argmax().item()], dtype=torch.long, device=device)
+                        r_num = r_features[10:].unsqueeze(0).to(device)
+                        
+                        # Extract structured features for candidate (job)
+                        cand_raw = candidates[i].get('job_raw', {})
+                        if isinstance(cand_raw, str):
+                            cand_raw = json.loads(cand_raw) if cand_raw.startswith('{') else {}
+                        j_features = feature_extractor.extract_features(cand_raw, 'job')
+                        j_exp_idx = torch.tensor([j_features[:10].argmax().item()], dtype=torch.long, device=device)
+                        j_num = j_features[10:].unsqueeze(0).to(device)
+                        
+                        logit = model(query_embedding, cand_emb.unsqueeze(0),
+                                     r_exp_idx, r_num, j_exp_idx, j_num)
+                    else:
+                        logit = model(query_embedding, cand_emb.unsqueeze(0))
+                    score = logit.item()  # Model already applies sigmoid
                     scores.append(score)
             else:
                 # Query is job, candidates are resumes
                 query_embedding = text_encoder.encode(
-                    [query_text], convert_to_tensor=True).to(device)
+                    [query_text], convert_to_tensor=True).clone().to(device)
                 candidate_texts = [c['resume'] for c in candidates]
                 candidate_embeddings = text_encoder.encode(
-                    candidate_texts, convert_to_tensor=True).to(device)
+                    candidate_texts, convert_to_tensor=True).clone().to(device)
 
                 # Get scores
                 scores = []
-                for cand_emb in candidate_embeddings:
-                    logit = model(cand_emb.unsqueeze(0), query_embedding)
-                    score = torch.sigmoid(logit).item()
+                for i, cand_emb in enumerate(candidate_embeddings):
+                    if use_structured_features:
+                        # Extract structured features for candidate (resume)
+                        cand_raw = candidates[i].get('resume_raw', {})
+                        if isinstance(cand_raw, str):
+                            cand_raw = json.loads(cand_raw) if cand_raw.startswith('{') else {}
+                        r_features = feature_extractor.extract_features(cand_raw, 'resume')
+                        r_exp_idx = torch.tensor([r_features[:10].argmax().item()], dtype=torch.long, device=device)
+                        r_num = r_features[10:].unsqueeze(0).to(device)
+                        
+                        # Extract structured features for query (job)
+                        query_raw = candidates[0].get('job_raw', {})
+                        if isinstance(query_raw, str):
+                            query_raw = json.loads(query_raw) if query_raw.startswith('{') else {}
+                        j_features = feature_extractor.extract_features(query_raw, 'job')
+                        j_exp_idx = torch.tensor([j_features[:10].argmax().item()], dtype=torch.long, device=device)
+                        j_num = j_features[10:].unsqueeze(0).to(device)
+                        
+                        logit = model(cand_emb.unsqueeze(0), query_embedding,
+                                     r_exp_idx, r_num, j_exp_idx, j_num)
+                    else:
+                        logit = model(cand_emb.unsqueeze(0), query_embedding)
+                    score = logit.item()  # Model already applies sigmoid
                     scores.append(score)
 
             # Get true labels
@@ -310,19 +581,33 @@ def evaluate_ranking(model, text_encoder, dataset, device, mode='job'):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Evaluate Phase 2 Classification Model")
+    parser.add_argument("--dataset", type=str, required=True, help="Path to test dataset (JSONL)")
+    parser.add_argument("--validation-dataset", type=str, default=None, help="Path to validation dataset for threshold tuning (JSONL)")
+    parser.add_argument("--checkpoint", type=str, required=True, help="Path to Phase 2 model checkpoint")
+    parser.add_argument("--config", type=str, required=True, help="Path to training config JSON")
+    parser.add_argument("--output-dir", type=str, default="phase2_classification_evaluation", help="Output directory for results")
+    args = parser.parse_args()
+    
     print("=" * 80)
     print("PHASE 2 CLASSIFICATION MODEL EVALUATION")
     print("=" * 80)
     print("\nEvaluating the full Phase 2 classification model:")
     print("  - Uses classification head outputs (not just embeddings)")
     print("  - Calculates Accuracy, Precision, Recall, F1, AUC-ROC")
-    print("  - Confusion Matrix and detailed metrics\n")
+    print("  - Confusion Matrix and detailed metrics")
+    if args.validation_dataset:
+        print("  - Tunes threshold on VALIDATION set")
+        print("  - Reports metrics on TEST set\n")
+    else:
+        print("  - ⚠️  No validation set - tuning threshold on test set (data leakage!)\n")
 
     # Paths
-    dataset_path = "preprocess/augmented_enriched_data_training_updated_with_uri.jsonl"
-    checkpoint_path = "phase2_finetuning/checkpoint_epoch_9.pt"
-    config_path = "config/phase2_finetuning_config.json"
-    output_dir = Path("phase2_classification_evaluation")
+    dataset_path = args.dataset
+    validation_dataset_path = args.validation_dataset
+    checkpoint_path = args.checkpoint
+    config_path = args.config
+    output_dir = Path(args.output_dir)
     output_dir.mkdir(exist_ok=True)
 
     # Check files exist
@@ -361,9 +646,15 @@ def main():
     model = model.to(device)
     model.eval()
     print(f"✓ Model loaded successfully")
+    
+    # Initialize structured feature extractor if model uses it
+    feature_extractor = None
+    if model.uses_structured_features():
+        feature_extractor = StructuredFeatureExtractor()
+        print(f"✓ Structured feature extractor initialized")
 
-    # Load dataset
-    print(f"\nLoading dataset from: {dataset_path}")
+    # Load test dataset
+    print(f"\nLoading test dataset from: {dataset_path}")
     dataset = JSONLDataset(dataset_path)
 
     data_loader = TorchDataLoader(
@@ -374,6 +665,8 @@ def main():
         collate_fn=lambda x: {
             'resume': [item['resume'] for item in x],
             'job': [item['job'] for item in x],
+            'resume_raw': [item['resume_raw'] for item in x],
+            'job_raw': [item['job_raw'] for item in x],
             'label': torch.tensor([item['label'] for item in x])
         }
     )
@@ -387,7 +680,7 @@ def main():
     print("=" * 80)
 
     predictions, probabilities, true_labels = evaluate_classification_model(
-        model, text_encoder, data_loader, device
+        model, text_encoder, data_loader, device, feature_extractor
     )
 
     # Calculate metrics
@@ -395,18 +688,55 @@ def main():
     print("PHASE 2 CLASSIFICATION MODEL RESULTS")
     print("=" * 80)
 
-    # Find optimal threshold based on F1 score
-    thresholds = np.linspace(0.0, 1.0, 101)
-    best_threshold = 0.5
-    best_f1 = 0.0
+    # Find optimal threshold on validation set (if provided) or test set
+    if validation_dataset_path and Path(validation_dataset_path).exists():
+        print(f"\n🔍 Finding optimal threshold on VALIDATION set...")
+        val_dataset = JSONLDataset(validation_dataset_path)
+        val_data_loader = TorchDataLoader(
+            val_dataset,
+            batch_size=training_config.batch_size,
+            shuffle=False,
+            collate_fn=lambda x: {
+                'resume': [item['resume'] for item in x],
+                'job': [item['job'] for item in x],
+                'resume_raw': [item['resume_raw'] for item in x],
+                'job_raw': [item['job_raw'] for item in x],
+                'label': torch.tensor([item['label'] for item in x])
+            }
+        )
+        
+        _, val_probabilities, val_true_labels = evaluate_classification_model(
+            model, text_encoder, val_data_loader, device, feature_extractor
+        )
+        
+        thresholds = np.linspace(0.0, 1.0, 101)
+        best_threshold = 0.5
+        best_f1 = 0.0
 
-    for threshold in thresholds:
-        preds_at_threshold = (probabilities > threshold).astype(int)
-        f1_at_threshold = f1_score(
-            true_labels, preds_at_threshold, zero_division=0)
-        if f1_at_threshold > best_f1:
-            best_f1 = f1_at_threshold
-            best_threshold = threshold
+        for threshold in thresholds:
+            preds_at_threshold = (val_probabilities > threshold).astype(int)
+            f1_at_threshold = f1_score(
+                val_true_labels, preds_at_threshold, zero_division=0)
+            if f1_at_threshold > best_f1:
+                best_f1 = f1_at_threshold
+                best_threshold = threshold
+        
+        print(f"  Validation set size: {len(val_dataset)} samples")
+        print(f"  Optimal threshold from validation: {best_threshold:.4f} (F1={best_f1:.4f})")
+        print(f"\n📊 Applying threshold to TEST set...")
+    else:
+        print(f"\n⚠️  No validation set provided - finding threshold on TEST set (data leakage!)")
+        thresholds = np.linspace(0.0, 1.0, 101)
+        best_threshold = 0.5
+        best_f1 = 0.0
+
+        for threshold in thresholds:
+            preds_at_threshold = (probabilities > threshold).astype(int)
+            f1_at_threshold = f1_score(
+                true_labels, preds_at_threshold, zero_division=0)
+            if f1_at_threshold > best_f1:
+                best_f1 = f1_at_threshold
+                best_threshold = threshold
 
     print(f"\n🔍 Threshold Analysis:")
     print(
@@ -540,12 +870,12 @@ def main():
 
     # Job Ranking (given resume, rank relevant jobs)
     job_ranking_results = evaluate_ranking(
-        model, text_encoder, dataset, device, mode='job'
+        model, text_encoder, dataset, device, mode='job', feature_extractor=feature_extractor
     )
 
     # Resume Ranking (given job, rank relevant resumes)
     resume_ranking_results = evaluate_ranking(
-        model, text_encoder, dataset, device, mode='resume'
+        model, text_encoder, dataset, device, mode='resume', feature_extractor=feature_extractor
     )
 
     # Add ranking results to output

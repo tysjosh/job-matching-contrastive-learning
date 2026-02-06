@@ -72,6 +72,19 @@ from .downward_llm_transformer import (
     DownwardLLMTransformer,
 )
 
+from .negative_generator import (
+    LLMNegativeGenerator,
+    NegativeType,
+    GeneratedNegative,
+    NegativeGenerationResult,
+)
+
+from .negative_augmentation_orchestrator import (
+    NegativeAugmentationOrchestrator,
+    run_negative_augmentation,
+    AugmentationStats as NegativeAugmentationStats,
+)
+
 __all__ = [
     "__version__",
     # Data Models
@@ -112,4 +125,13 @@ __all__ = [
     "TransformationResult",
     # Downward LLM Transformer
     "DownwardLLMTransformer",
+    # Negative Generator
+    "LLMNegativeGenerator",
+    "NegativeType",
+    "GeneratedNegative",
+    "NegativeGenerationResult",
+    # Negative Augmentation Orchestrator
+    "NegativeAugmentationOrchestrator",
+    "run_negative_augmentation",
+    "NegativeAugmentationStats",
 ]

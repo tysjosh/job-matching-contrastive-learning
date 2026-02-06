@@ -33,6 +33,11 @@ from .logging_utils import (
     BatchMetrics, EpochMetrics, MemoryMonitor,
     timed_operation, setup_training_logger
 )
+from .structured_features import (
+    StructuredFeatureExtractor, 
+    EnhancedContrastiveModel,
+    extract_structured_features_batch
+)
 logger = logging.getLogger(__name__)
 # Import diagnostic integration
 try:
@@ -124,20 +129,48 @@ class ContrastiveLearningTrainer:
         # Model and optimizer setup
         # Get the text encoder's embedding dimension dynamically
         text_encoder_dim = self.text_encoder.get_sentence_embedding_dimension()
-        self.model = model or self._create_dual_encoder_model(
-            input_dim=text_encoder_dim)
+        
+        # Check if structured features are enabled
+        self.use_structured_features = getattr(config, 'use_structured_features', False)
+        
+        if self.use_structured_features:
+            # Initialize structured feature extractor
+            self.feature_extractor = StructuredFeatureExtractor()
+            structured_feature_dim = getattr(config, 'structured_feature_dim', 32)
+            
+            # Create enhanced model with structured features
+            self.model = model or EnhancedContrastiveModel(
+                text_embed_dim=text_encoder_dim,
+                structured_feature_dim=structured_feature_dim,
+                projection_dim=getattr(config, 'projection_dim', 128),
+                dropout=getattr(config, 'projection_dropout', 0.1),
+                use_structured_features=True
+            )
+            logger.info(f"✅ Using EnhancedContrastiveModel with structured features "
+                       f"(text_dim={text_encoder_dim}, structured_dim={structured_feature_dim})")
+        else:
+            self.feature_extractor = None
+            self.model = model or self._create_dual_encoder_model(
+                input_dim=text_encoder_dim)
+            logger.info(f"Using standard CareerAwareContrastiveModel (text_dim={text_encoder_dim})")
 
         # RESEARCH-GRADE SETUP: Freeze SentenceTransformer to avoid catastrophic forgetting
+        weight_decay = getattr(config, 'weight_decay', 0.0)
         if getattr(config, 'freeze_text_encoder', True):
             for param in self.text_encoder.parameters():
                 param.requires_grad = False
             
             # Only train the minimal projection head (prevents overfitting)
-            self.optimizer = optim.Adam(self.model.parameters(), lr=config.learning_rate)
+            self.optimizer = optim.Adam(
+                self.model.parameters(), 
+                lr=config.learning_rate,
+                weight_decay=weight_decay
+            )
             
             logger.info("✅ SentenceTransformer FROZEN - avoiding catastrophic forgetting")
             logger.info(f"📊 Trainable parameters: {sum(p.numel() for p in self.model.parameters() if p.requires_grad):,}")
             logger.info(f"📊 Frozen parameters: {sum(p.numel() for p in self.text_encoder.parameters()):,}")
+            logger.info(f"📊 Weight decay (L2 regularization): {weight_decay}")
         else:
             # Legacy mode: train both models (not recommended for research)
             import itertools
@@ -145,7 +178,11 @@ class ContrastiveLearningTrainer:
                 self.model.parameters(),
                 self.text_encoder.parameters()
             )
-            self.optimizer = optim.Adam(all_parameters, lr=config.learning_rate)
+            self.optimizer = optim.Adam(
+                all_parameters, 
+                lr=config.learning_rate,
+                weight_decay=weight_decay
+            )
             logger.warning("⚠️ Training both models - risk of catastrophic forgetting!")
         
         self.model.to(self.device)
@@ -162,7 +199,9 @@ class ContrastiveLearningTrainer:
         self.batch_encoder = BatchEfficientEncoder(
             text_encoder=self.text_encoder,
             model=self.model,
-            device=self.device
+            device=self.device,
+            use_structured_features=self.use_structured_features,
+            feature_extractor=self.feature_extractor
         )
 
         # Training state
@@ -171,12 +210,14 @@ class ContrastiveLearningTrainer:
         self.total_batches_processed = 0
         self.training_interrupted = False
         self.best_loss = float('inf')
+        self.best_val_loss = float('inf')  # Track best validation loss for checkpoint selection
         
         # Global negative sampling state
         self.global_job_pool = None
 
         # Metrics tracking
         self.epoch_losses = []
+        self.validation_losses = []  # Track validation loss per epoch
         self.batch_losses = []
         self.training_metrics = {
             'total_samples_processed': 0,
@@ -298,6 +339,22 @@ class ContrastiveLearningTrainer:
                 with timed_operation(self.structured_logger, f"epoch_{epoch}", {"epoch": epoch}):
                     epoch_loss = self._train_epoch(dataset_path)
                     self.epoch_losses.append(epoch_loss)
+
+                # Run validation if validation path is configured
+                if self.config.validation_path and (epoch + 1) % self.config.validate_every_n_epochs == 0:
+                    val_loss = self._validate_epoch(Path(self.config.validation_path))
+                    self.validation_losses.append(val_loss)
+                    self.structured_logger.logger.info(
+                        f"Epoch {epoch + 1}: train_loss={epoch_loss:.6f}, val_loss={val_loss:.6f}"
+                    )
+                    
+                    # Save best checkpoint based on validation loss
+                    if val_loss < self.best_val_loss:
+                        self.best_val_loss = val_loss
+                        self._save_best_checkpoint(epoch, val_loss)
+                        self.structured_logger.logger.info(
+                            f"New best validation loss: {val_loss:.6f} - saved best_checkpoint.pt"
+                        )
 
                 # Save checkpoint if needed
                 if self._should_save_checkpoint():
@@ -567,6 +624,77 @@ class ContrastiveLearningTrainer:
 
         return avg_epoch_loss
 
+    def _validate_epoch(self, validation_path: Path) -> float:
+        """
+        Run validation on the validation dataset (no gradient updates).
+
+        Args:
+            validation_path: Path to validation dataset
+
+        Returns:
+            Average validation loss for the epoch
+        """
+        self.structured_logger.logger.info(f"Running validation on {validation_path}")
+        
+        self.model.eval()
+        validation_losses = []
+        validation_samples = 0
+        validation_triplets = 0
+
+        # Create a validation-specific config that doesn't filter by augmentation
+        # This ensures we validate on ALL samples, not just augmented ones
+        from copy import deepcopy
+        val_config = deepcopy(self.config)
+        val_config.use_augmentation_labels_only = False  # Include all samples for validation
+        val_config.shuffle_data = False  # No need to shuffle validation data
+        
+        # Create a separate data loader for validation
+        val_data_loader = DataLoader(val_config)
+
+        try:
+            with torch.no_grad():
+                for batch_idx, batch in enumerate(val_data_loader.load_batches(validation_path)):
+                    try:
+                        # Process batch to create triplets (with optional global job pool)
+                        triplets = self.batch_processor.process_batch(batch, self.global_job_pool)
+                        
+                        if not triplets:
+                            continue
+
+                        # Generate embeddings for triplets
+                        embeddings = self._generate_embeddings(triplets)
+
+                        if not embeddings:
+                            continue
+
+                        # Compute loss (no backward pass)
+                        loss = self.loss_engine.compute_loss(triplets, embeddings)
+
+                        if not torch.isnan(loss) and not torch.isinf(loss):
+                            validation_losses.append(loss.item())
+                            validation_samples += len(batch)
+                            validation_triplets += len(triplets)
+
+                    except Exception as batch_error:
+                        self.structured_logger.logger.warning(
+                            f"Validation batch {batch_idx} error: {batch_error}"
+                        )
+                        continue
+
+        except Exception as e:
+            self.structured_logger.logger.error(f"Error during validation: {e}")
+        finally:
+            self.model.train()
+
+        avg_val_loss = sum(validation_losses) / len(validation_losses) if validation_losses else float('inf')
+        
+        self.structured_logger.logger.info(
+            f"Validation complete: avg_loss={avg_val_loss:.6f}, "
+            f"samples={validation_samples}, triplets={validation_triplets}"
+        )
+
+        return avg_val_loss
+
     def _train_batch(self, batch: List[TrainingSample]) -> tuple[Optional[float], Dict[str, Any]]:
         """
         Train on a single batch.
@@ -772,7 +900,20 @@ class ContrastiveLearningTrainer:
                 if isinstance(experience, list) and len(experience) > 0:
                     # Extract description from first experience entry (most comprehensive)
                     if isinstance(experience[0], dict):
-                        experience_text = experience[0].get('description', '')
+                        # Handle nested description structure
+                        desc_field = experience[0].get('description', '')
+                        
+                        # Check if description is a nested list (common in preprocessed data)
+                        if isinstance(desc_field, list) and len(desc_field) > 0:
+                            if isinstance(desc_field[0], dict):
+                                experience_text = desc_field[0].get('description', '')
+                            else:
+                                experience_text = str(desc_field[0])
+                        elif isinstance(desc_field, str):
+                            experience_text = desc_field
+                        else:
+                            experience_text = str(desc_field) if desc_field else ''
+                        
                         if experience_text:
                             text_parts.append(f"Profile: {experience_text}")
                     else:
@@ -1170,6 +1311,7 @@ class ContrastiveLearningTrainer:
             'config': asdict(self.config),
             'training_metrics': self.training_metrics.copy(),
             'epoch_losses': self.epoch_losses.copy(),
+            'validation_losses': self.validation_losses.copy(),
             'total_batches_processed': self.total_batches_processed,
             'best_loss': self.best_loss
         }
@@ -1178,16 +1320,50 @@ class ContrastiveLearningTrainer:
             torch.save(checkpoint_data, checkpoint_path)
             self.training_metrics['checkpoint_saves'] += 1
 
-            # Update best loss if this is better
+            # Note: best_checkpoint.pt is now saved based on validation loss in the training loop
+            # Update best training loss for tracking (but don't save checkpoint based on it)
             if loss < self.best_loss:
                 self.best_loss = loss
-                best_checkpoint_path = self.output_dir / "best_checkpoint.pt"
-                torch.save(checkpoint_data, best_checkpoint_path)
 
             return str(checkpoint_path)
 
         except Exception as e:
             logger.error(f"Failed to save checkpoint: {e}")
+            raise
+
+    def _save_best_checkpoint(self, epoch: int, val_loss: float) -> str:
+        """
+        Save best model checkpoint based on validation loss.
+
+        Args:
+            epoch: Current epoch number
+            val_loss: Current validation loss value
+
+        Returns:
+            Path to saved best checkpoint
+        """
+        best_checkpoint_path = self.output_dir / "best_checkpoint.pt"
+
+        checkpoint_data = {
+            'epoch': epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'loss': self.epoch_losses[-1] if self.epoch_losses else float('inf'),  # Training loss
+            'val_loss': val_loss,  # Validation loss (the metric used for selection)
+            'config': asdict(self.config),
+            'training_metrics': self.training_metrics.copy(),
+            'epoch_losses': self.epoch_losses.copy(),
+            'validation_losses': self.validation_losses.copy(),
+            'total_batches_processed': self.total_batches_processed,
+            'best_loss': self.best_loss,
+            'best_val_loss': self.best_val_loss
+        }
+
+        try:
+            torch.save(checkpoint_data, best_checkpoint_path)
+            return str(best_checkpoint_path)
+        except Exception as e:
+            logger.error(f"Failed to save best checkpoint: {e}")
             raise
 
     def load_checkpoint(self, checkpoint_path: Union[str, Path]) -> Dict[str, Any]:
@@ -1225,6 +1401,7 @@ class ContrastiveLearningTrainer:
                 'total_batches_processed', 0)
             self.best_loss = checkpoint_data.get('best_loss', float('inf'))
             self.epoch_losses = checkpoint_data.get('epoch_losses', [])
+            self.validation_losses = checkpoint_data.get('validation_losses', [])
             self.training_metrics.update(
                 checkpoint_data.get('training_metrics', {}))
 
@@ -1293,7 +1470,8 @@ class ContrastiveLearningTrainer:
             total_batches=self.total_batches_processed,
             total_samples=self.training_metrics['total_samples_processed'],
             checkpoint_paths=checkpoint_paths,
-            metrics=self.training_metrics.copy()
+            metrics=self.training_metrics.copy(),
+            validation_losses=self.validation_losses.copy()
         )
 
     def _save_training_results(self, results: TrainingResults) -> None:
@@ -1408,8 +1586,13 @@ class ContrastiveLearningTrainer:
                 'total_triplets': logging_summary['total_triplets'],
                 'training_time_seconds': total_training_time,
                 'final_loss': self.epoch_losses[-1] if self.epoch_losses else None,
+                'final_validation_loss': self.validation_losses[-1] if self.validation_losses else None,
                 'best_loss': self.best_loss,
                 'training_completed': not self.training_interrupted
+            },
+            'loss_history': {
+                'epoch_losses': self.epoch_losses,
+                'validation_losses': self.validation_losses
             },
             'performance_metrics': {
                 'avg_batch_loss': logging_summary['avg_batch_loss'],

@@ -351,9 +351,12 @@ class EmbeddingCache:
 class BatchEfficientEncoder:
     """
     Wrapper that makes the encoding function batch-efficient for the cache.
+    Supports both text-only and text+structured feature encoding.
     """
 
-    def __init__(self, text_encoder, model, device):
+    def __init__(self, text_encoder, model, device, 
+                 use_structured_features: bool = False,
+                 feature_extractor = None):
         """
         Initialize batch encoder.
 
@@ -361,14 +364,23 @@ class BatchEfficientEncoder:
             text_encoder: SentenceTransformer model
             model: ContrastiveDualEncoder model  
             device: Device for computation
+            use_structured_features: Whether to extract and use structured features
+            feature_extractor: StructuredFeatureExtractor instance (required if use_structured_features=True)
         """
         self.text_encoder = text_encoder
         self.model = model
         self.device = device
+        self.use_structured_features = use_structured_features
+        self.feature_extractor = feature_extractor
+        
+        if use_structured_features and feature_extractor is None:
+            logger.warning("use_structured_features=True but no feature_extractor provided. "
+                          "Falling back to text-only encoding.")
 
     def encode_batch(self, content_items: List[Tuple[Dict[str, Any], str]]) -> List[torch.Tensor]:
         """
         Efficiently encode a batch of content items using frozen SentenceTransformer approach.
+        Supports both text-only and text+structured feature encoding.
 
         Args:
             content_items: List of (content_dict, content_type) tuples
@@ -405,8 +417,36 @@ class BatchEfficientEncoder:
             # Don't require gradients since the text encoder is frozen
             text_embeddings = text_embeddings.clone().detach().requires_grad_(False)
 
-            # Forward pass through minimal projection model
-            final_embeddings = self.model(text_embeddings)
+            # Step 4: Extract structured features if enabled
+            if self.use_structured_features and self.feature_extractor is not None:
+                # Extract structured features for the batch
+                experience_levels = []
+                numerical_features = []
+                
+                for content_data, content_type in content_items:
+                    features = self.feature_extractor.extract_features(content_data, content_type)
+                    
+                    # Split into experience level (one-hot) and numerical
+                    exp_onehot = features[:10]  # First 10 are one-hot
+                    numerical = features[10:]   # Rest are numerical
+                    
+                    # Convert one-hot to index
+                    exp_idx = exp_onehot.argmax().item()
+                    experience_levels.append(exp_idx)
+                    numerical_features.append(numerical)
+                
+                exp_tensor = torch.tensor(experience_levels, dtype=torch.long, device=self.device)
+                num_tensor = torch.stack(numerical_features).to(self.device)
+                
+                # Forward pass through enhanced model with structured features
+                final_embeddings = self.model(
+                    text_embeddings,
+                    experience_level_idx=exp_tensor,
+                    numerical_features=num_tensor
+                )
+            else:
+                # Forward pass through minimal projection model (text only)
+                final_embeddings = self.model(text_embeddings)
 
             # Convert to list of individual tensors
             all_embeddings = [final_embeddings[i]
@@ -431,7 +471,20 @@ class BatchEfficientEncoder:
                 experience = content['experience']
                 if isinstance(experience, list) and len(experience) > 0:
                     if isinstance(experience[0], dict):
-                        experience_text = experience[0].get('description', '')
+                        # Handle nested description structure
+                        desc_field = experience[0].get('description', '')
+                        
+                        # Check if description is a nested list (common in preprocessed data)
+                        if isinstance(desc_field, list) and len(desc_field) > 0:
+                            if isinstance(desc_field[0], dict):
+                                experience_text = desc_field[0].get('description', '')
+                            else:
+                                experience_text = str(desc_field[0])
+                        elif isinstance(desc_field, str):
+                            experience_text = desc_field
+                        else:
+                            experience_text = str(desc_field) if desc_field else ''
+                        
                         if experience_text:
                             text_parts.append(f"Profile: {experience_text}")
                     else:
@@ -536,10 +589,24 @@ class BatchEfficientEncoder:
                 text_embedding = text_embedding.unsqueeze(0)
 
             # Create a fresh tensor with gradients for each use
-            text_embedding = text_embedding.clone().detach().requires_grad_(True)
+            text_embedding = text_embedding.clone().detach().requires_grad_(False)
 
-            # Apply minimal projection head
-            final_embedding = self.model(text_embedding).squeeze(0)
+            # Apply model with or without structured features
+            if self.use_structured_features and self.feature_extractor is not None:
+                features = self.feature_extractor.extract_features(content_data, content_type)
+                exp_onehot = features[:10]
+                numerical = features[10:]
+                
+                exp_idx = torch.tensor([exp_onehot.argmax().item()], dtype=torch.long, device=self.device)
+                num_tensor = numerical.unsqueeze(0).to(self.device)
+                
+                final_embedding = self.model(
+                    text_embedding,
+                    experience_level_idx=exp_idx,
+                    numerical_features=num_tensor
+                ).squeeze(0)
+            else:
+                final_embedding = self.model(text_embedding).squeeze(0)
 
             return final_embedding
 

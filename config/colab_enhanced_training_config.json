@@ -17,7 +17,7 @@
   "fallback_on_augmentation_failure": true,
   "hard_negative_max_distance": 2.0,
   "medium_negative_max_distance": 4.0,
-  "esco_graph_path": "training_output/career_graph_data_driven.gexf",
+  "esco_graph_path": "training_output/career_graph_bridged_complete.gexf",
   "embedding_cache_size": 10000,
   "clear_cache_between_epochs": true,
   "augmentation_config_path": "config/augmentation_config.json",

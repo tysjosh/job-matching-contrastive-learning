@@ -277,6 +277,136 @@ class AnthropicClient(LLMClient):
         raise LLMClientError(f"Failed after {self.max_retries} attempts: {last_error}")
 
 
+class BedrockClient(LLMClient):
+    """Amazon Bedrock client implementation."""
+    
+    def __init__(
+        self,
+        config: LLMProviderConfig,
+        max_retries: int = 3,
+        retry_delay_base: float = 1.0,
+        retry_delay_multiplier: float = 2.0,
+        region_name: str = "us-east-1"
+    ):
+        """
+        Initialize Bedrock client.
+        
+        Args:
+            config: LLM provider configuration
+            max_retries: Maximum number of retry attempts
+            retry_delay_base: Base delay between retries in seconds
+            retry_delay_multiplier: Multiplier for exponential backoff
+            region_name: AWS region for Bedrock
+        """
+        self.config = config
+        self.max_retries = max_retries
+        self.retry_delay_base = retry_delay_base
+        self.retry_delay_multiplier = retry_delay_multiplier
+        self.region_name = os.environ.get("AWS_REGION", region_name)
+        self._client = None
+        self._initialize_client()
+    
+    def _initialize_client(self) -> None:
+        """Initialize the Bedrock client."""
+        try:
+            import boto3
+            self._client = boto3.client(
+                "bedrock-runtime",
+                region_name=self.region_name
+            )
+            logger.info(f"Bedrock client initialized with model: {self.config.model_name} in region: {self.region_name}")
+        except ImportError:
+            logger.error("boto3 package not installed. Run: pip install boto3")
+        except Exception as e:
+            logger.error(f"Failed to initialize Bedrock client: {e}")
+    
+    def is_available(self) -> bool:
+        """Check if the Bedrock client is properly configured."""
+        return self._client is not None
+    
+    def generate(
+        self,
+        prompt: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None
+    ) -> LLMResponse:
+        """
+        Generate text using Amazon Bedrock API.
+        
+        Args:
+            prompt: The input prompt for generation
+            temperature: Optional override for temperature setting
+            max_tokens: Optional override for max tokens setting
+            
+        Returns:
+            LLMResponse containing the generated text and metadata
+            
+        Raises:
+            LLMClientError: If generation fails after retries
+        """
+        import json
+        
+        if not self.is_available():
+            raise LLMClientError("Bedrock client not available. Check AWS credentials.")
+        
+        temp = temperature if temperature is not None else self.config.temperature
+        tokens = max_tokens if max_tokens is not None else self.config.max_tokens
+        
+        last_error = None
+        for attempt in range(self.max_retries):
+            try:
+                # Build request body for converse API
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [{"text": prompt}]
+                    }
+                ]
+                
+                inference_config = {
+                    "maxTokens": tokens,
+                    "temperature": temp
+                }
+                
+                response = self._client.converse(
+                    modelId=self.config.model_name,
+                    messages=messages,
+                    inferenceConfig=inference_config
+                )
+                
+                # Extract response text
+                output_message = response.get("output", {}).get("message", {})
+                content = output_message.get("content", [])
+                text = ""
+                if content and isinstance(content, list):
+                    text = content[0].get("text", "")
+                
+                # Extract usage info
+                usage = response.get("usage", {})
+                
+                return LLMResponse(
+                    text=text.strip(),
+                    model=self.config.model_name,
+                    usage={
+                        "prompt_tokens": usage.get("inputTokens", 0),
+                        "completion_tokens": usage.get("outputTokens", 0),
+                        "total_tokens": usage.get("totalTokens", 0)
+                    },
+                    finish_reason=response.get("stopReason", "end_turn")
+                )
+                
+            except Exception as e:
+                last_error = e
+                delay = self.retry_delay_base * (self.retry_delay_multiplier ** attempt)
+                logger.warning(
+                    f"Bedrock API error (attempt {attempt + 1}/{self.max_retries}): {e}. "
+                    f"Retrying in {delay:.1f}s..."
+                )
+                time.sleep(delay)
+        
+        raise LLMClientError(f"Failed after {self.max_retries} attempts: {last_error}")
+
+
 class MockLLMClient(LLMClient):
     """Mock LLM client for testing without API calls."""
     
@@ -355,6 +485,13 @@ def create_llm_client(
         )
     elif provider_type == "anthropic":
         return AnthropicClient(
+            config=config,
+            max_retries=max_retries,
+            retry_delay_base=retry_delay_base,
+            retry_delay_multiplier=retry_delay_multiplier
+        )
+    elif provider_type == "bedrock":
+        return BedrockClient(
             config=config,
             max_retries=max_retries,
             retry_delay_base=retry_delay_base,
