@@ -34,6 +34,6 @@
   "freeze_contrastive_layers": false,
   "classification_dropout": 0.3,
   "max_negatives_per_anchor": 20,
-  "validation_path": "preprocess/data_splits_aug_fixed/validation.jsonl",
+  "validation_path": "preprocess/data_splits_new_data/validation.jsonl",
   "validate_every_n_epochs": 1
 }
