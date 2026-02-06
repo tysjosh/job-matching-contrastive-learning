@@ -58,13 +58,22 @@ class CareerGraph:
         self._load_esco_graph(esco_graph_path)
 
     def _load_esco_graph(self, esco_graph_path: str):
-        """Load pre-built ESCO NetworkX graph for career distance calculations."""
+        """Load pre-built ESCO NetworkX graph for career distance calculations.
+        
+        The graph is converted to undirected for symmetric career distance calculations.
+        This ensures that distance(A, B) == distance(B, A), which is appropriate for
+        measuring career similarity rather than career progression direction.
+        """
         try:
             if not os.path.exists(esco_graph_path):
                 raise FileNotFoundError(
                     f"ESCO graph file not found at: {esco_graph_path}")
 
-            self.esco_graph = nx.read_gexf(esco_graph_path)
+            directed_graph = nx.read_gexf(esco_graph_path)
+            
+            # Convert to undirected for symmetric distance calculations
+            # Career similarity should be symmetric: distance(A,B) == distance(B,A)
+            self.esco_graph = directed_graph.to_undirected()
 
             # Build URI to title mapping for faster lookups
             for node in self.esco_graph.nodes():
@@ -72,7 +81,8 @@ class CareerGraph:
                 self.uri_to_title[node] = title
 
             logger.info(
-                f"Loaded ESCO graph with {self.esco_graph.number_of_nodes()} nodes and {self.esco_graph.number_of_edges()} edges")
+                f"Loaded ESCO graph with {self.esco_graph.number_of_nodes()} nodes and "
+                f"{self.esco_graph.number_of_edges()} edges (converted to undirected)")
 
         except Exception as e:
             logger.error(

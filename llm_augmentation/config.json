@@ -1,10 +1,10 @@
 {
   "llm_provider": {
-    "model_name": "gpt-4o-mini",
+    "model_name": "openai.gpt-oss-120b-1:0",
     "temperature": 0.7,
     "max_tokens": 1024,
-    "api_key_env": "OPENAI_API_KEY",
-    "provider_type": "openai"
+    "api_key_env": "AWS_ACCESS_KEY_ID",
+    "provider_type": "bedrock"
   },
   "transformation": {
     "upward_target_level": "senior",
@@ -37,13 +37,13 @@
     "summary_file": "llm_augmentation/augmentation_summary.json"
   },
   "prompts": {
-    "upward_experience": "Transform the following work experience description to reflect a senior-level professional with leadership responsibilities, strategic thinking, and business impact. Maintain the core technical content but add language that demonstrates ownership, mentorship, and cross-functional collaboration.\n\nOriginal: {text}\n\nTransformed (senior-level):",
-    "downward_experience": "Transform the following work experience description to reflect a junior-level professional who is learning and growing. Maintain the core technical content but use language that demonstrates learning, support roles, and task execution under guidance.\n\nOriginal: {text}\n\nTransformed (junior-level):",
-    "upward_responsibilities": "Transform these responsibilities to reflect senior-level ownership and leadership. Add strategic oversight and mentorship aspects while preserving the core duties.\n\nOriginal responsibilities:\n{responsibilities}\n\nTransformed (senior-level):",
-    "downward_responsibilities": "Transform these responsibilities to reflect junior-level support and learning. Focus on task execution and learning aspects while preserving the core duties.\n\nOriginal responsibilities:\n{responsibilities}\n\nTransformed (junior-level):",
-    "upward_role": "Elevate this job title to a senior-level position while keeping it in the same job family/domain.\n\nOriginal title: {title}\n\nSenior-level title:",
-    "downward_role": "Reduce this job title to a junior-level position while keeping it in the same job family/domain.\n\nOriginal title: {title}\n\nJunior-level title:",
-    "upward_job_description": "Transform this job description to reflect senior-level requirements with leadership, strategic thinking, and advanced technical expectations.\n\nOriginal: {description}\n\nSenior-level job description:",
-    "downward_job_description": "Transform this job description to reflect entry-level or junior requirements with learning opportunities and foundational technical expectations.\n\nOriginal: {description}\n\nJunior-level job description:"
+    "upward_experience": "Transform the following work experience description to reflect a senior-level professional.",
+    "downward_experience": "Transform the following work experience description to reflect a junior-level professional.",
+    "upward_responsibilities": "Transform these responsibilities to reflect senior-level ownership.",
+    "downward_responsibilities": "Transform these responsibilities to reflect junior-level support.",
+    "upward_role": "Elevate this job title to a senior-level position.",
+    "downward_role": "Reduce this job title to a junior-level position.",
+    "upward_job_description": "Transform this job description to reflect senior-level requirements.",
+    "downward_job_description": "Transform this job description to reflect entry-level requirements."
   }
 }

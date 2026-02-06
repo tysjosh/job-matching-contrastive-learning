@@ -97,5 +97,14 @@
     "embedding_diversity_monitoring": true,
     "transformation_statistics": true,
     "failure_analysis": true
+  },
+  "career_graph": {
+    "esco_graph_path": "training_output/career_graph_bridged_complete.gexf",
+    "esco_skills_hierarchy_path": "dataset/esco/skillsHierarchy_en.csv",
+    "hard_negative_max_distance": 2.0,
+    "medium_negative_max_distance": 4.0,
+    "use_distance_cache": true,
+    "lambda1": 0.3,
+    "lambda2": 0.2
   }
 }

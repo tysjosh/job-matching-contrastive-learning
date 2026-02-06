@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """
-Training script with ENFORCED data splitting (80/20 train/test)
-This script ensures that training data is properly split before training begins.
+Training pipeline with enforced 80/10/10 train/validation/test splitting.
+
+Phases:
+- Phase 1: Contrastive pretraining on training set
+- Phase 1 Eval: Embedding quality baseline on validation set
+- Phase 2: Classification fine-tuning with validation monitoring
+- Phase 2 Eval: Final results on test set (threshold tuned on validation)
 """
 
-import json
-import logging
 import argparse
+import logging
+import subprocess
 import sys
 from pathlib import Path
 
 from contrastive_learning.data_splitter import DataSplitter, SplitConfig
-from contrastive_learning.trainer import ContrastiveLearningTrainer
-from contrastive_learning.fine_tuning_trainer import FineTuningTrainer
 from contrastive_learning.data_structures import TrainingConfig
+from contrastive_learning.fine_tuning_trainer import FineTuningTrainer
+from contrastive_learning.trainer import ContrastiveLearningTrainer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,431 +27,202 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def split_dataset(dataset_path: str, output_dir: str = "data_splits",
-                  strategy: str = "random", seed: int = 42):
-    """
-    Split dataset into train/test sets.
+def split_dataset(dataset_path: str, output_dir: str, strategy: str, seed: int) -> dict:
+    """Split dataset into train/validation/test sets (80/10/10)."""
+    logger.info(f"Splitting {dataset_path} → {output_dir} (strategy={strategy}, seed={seed})")
 
-    Args:
-        dataset_path: Path to full dataset (JSONL)
-        output_dir: Directory to save splits
-        strategy: Split strategy (random, stratified, sequential)
-        seed: Random seed for reproducibility
-
-    Returns:
-        Dictionary with paths to train/test files
-    """
-    logger.info("=" * 80)
-    logger.info("DATA SPLITTING")
-    logger.info("=" * 80)
-    logger.info(f"Input dataset: {dataset_path}")
-    logger.info(f"Output directory: {output_dir}")
-    logger.info(f"Strategy: {strategy}")
-    logger.info(f"Ratios: 80% train, 20% test")
-    logger.info(f"Random seed: {seed}")
-
-    # Create split configuration
-    split_config = SplitConfig(
+    splitter = DataSplitter(SplitConfig(
         strategy=strategy,
-        ratios={"train": 0.8, "test": 0.2},
+        ratios={"train": 0.8, "validation": 0.1, "test": 0.1},
         seed=seed,
         validate_splits=True
-    )
+    ))
 
-    # Initialize splitter
-    splitter = DataSplitter(split_config)
+    result = splitter.split_dataset(dataset_path, output_dir)
 
-    # Perform split
-    split_results = splitter.split_dataset(dataset_path, output_dir)
+    # Log split statistics
+    for name, info in result.statistics.get('splits', {}).items():
+        logger.info(f"  {name}: {info['count']} samples ({info['percentage']:.1f}%)")
 
-    # Log statistics
-    logger.info("\n" + "=" * 80)
-    logger.info("SPLIT STATISTICS")
-    logger.info("=" * 80)
+    # Check for data leakage
+    if result.validation_report and result.validation_report.get('data_leakage'):
+        leakage = result.validation_report['data_leakage']
+        overlaps = [
+            leakage.get('train_validation_overlap', 0),
+            leakage.get('train_test_overlap', 0),
+            leakage.get('validation_test_overlap', 0)
+        ]
+        if any(overlaps):
+            logger.warning(f"⚠️ Data leakage detected: {overlaps}")
+        else:
+            logger.info("✓ No data leakage")
 
-    stats = split_results.statistics
-    for split_name in ["train", "test"]:
-        if split_name in stats['split_sizes']:
-            count = stats['split_sizes'][split_name]['count']
-            percentage = stats['split_sizes'][split_name]['percentage']
-            logger.info(
-                f"{split_name.upper():12s}: {count:6d} samples ({percentage:.1f}%)")
-
-    # Log validation report if available
-    if split_results.validation_report:
-        logger.info("\n" + "=" * 80)
-        logger.info("VALIDATION REPORT")
-        logger.info("=" * 80)
-
-        report = split_results.validation_report
-
-        if report.get('label_distribution'):
-            logger.info("\nLabel Distribution:")
-            for split_name, dist in report['label_distribution'].items():
-                logger.info(f"  {split_name}:")
-                for label, count in dist.items():
-                    logger.info(f"    label={label}: {count}")
-
-        if report.get('data_leakage'):
-            leakage = report['data_leakage']
-            if leakage['train_val_overlap'] > 0 or leakage['train_test_overlap'] > 0:
-                logger.warning("\n⚠️  DATA LEAKAGE DETECTED!")
-                logger.warning(
-                    f"  Train-Val overlap: {leakage['train_val_overlap']}")
-                logger.warning(
-                    f"  Train-Test overlap: {leakage['train_test_overlap']}")
-            else:
-                logger.info("\n✓ No data leakage detected")
-
-    logger.info("\n" + "=" * 80)
-    logger.info("SPLIT FILES")
-    logger.info("=" * 80)
-    for split_name, file_path in split_results.splits.items():
-        logger.info(f"{split_name:12s}: {file_path}")
-
-    return split_results.splits
+    return result.splits
 
 
-def run_phase1_training(train_data_path: str, config_path: str,
-                        output_dir: str = "phase1_pretraining"):
-    """
-    Run Phase 1 (contrastive pretraining).
+def run_phase1(train_path: str, config_path: str, output_dir: str = "phase1_pretraining",
+               validation_path: str = None):
+    """Run Phase 1 contrastive pretraining."""
+    logger.info(f"Phase 1: Training on {train_path}")
 
-    Args:
-        train_data_path: Path to training split
-        config_path: Path to Phase 1 config
-        output_dir: Output directory
-    """
-    logger.info("\n" + "=" * 80)
-    logger.info("PHASE 1: CONTRASTIVE PRETRAINING")
-    logger.info("=" * 80)
-    logger.info(f"Training data: {train_data_path}")
-    logger.info(f"Config: {config_path}")
-    logger.info(f"Output: {output_dir}")
-
-    # Load config
     config = TrainingConfig.from_json(config_path)
+    
+    # Override validation path if provided
+    if validation_path:
+        config.validation_path = validation_path
+        logger.info(f"  Validation: {validation_path}")
+    
+    trainer = ContrastiveLearningTrainer(config=config, output_dir=output_dir)
+    results = trainer.train(train_path)
 
-    # Initialize trainer
-    trainer = ContrastiveLearningTrainer(
-        config=config,
-        output_dir=output_dir
-    )
-
-    # Train on training split only
-    results = trainer.train(train_data_path)
-
-    logger.info(f"\n✓ Phase 1 complete")
-    logger.info(f"  Final loss: {results.final_loss:.6f}")
-    logger.info(f"  Training time: {results.training_time:.2f}s")
-    logger.info(f"  Best checkpoint: {results.best_checkpoint_path}")
-
-    return results
-
-
-def run_phase2_training(train_data_path: str, config_path: str,
-                        pretrained_model_path: str,
-                        output_dir: str = "phase2_finetuning"):
-    """
-    Run Phase 2 (classification fine-tuning).
-
-    Args:
-        train_data_path: Path to training split
-        config_path: Path to Phase 2 config
-        pretrained_model_path: Path to Phase 1 checkpoint
-        output_dir: Output directory
-    """
-    logger.info("\n" + "=" * 80)
-    logger.info("PHASE 2: CLASSIFICATION FINE-TUNING")
-    logger.info("=" * 80)
-    logger.info(f"Training data: {train_data_path}")
-    logger.info(f"Config: {config_path}")
-    logger.info(f"Pretrained model: {pretrained_model_path}")
-    logger.info(f"Output: {output_dir}")
-
-    # Load config
-    config = TrainingConfig.from_json(config_path)
-
-    # Update pretrained model path
-    config.pretrained_model_path = pretrained_model_path
-
-    # Initialize trainer
-    trainer = FineTuningTrainer(
-        config=config,
-        output_dir=output_dir
-    )
-
-    # Train on training split only
-    results = trainer.train(train_data_path)
-
-    logger.info(f"\n✓ Phase 2 complete")
-    logger.info(f"  Final accuracy: {results.final_accuracy:.4f}")
-    logger.info(f"  Training time: {results.training_time:.2f}s")
-    logger.info(f"  Best checkpoint: {results.best_checkpoint_path}")
-
-    return results
-
-
-def evaluate_on_test_set(model_checkpoint: str, test_data_path: str,
-                         config_path: str, output_dir: str = "test_evaluation"):
-    """
-    Evaluate final model on held-out test set.
-
-    Args:
-        model_checkpoint: Path to trained model
-        test_data_path: Path to test split
-        config_path: Path to config
-        output_dir: Output directory
-    """
-    logger.info("\n" + "=" * 80)
-    logger.info("TEST SET EVALUATION")
-    logger.info("=" * 80)
-    logger.info(f"Model checkpoint: {model_checkpoint}")
-    logger.info(f"Test data: {test_data_path}")
-    logger.info(f"Output: {output_dir}")
-
-    # Import evaluation functionality
-    from run_phase2_classification_evaluation import (
-        JSONLDataset, evaluate_classification_model, evaluate_ranking
-    )
-    import torch
-    from sentence_transformers import SentenceTransformer
-    from torch.utils.data import DataLoader as TorchDataLoader
-    from contrastive_learning.contrastive_classification_model import ContrastiveClassificationModel
-
-    # Load config
-    config = TrainingConfig.from_json(config_path)
-
-    # Setup
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    text_encoder = SentenceTransformer(config.text_encoder_model).to(device)
-
-    # Load model
-    model = ContrastiveClassificationModel(config=config)
-    checkpoint = torch.load(model_checkpoint, map_location=device)
-    if 'model_state_dict' in checkpoint:
-        model.load_state_dict(checkpoint['model_state_dict'])
+    # Log validation loss if available
+    if results.validation_losses:
+        logger.info(f"✓ Phase 1 complete - train_loss: {results.final_loss:.6f}, "
+                   f"val_loss: {results.validation_losses[-1]:.6f}, time: {results.training_time:.2f}s")
     else:
-        model.load_state_dict(checkpoint)
-    model = model.to(device)
-    model.eval()
+        logger.info(f"✓ Phase 1 complete - loss: {results.final_loss:.6f}, time: {results.training_time:.2f}s")
+    
+    # Prefer best_checkpoint.pt (based on validation loss) over last epoch checkpoint
+    best_checkpoint_path = Path(output_dir) / "best_checkpoint.pt"
+    if best_checkpoint_path.exists():
+        logger.info(f"  Using best checkpoint: {best_checkpoint_path}")
+        return str(best_checkpoint_path)
+    
+    # Fallback to last checkpoint if best doesn't exist
+    return results.checkpoint_paths[-1] if results.checkpoint_paths else None
 
-    # Load test dataset
-    dataset = JSONLDataset(test_data_path)
-    data_loader = TorchDataLoader(
-        dataset,
-        batch_size=config.batch_size,
-        shuffle=False,
-        collate_fn=lambda x: {
-            'resume': [item['resume'] for item in x],
-            'job': [item['job'] for item in x],
-            'label': torch.tensor([item['label'] for item in x])
-        }
-    )
 
-    logger.info(f"Test set size: {len(dataset)} samples")
+def run_phase2(train_path: str, config_path: str, pretrained_path: str,
+               validation_path: str = None, output_dir: str = "phase2_finetuning"):
+    """Run Phase 2 classification fine-tuning."""
+    logger.info(f"Phase 2: Training on {train_path}, pretrained={pretrained_path}")
 
-    # Run evaluation
-    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-    import numpy as np
+    config = TrainingConfig.from_json(config_path)
+    config.pretrained_model_path = pretrained_path
 
-    predictions, probabilities, true_labels = evaluate_classification_model(
-        model, text_encoder, data_loader, device
-    )
+    trainer = FineTuningTrainer(config=config, output_dir=output_dir)
+    results = trainer.train(train_path, validation_data_path=validation_path)
 
-    # Calculate metrics with different thresholds
-    thresholds = np.linspace(0.0, 1.0, 101)
-    best_threshold = 0.5
-    best_f1 = 0.0
+    # Handle both dict and TrainingResults
+    if isinstance(results, dict):
+        checkpoints = results.get('checkpoint_paths', [])
+        accuracy = results.get('final_accuracy', 'N/A')
+        time_taken = results.get('training_time', 0)
+    else:
+        checkpoints = results.checkpoint_paths
+        accuracy = results.final_accuracy
+        time_taken = results.training_time
 
-    for threshold in thresholds:
-        preds = (probabilities > threshold).astype(int)
-        f1 = f1_score(true_labels, preds, zero_division=0)
-        if f1 > best_f1:
-            best_f1 = f1
-            best_threshold = threshold
+    logger.info(f"✓ Phase 2 complete - accuracy: {accuracy}, time: {time_taken:.2f}s")
+    return checkpoints[-1] if checkpoints else None
 
-    # Use optimal threshold
-    predictions_optimal = (probabilities > best_threshold).astype(int)
 
-    accuracy = accuracy_score(true_labels, predictions_optimal)
-    precision = precision_score(
-        true_labels, predictions_optimal, zero_division=0)
-    recall = recall_score(true_labels, predictions_optimal, zero_division=0)
-    f1 = f1_score(true_labels, predictions_optimal, zero_division=0)
-    auc_roc = roc_auc_score(true_labels, probabilities)
+def run_evaluation(script: str, dataset: str, checkpoint: str, config: str,
+                   output_dir: str, validation_dataset: str = None) -> bool:
+    """Run evaluation script."""
+    cmd = ["python", script, "--dataset", dataset, "--checkpoint", checkpoint,
+           "--config", config, "--output-dir", output_dir]
 
-    logger.info(f"\n🎯 TEST SET RESULTS (threshold={best_threshold:.4f}):")
-    logger.info(f"  Accuracy:  {accuracy:.4f} ({accuracy*100:.2f}%)")
-    logger.info(f"  Precision: {precision:.4f} ({precision*100:.2f}%)")
-    logger.info(f"  Recall:    {recall:.4f} ({recall*100:.2f}%)")
-    logger.info(f"  F1 Score:  {f1:.4f} ({f1*100:.2f}%)")
-    logger.info(f"  AUC-ROC:   {auc_roc:.4f} ({auc_roc*100:.2f}%)")
+    if validation_dataset:
+        cmd.extend(["--validation-dataset", validation_dataset])
 
-    # Ranking evaluation
-    logger.info("\n" + "=" * 80)
-    logger.info("RANKING EVALUATION ON TEST SET")
-    logger.info("=" * 80)
-
-    job_ranking = evaluate_ranking(
-        model, text_encoder, dataset, device, mode='job')
-    resume_ranking = evaluate_ranking(
-        model, text_encoder, dataset, device, mode='resume')
-
-    # Save results
-    output_path = Path(output_dir)
-    output_path.mkdir(exist_ok=True)
-
-    results = {
-        'test_set_metrics': {
-            'optimal_threshold': float(best_threshold),
-            'accuracy': float(accuracy),
-            'precision': float(precision),
-            'recall': float(recall),
-            'f1_score': float(f1),
-            'auc_roc': float(auc_roc)
-        },
-        'job_ranking': job_ranking,
-        'resume_ranking': resume_ranking,
-        'test_set_size': len(dataset),
-        'model_checkpoint': model_checkpoint,
-        'test_data_path': test_data_path
-    }
-
-    results_path = output_path / "test_results.json"
-    with open(results_path, 'w') as f:
-        json.dump(results, f, indent=2)
-
-    logger.info(f"\n✓ Test results saved to: {results_path}")
-
-    return results
+    logger.info(f"Running: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=False, text=True)
+    return result.returncode == 0
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Training with enforced data splitting (80/20 train/test)"
-    )
-    parser.add_argument('--dataset', required=True,
-                        help='Path to full dataset (JSONL)')
-    parser.add_argument('--phase1-config', default='config/phase1_pretraining_config.json',
-                        help='Path to Phase 1 config')
-    parser.add_argument('--phase2-config', default='config/phase2_finetuning_config.json',
-                        help='Path to Phase 2 config')
+    parser = argparse.ArgumentParser(description="Training with 80/10/10 data splitting")
+    parser.add_argument('--dataset', required=True, help='Path to full dataset (JSONL)')
+    parser.add_argument('--phase1-config', default='config/phase1_pretraining_config.json')
+    parser.add_argument('--phase2-config', default='config/phase2_finetuning_config.json')
     parser.add_argument('--split-strategy', choices=['random', 'stratified', 'sequential'],
-                        default='stratified', help='Data splitting strategy')
-    parser.add_argument('--split-seed', type=int, default=42,
-                        help='Random seed for splitting')
-    parser.add_argument('--splits-dir', default='data_splits',
-                        help='Directory for split files')
-    parser.add_argument('--use-existing-splits', action='store_true',
-                        help='Use existing splits instead of creating new ones')
-    parser.add_argument('--skip-phase1', action='store_true',
-                        help='Skip Phase 1 training')
-    parser.add_argument('--skip-phase2', action='store_true',
-                        help='Skip Phase 2 training')
-    parser.add_argument('--skip-test-eval', action='store_true',
-                        help='Skip test set evaluation')
-    parser.add_argument('--phase1-checkpoint', type=str,
-                        help='Use existing Phase 1 checkpoint (if skipping Phase 1)')
+                        default='sequential')
+    parser.add_argument('--split-seed', type=int, default=42)
+    parser.add_argument('--splits-dir', default='data_splits')
+    parser.add_argument('--use-existing-splits', action='store_true')
+    parser.add_argument('--train-file', type=str, help='Custom training file (overrides splits/train.jsonl)')
+    parser.add_argument('--skip-phase1', action='store_true')
+    parser.add_argument('--skip-phase2', action='store_true')
+    parser.add_argument('--skip-phase1-eval', action='store_true')
+    parser.add_argument('--skip-phase2-eval', action='store_true')
+    parser.add_argument('--phase1-checkpoint', type=str, help='Existing Phase 1 checkpoint')
+    parser.add_argument('--phase2-checkpoint', type=str, help='Existing Phase 2 checkpoint (skips Phase 2 training)')
 
     args = parser.parse_args()
 
-    logger.info("=" * 80)
-    logger.info("TRAINING WITH ENFORCED DATA SPLITTING (80/20)")
-    logger.info("=" * 80)
-    logger.info(f"Dataset: {args.dataset}")
-    logger.info(f"Split strategy: {args.split_strategy}")
-    logger.info(f"Phase 1 config: {args.phase1_config}")
-    logger.info(f"Phase 2 config: {args.phase2_config}")
-
-    # Check that dataset exists
+    # Validate inputs
     if not Path(args.dataset).exists():
         logger.error(f"Dataset not found: {args.dataset}")
         return 1
 
-    # Step 1: Split dataset (or use existing splits)
+    # Step 1: Get or create splits
     if args.use_existing_splits:
-        logger.info(f"\nUsing existing splits from: {args.splits_dir}")
         splits = {
             'train': str(Path(args.splits_dir) / 'train.jsonl'),
+            'validation': str(Path(args.splits_dir) / 'validation.jsonl'),
             'test': str(Path(args.splits_dir) / 'test.jsonl')
         }
-
-        # Verify all splits exist
-        for split_name, split_path in splits.items():
-            if not Path(split_path).exists():
-                logger.error(f"Split file not found: {split_path}")
+        for name, path in splits.items():
+            if not Path(path).exists():
+                logger.error(f"Split not found: {path}")
                 return 1
+        logger.info(f"Using existing splits from {args.splits_dir}")
     else:
-        splits = split_dataset(
-            args.dataset,
-            output_dir=args.splits_dir,
-            strategy=args.split_strategy,
-            seed=args.split_seed
-        )
+        splits = split_dataset(args.dataset, args.splits_dir, args.split_strategy, args.split_seed)
 
-    train_path = splits['train']
-    test_path = splits['test']
+    train_path, val_path, test_path = splits['train'], splits['validation'], splits['test']
 
-    # Step 2: Run Phase 1 training (contrastive pretraining)
-    phase1_checkpoint = args.phase1_checkpoint
+    # Early exit if only splitting
+    if args.skip_phase1 and args.skip_phase2 and args.skip_phase2_eval:
+        logger.info("✅ Splitting complete, all training skipped")
+        return 0
 
+    # Step 2: Phase 1 training
+    phase1_ckpt = args.phase1_checkpoint
     if not args.skip_phase1:
         if not Path(args.phase1_config).exists():
-            logger.error(f"Phase 1 config not found: {args.phase1_config}")
+            logger.error(f"Config not found: {args.phase1_config}")
             return 1
+        phase1_ckpt = run_phase1(train_path, args.phase1_config, validation_path=val_path)
+    elif not phase1_ckpt or not Path(phase1_ckpt).exists():
+        logger.error("Phase 1 checkpoint required when skipping Phase 1")
+        return 1
 
-        phase1_results = run_phase1_training(
-            train_path,
-            args.phase1_config,
-            output_dir="phase1_pretraining"
-        )
-        phase1_checkpoint = phase1_results.best_checkpoint_path
-    else:
-        if not phase1_checkpoint or not Path(phase1_checkpoint).exists():
-            logger.error("Phase 1 checkpoint required when skipping Phase 1")
+    # Step 2.5: Phase 1 evaluation
+    if not args.skip_phase1_eval and phase1_ckpt:
+        if not run_evaluation("run_phase1_embedding_evaluation.py", val_path,
+                              phase1_ckpt, args.phase1_config, "phase1_evaluation"):
+            logger.warning("Phase 1 evaluation failed, continuing...")
+
+    # Step 3: Phase 2 training
+    phase2_ckpt = args.phase2_checkpoint
+    if phase2_ckpt:
+        # Use existing Phase 2 checkpoint (skip training)
+        if not Path(phase2_ckpt).exists():
+            logger.error(f"Phase 2 checkpoint not found: {phase2_ckpt}")
             return 1
-        logger.info(
-            f"\nSkipping Phase 1, using checkpoint: {phase1_checkpoint}")
-
-    # Step 3: Run Phase 2 training (classification fine-tuning)
-    phase2_checkpoint = None
-
-    if not args.skip_phase2:
+        logger.info(f"Using existing Phase 2 checkpoint: {phase2_ckpt}")
+    elif not args.skip_phase2:
         if not Path(args.phase2_config).exists():
-            logger.error(f"Phase 2 config not found: {args.phase2_config}")
+            logger.error(f"Config not found: {args.phase2_config}")
             return 1
+        phase2_ckpt = run_phase2(train_path, args.phase2_config, phase1_ckpt, val_path)
 
-        phase2_results = run_phase2_training(
-            train_path,
-            args.phase2_config,
-            phase1_checkpoint,
-            output_dir="phase2_finetuning"
-        )
-        phase2_checkpoint = phase2_results.best_checkpoint_path
-    else:
-        logger.info("\nSkipping Phase 2 training")
+    # Step 4: Phase 2 evaluation
+    if not args.skip_phase2_eval and phase2_ckpt:
+        run_evaluation("run_phase2_classification_evaluation.py", test_path,
+                       phase2_ckpt, args.phase2_config, "test_evaluation", val_path)
 
-    # Step 4: Evaluate on held-out test set
-    if not args.skip_test_eval and phase2_checkpoint:
-        test_results = evaluate_on_test_set(
-            phase2_checkpoint,
-            test_path,
-            args.phase2_config,
-            output_dir="test_evaluation"
-        )
-    else:
-        logger.info("\nSkipping test set evaluation")
-
-    logger.info("\n" + "=" * 80)
+    # Summary
+    logger.info("=" * 60)
     logger.info("✅ PIPELINE COMPLETE")
-    logger.info("=" * 80)
-    logger.info(f"Train split: {train_path}")
-    logger.info(f"Test split: {test_path}")
-    if phase1_checkpoint:
-        logger.info(f"Phase 1 checkpoint: {phase1_checkpoint}")
-    if phase2_checkpoint:
-        logger.info(f"Phase 2 checkpoint: {phase2_checkpoint}")
+    logger.info(f"  Splits: {train_path}, {val_path}, {test_path}")
+    if phase1_ckpt:
+        logger.info(f"  Phase 1: {phase1_ckpt}")
+    if phase2_ckpt:
+        logger.info(f"  Phase 2: {phase2_ckpt}")
+    logger.info("=" * 60)
 
     return 0
 

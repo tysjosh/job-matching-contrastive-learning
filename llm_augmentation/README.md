@@ -2,10 +2,24 @@
 
 ## Overview
 
-The LLM Career-Aware Data Augmentation System transforms resume-job pairs into career progression views using Large Language Models. Unlike the rule-based `augmentation` module, this system leverages LLM capabilities for more natural, contextually appropriate transformations while maintaining semantic coherence and career realism.
+The LLM Career-Aware Data Augmentation System transforms resume-job pairs using Large Language Models. Unlike the rule-based `augmentation` module, this system leverages LLM capabilities for more natural, contextually appropriate transformations while maintaining semantic coherence and career realism.
 
-The system implements a "Career Time Machine" approach that generates 2x training data by creating:
+The system supports two augmentation modes:
 
+### 1. Negative Sample Generation (Recommended for Training)
+
+Generates hard negative samples by creating semantically plausible but incorrect resume-job pairings. For each original record, it outputs:
+- **Original record** (with original label)
+- **5 negative samples** (label=0) of different types:
+  - **Overqualified**: Senior resume → Junior job
+  - **Underqualified**: Junior resume → Senior job
+  - **Same Role Wrong Level**: Same job title but mismatched experience
+  - **Adjacent Role**: Similar but different role from ESCO ontology
+  - **Skill Gap**: Resume missing critical required skills
+
+### 2. Career Time Machine (Legacy)
+
+Generates positive augmented views by transforming content:
 - **Aspirational View**: Senior-level perspective with leadership, impact, and strategic language
 - **Foundational View**: Junior-level perspective with learning, support, and task-focused language
 
@@ -15,23 +29,25 @@ The system implements a "Career Time Machine" approach that generates 2x trainin
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    LLM Augmentation System                                  │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  Entry Point                                                                │
-│  └── LLMAugmentationOrchestrator                                           │
-│      ├── Loads configuration from llm_augmentation/config.json             │
-│      ├── Processes Source_Records from processed_combined_data.jsonl       │
-│      └── Outputs to llm_augmentation/augmented_data.jsonl                  │
+│  Negative Generation (NEW - Recommended)                                    │
+│  └── NegativeAugmentationOrchestrator                                      │
+│      ├── LLMNegativeGenerator                                              │
+│      │   ├── generate_overqualified_negative()                             │
+│      │   ├── generate_underqualified_negative()                            │
+│      │   ├── generate_same_role_wrong_level_negative()                     │
+│      │   ├── generate_adjacent_role_negative()                             │
+│      │   └── generate_skill_gap_negative()                                 │
+│      └── ESCOContextBuilder (ontology guidance)                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  Transformation Layer                                                       │
-│  ├── UpwardLLMTransformer (aspirational views)                             │
-│  ├── DownwardLLMTransformer (foundational views)                           │
-│  └── JobLLMTransformer (job description transformation)                    │
+│  Career Time Machine (Legacy)                                              │
+│  └── LLMAugmentationOrchestrator                                           │
+│      ├── UpwardLLMTransformer (aspirational views)                         │
+│      ├── DownwardLLMTransformer (foundational views)                       │
+│      └── JobLLMTransformer (job description transformation)                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  Protection & Validation Layer                                             │
 │  ├── TechnicalTermProtector                                                │
 │  └── SemanticCoherenceValidator                                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  Fallback Layer                                                            │
-│  └── RuleBasedFallback (uses existing augmentation module)                 │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -51,15 +67,62 @@ export OPENAI_API_KEY="your-api-key-here"
 
 ## Usage
 
-### Basic Usage
+### Negative Sample Generation (Recommended)
 
-Run the augmentation system from the project root:
+Generate hard negative samples for training:
+
+```bash
+# Full augmentation
+python run_llm_negative_augmentation.py \
+    --input preprocess/data_without_augmentation_training.jsonl \
+    --output preprocess/llm_augmented_negatives.jsonl
+
+# Test with 10 records first
+python run_llm_negative_augmentation.py \
+    --input preprocess/data_without_augmentation_training.jsonl \
+    --output preprocess/test_negatives.jsonl \
+    --max-records 10
+
+# Custom number of negatives (default is 5)
+python run_llm_negative_augmentation.py \
+    --input data.jsonl \
+    --output augmented.jsonl \
+    --num-negatives 3
+```
+
+#### Programmatic Usage (Negative Generation)
+
+```python
+from llm_augmentation import NegativeAugmentationOrchestrator, run_negative_augmentation
+
+# Quick run
+stats = run_negative_augmentation(
+    input_file="preprocess/data_without_augmentation_training.jsonl",
+    output_file="preprocess/llm_augmented_negatives.jsonl",
+    num_negatives=5
+)
+
+# Or with more control
+orchestrator = NegativeAugmentationOrchestrator(
+    config_path="llm_augmentation/config.json",
+    num_negatives=5
+)
+stats = orchestrator.augment_dataset(
+    input_file="input.jsonl",
+    output_file="output.jsonl",
+    max_records=100  # For testing
+)
+```
+
+### Career Time Machine (Legacy)
+
+Run the legacy augmentation system:
 
 ```bash
 python run_llm_augmentation.py
 ```
 
-### With Custom Input/Output
+#### With Custom Input/Output
 
 ```bash
 python run_llm_augmentation.py \
@@ -68,7 +131,7 @@ python run_llm_augmentation.py \
     --config llm_augmentation/config.json
 ```
 
-### Programmatic Usage
+#### Programmatic Usage (Legacy)
 
 ```python
 from llm_augmentation import LLMAugmentationOrchestrator

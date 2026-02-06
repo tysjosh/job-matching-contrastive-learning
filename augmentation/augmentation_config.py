@@ -96,6 +96,15 @@ class AugmentationConfig:
     embedding_diversity_monitoring: bool = True
     transformation_statistics: bool = True
     failure_analysis: bool = True
+    
+    # Career graph configuration
+    esco_graph_path: str = "training_output/career_graph_data_driven.gexf"
+    esco_skills_hierarchy_path: str = "dataset/esco/skillsHierarchy_en.csv"
+    hard_negative_max_distance: float = 2.0
+    medium_negative_max_distance: float = 4.0
+    use_distance_cache: bool = True
+    lambda1: float = 0.3  # Weight for aspirational view
+    lambda2: float = 0.2  # Weight for foundational view
 
     @classmethod
     def from_file(cls, config_path: str) -> 'AugmentationConfig':
@@ -221,6 +230,9 @@ class AugmentationConfig:
         # Extract metadata synchronization settings
         metadata_sync = config_dict.get('metadata_synchronization', {})
         
+        # Extract career graph settings
+        career_graph = config_dict.get('career_graph', {})
+        
         return cls(
             enhanced_validation_enabled=enhanced_validation.get('enabled', True),
             metadata_synchronization_enabled=metadata_sync.get('enabled', True),
@@ -235,7 +247,14 @@ class AugmentationConfig:
             batch_level_validation=reporting_dict.get('batch_level_validation', True),
             embedding_diversity_monitoring=reporting_dict.get('embedding_diversity_monitoring', True),
             transformation_statistics=reporting_dict.get('transformation_statistics', True),
-            failure_analysis=reporting_dict.get('failure_analysis', True)
+            failure_analysis=reporting_dict.get('failure_analysis', True),
+            esco_graph_path=career_graph.get('esco_graph_path', 'training_output/career_graph_data_driven.gexf'),
+            esco_skills_hierarchy_path=career_graph.get('esco_skills_hierarchy_path', 'dataset/esco/skillsHierarchy_en.csv'),
+            hard_negative_max_distance=career_graph.get('hard_negative_max_distance', 2.0),
+            medium_negative_max_distance=career_graph.get('medium_negative_max_distance', 4.0),
+            use_distance_cache=career_graph.get('use_distance_cache', True),
+            lambda1=career_graph.get('lambda1', 0.3),
+            lambda2=career_graph.get('lambda2', 0.2)
         )
 
     def get_active_profile(self) -> QualityProfile:
@@ -299,6 +318,15 @@ class AugmentationConfig:
                 'embedding_diversity_monitoring': self.embedding_diversity_monitoring,
                 'transformation_statistics': self.transformation_statistics,
                 'failure_analysis': self.failure_analysis
+            },
+            'career_graph': {
+                'esco_graph_path': self.esco_graph_path,
+                'esco_skills_hierarchy_path': self.esco_skills_hierarchy_path,
+                'hard_negative_max_distance': self.hard_negative_max_distance,
+                'medium_negative_max_distance': self.medium_negative_max_distance,
+                'use_distance_cache': self.use_distance_cache,
+                'lambda1': self.lambda1,
+                'lambda2': self.lambda2
             }
         }
 

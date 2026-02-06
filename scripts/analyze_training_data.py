@@ -175,11 +175,21 @@ def analyze_text_content(data: List[Dict[str, Any]]) -> Dict[str, Any]:
         resume = sample.get('resume', {})
         job = sample.get('job', {})
 
-        # Handle resume experience (could be list or string)
+        # Handle resume experience (could be list or string with nested structure)
         experience = resume.get('experience', '')
         if isinstance(experience, list) and len(experience) > 0:
             if isinstance(experience[0], dict):
-                experience_text = experience[0].get('description', '')
+                # Handle nested description structure
+                desc_field = experience[0].get('description', '')
+                if isinstance(desc_field, list) and len(desc_field) > 0:
+                    if isinstance(desc_field[0], dict):
+                        experience_text = desc_field[0].get('description', '')
+                    else:
+                        experience_text = str(desc_field[0])
+                elif isinstance(desc_field, str):
+                    experience_text = desc_field
+                else:
+                    experience_text = str(desc_field) if desc_field else ''
             else:
                 experience_text = str(experience[0])
         else:
@@ -312,12 +322,22 @@ def check_text_encoder_potential_issues(data: List[Dict[str, Any]]) -> Dict[str,
         resume = sample.get('resume', {})
         job = sample.get('job', {})
 
-        # Build text that would be encoded - handle list format
+        # Build text that would be encoded - handle nested list format
         resume_parts = []
         experience = resume.get('experience', [])
         if isinstance(experience, list) and len(experience) > 0:
             if isinstance(experience[0], dict):
-                resume_parts.append(experience[0].get('description', ''))
+                # Handle nested description structure
+                desc_field = experience[0].get('description', '')
+                if isinstance(desc_field, list) and len(desc_field) > 0:
+                    if isinstance(desc_field[0], dict):
+                        resume_parts.append(desc_field[0].get('description', ''))
+                    else:
+                        resume_parts.append(str(desc_field[0]))
+                elif isinstance(desc_field, str):
+                    resume_parts.append(desc_field)
+                else:
+                    resume_parts.append(str(desc_field) if desc_field else '')
             else:
                 resume_parts.append(str(experience[0]))
         elif isinstance(experience, str):

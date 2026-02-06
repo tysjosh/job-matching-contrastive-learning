@@ -45,8 +45,8 @@ class DatasetAugmentationOrchestrator:
     def __init__(self,
                  esco_skills_hierarchy: Dict,
                  career_graph: Any,
-                 lambda1: float = 0.3,
-                 lambda2: float = 0.2,
+                 lambda1: Optional[float] = None,
+                 lambda2: Optional[float] = None,
                  enable_enhanced_validation: bool = True,
                  augmentation_config: Optional[AugmentationConfig] = None,
                  quality_profile: Optional[str] = None):
@@ -56,13 +56,28 @@ class DatasetAugmentationOrchestrator:
         Args:
             esco_skills_hierarchy: ESCO skills hierarchy (required)
             career_graph: Career graph for validation (required)
-            lambda1: Weight for aspirational view
-            lambda2: Weight for foundational view
+            lambda1: Weight for aspirational view (if None, uses config value)
+            lambda2: Weight for foundational view (if None, uses config value)
             enable_enhanced_validation: Enable enhanced semantic validation
             augmentation_config: Augmentation configuration object
             quality_profile: Quality profile to use ('fast', 'balanced', 'high_quality')
         """
         self.career_graph = career_graph
+        
+        # Load augmentation configuration if not provided
+        if augmentation_config is None:
+            self.augmentation_config = load_augmentation_config(quality_profile=quality_profile)
+        else:
+            self.augmentation_config = augmentation_config
+            if quality_profile:
+                self.augmentation_config.set_active_profile(quality_profile)
+        
+        # Use config values if lambda weights not explicitly provided
+        if lambda1 is None:
+            lambda1 = self.augmentation_config.lambda1
+        if lambda2 is None:
+            lambda2 = self.augmentation_config.lambda2
+        
         self.career_augmenter = CareerAwareAugmenter(
             esco_skills_hierarchy=esco_skills_hierarchy,
             career_graph=career_graph,
@@ -71,14 +86,6 @@ class DatasetAugmentationOrchestrator:
         )
         self.job_transformer = JobTransformer()
         self.job_pool_manager = None  # Will be initialized when dataset is loaded
-        
-        # Load augmentation configuration
-        if augmentation_config is None:
-            self.augmentation_config = load_augmentation_config(quality_profile=quality_profile)
-        else:
-            self.augmentation_config = augmentation_config
-            if quality_profile:
-                self.augmentation_config.set_active_profile(quality_profile)
         
         # Get active profile
         self.active_profile = self.augmentation_config.get_active_profile()

@@ -60,14 +60,12 @@ def setup_logging():
     )
 
 
-def load_esco_skills_hierarchy():
+def load_esco_skills_hierarchy(skills_hierarchy_file: str = 'dataset/esco/skillsHierarchy_en.csv'):
     """Load ESCO skills hierarchy from skillsHierarchy_en.csv"""
     logger = logging.getLogger(__name__)
 
     try:
         # Load ESCO skills hierarchy data
-        skills_hierarchy_file = 'dataset/esco/skillsHierarchy_en.csv'
-
         if os.path.exists(skills_hierarchy_file):
             logger.info(
                 "Loading ESCO skills hierarchy from skillsHierarchy_en.csv...")
@@ -158,14 +156,14 @@ def load_esco_skills_hierarchy():
     }
 
 
-def load_career_graph():
+def load_career_graph(career_graph_path: str = 'training_output/career_graph_data_driven.gexf'):
     """Load career graph from GEXF file"""
     logger = logging.getLogger(__name__)
 
     try:
-        # Check if career graph file exists - try multiple locations
+        # Check if career graph file exists - try primary path and fallback locations
         career_graph_paths = [
-            'training_output/career_graph_data_driven.gexf',
+            career_graph_path,
             'training_output/career_graph.gexf',
             'colab_package/training_output/career_graph.gexf'
         ]
@@ -525,21 +523,31 @@ def run_augmentation(input_file='processed_combined_data.jsonl', output_file='au
             return False
 
         try:
-            # Load required components
+            # Load augmentation configuration
+            from augmentation.augmentation_config import load_augmentation_config
+            logger.info("Loading augmentation configuration...")
+            augmentation_config = load_augmentation_config()
+            
+            # Load required components using config paths
             logger.info("Loading ESCO skills hierarchy...")
-            esco_skills_hierarchy = load_esco_skills_hierarchy()
+            esco_skills_hierarchy = load_esco_skills_hierarchy(
+                augmentation_config.esco_skills_hierarchy_path
+            )
 
             logger.info("Loading career graph...")
-            career_graph = load_career_graph()
+            career_graph = load_career_graph(
+                augmentation_config.esco_graph_path
+            )
 
-            # Initialize the orchestrator
+            # Initialize the orchestrator with config values
             logger.info("Initializing DatasetAugmentationOrchestrator...")
             orchestrator = DatasetAugmentationOrchestrator(
                 esco_skills_hierarchy=esco_skills_hierarchy,
                 career_graph=career_graph,
-                lambda1=0.3,  # Weight for aspirational view
-                lambda2=0.2,   # Weight for foundational view
-                enable_enhanced_validation=False  # Disable strict validation
+                lambda1=augmentation_config.lambda1,
+                lambda2=augmentation_config.lambda2,
+                enable_enhanced_validation=False,  # Disable strict validation
+                augmentation_config=augmentation_config
             )
 
             # Run the complete augmentation strategy

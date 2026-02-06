@@ -158,6 +158,11 @@ class TrainingConfig:
     freeze_text_encoder: bool = True        # Freeze SentenceTransformer to avoid catastrophic forgetting
     projection_dim: int = 128              # Smaller projection to reduce overfitting (was 256)
     projection_dropout: float = 0.1        # Dropout for regularization
+    weight_decay: float = 0.0              # L2 regularization for optimizer (0.001 recommended)
+    
+    # NEW: Structured features configuration
+    use_structured_features: bool = False   # Enable explicit level encoding and structured features
+    structured_feature_dim: int = 32        # Dimension of encoded structured features
     
     # NEW: 2-Phase Training Configuration
     training_phase: str = "supervised"  # "self_supervised" | "supervised" | "fine_tuning"
@@ -182,6 +187,10 @@ class TrainingConfig:
     augmentation_quality_gates: Optional[Dict[str, float]] = None
     augmentation_similarity_thresholds: Optional[Dict[str, float]] = None
     augmentation_fallback_config: Optional[Dict[str, Any]] = None
+    
+    # Validation configuration
+    validation_path: Optional[str] = None  # Path to validation dataset (JSONL format)
+    validate_every_n_epochs: int = 1       # Run validation every N epochs
 
     def __post_init__(self):
         """Validate configuration parameters."""
@@ -302,6 +311,10 @@ class TrainingConfig:
             'freeze_text_encoder': self.freeze_text_encoder,
             'projection_dim': self.projection_dim,
             'projection_dropout': self.projection_dropout,
+            'weight_decay': self.weight_decay,
+            # Structured features configuration
+            'use_structured_features': self.use_structured_features,
+            'structured_feature_dim': self.structured_feature_dim,
             # NEW: 2-phase training fields
             'training_phase': self.training_phase,
             'use_augmentation_labels_only': self.use_augmentation_labels_only,
@@ -317,7 +330,9 @@ class TrainingConfig:
             'augmentation_metadata_sync': self.augmentation_metadata_sync,
             'augmentation_quality_gates': self.augmentation_quality_gates,
             'augmentation_similarity_thresholds': self.augmentation_similarity_thresholds,
-            'augmentation_fallback_config': self.augmentation_fallback_config
+            'augmentation_fallback_config': self.augmentation_fallback_config,
+            'validation_path': self.validation_path,
+            'validate_every_n_epochs': self.validate_every_n_epochs
         }
 
     @classmethod
@@ -386,6 +401,7 @@ class TrainingResults:
     total_samples: int
     checkpoint_paths: List[str]
     metrics: Dict[str, Any] = field(default_factory=dict)
+    validation_losses: List[float] = field(default_factory=list)  # Validation loss per epoch
 
     def __post_init__(self):
         """Validate training results."""
@@ -409,6 +425,7 @@ class TrainingResults:
         return {
             'final_loss': self.final_loss,
             'epoch_losses': self.epoch_losses,
+            'validation_losses': self.validation_losses,
             'training_time': self.training_time,
             'total_batches': self.total_batches,
             'total_samples': self.total_samples,
@@ -426,7 +443,8 @@ class TrainingResults:
             total_batches=data['total_batches'],
             total_samples=data['total_samples'],
             checkpoint_paths=data['checkpoint_paths'],
-            metrics=data.get('metrics', {})
+            metrics=data.get('metrics', {}),
+            validation_losses=data.get('validation_losses', [])
         )
 
     def save_json(self, file_path: str) -> None:

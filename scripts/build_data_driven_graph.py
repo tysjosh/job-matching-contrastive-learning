@@ -286,11 +286,11 @@ def main():
 
     # Paths
     data_path = Path(__file__).parent.parent / "preprocess" / \
-        "augmented_enriched_data_training_with_uri.jsonl"
+        "train_final_cleaned_with_uri.jsonl"
     graph_path = Path(__file__).parent.parent / \
-        "training_output" / "career_graph_bridged.gexf"
+        "training_output" / "career_graph.gexf"
     output_path = Path(__file__).parent.parent / \
-        "training_output" / "career_graph_data_driven.gexf"
+        "training_output" / "career_graph_data_driven_new.gexf"
 
     # Load existing graph
     print(f"\nLoading existing graph from: {graph_path}")

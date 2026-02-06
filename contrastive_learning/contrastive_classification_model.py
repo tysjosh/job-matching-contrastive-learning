@@ -18,6 +18,7 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 from .data_structures import TrainingConfig
+from .structured_features import StructuredFeatureEncoder
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +160,9 @@ class ContrastiveClassificationModel(nn.Module):
             raise ValueError(
                 "Could not find projection_head layers in pretrained model")
 
+        # Check if structured features are used
+        has_structured_encoder = any('structured_encoder' in k for k in state_dict.keys())
+        
         # Find input and output dimensions from the projection head
         input_dim = None
         output_dim = None
@@ -181,10 +185,35 @@ class ContrastiveClassificationModel(nn.Module):
             logger.warning(
                 f"Could not determine output dimension, using config default: {output_dim}")
 
-        # Create the contrastive encoder (reuse the existing architecture)
+        # Determine structured feature dimension if used
+        structured_feature_dim = 32  # Default
+        if has_structured_encoder:
+            # Try to infer from state dict
+            for key in state_dict.keys():
+                if 'structured_encoder.combiner.0.weight' in key:
+                    structured_feature_dim = state_dict[key].shape[0]
+                    break
+            logger.info(f"Detected structured features with dim={structured_feature_dim}")
+
+        # Create the contrastive encoder with structured features support
         class CareerAwareContrastiveModel(nn.Module):
-            def __init__(self, input_dim: int, projection_dim: int, dropout: float = 0.1):
+            def __init__(self, input_dim: int, projection_dim: int, dropout: float = 0.1,
+                         use_structured_features: bool = False, structured_feature_dim: int = 32):
                 super().__init__()
+                self.use_structured_features = use_structured_features
+                self.structured_feature_dim = structured_feature_dim if use_structured_features else 0
+                
+                # Structured feature encoder (if enabled)
+                if use_structured_features:
+                    self.structured_encoder = StructuredFeatureEncoder(
+                        num_experience_levels=10,
+                        experience_embed_dim=16,
+                        numerical_features=3,
+                        output_dim=structured_feature_dim
+                    )
+                else:
+                    self.structured_encoder = None
+                
                 self.projection_head = nn.Sequential(
                     nn.Linear(input_dim, projection_dim * 2),
                     nn.ReLU(),
@@ -192,8 +221,18 @@ class ContrastiveClassificationModel(nn.Module):
                     nn.Linear(projection_dim * 2, projection_dim)
                 )
 
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                projected = self.projection_head(x)
+            def forward(self, x: torch.Tensor,
+                        experience_level_idx: torch.Tensor = None,
+                        numerical_features: torch.Tensor = None) -> torch.Tensor:
+                if self.use_structured_features and experience_level_idx is not None and numerical_features is not None:
+                    # Encode structured features
+                    structured_encoded = self.structured_encoder(experience_level_idx, numerical_features)
+                    # Concatenate text and structured features
+                    combined = torch.cat([x, structured_encoded], dim=-1)
+                else:
+                    combined = x
+                
+                projected = self.projection_head(combined)
                 return projected  # Remove double normalization - SentenceTransformer already normalizes
 
             def get_embedding_dim(self) -> int:
@@ -203,10 +242,15 @@ class ContrastiveClassificationModel(nn.Module):
                 return output_dim
 
         dropout = getattr(self.config, 'projection_dropout', 0.1)
-        encoder = CareerAwareContrastiveModel(input_dim, output_dim, dropout)
+        encoder = CareerAwareContrastiveModel(
+            input_dim, output_dim, dropout,
+            use_structured_features=has_structured_encoder,
+            structured_feature_dim=structured_feature_dim
+        )
 
         logger.info(
-            f"Created contrastive encoder with input_dim={input_dim}, output_dim={output_dim}")
+            f"Created contrastive encoder with input_dim={input_dim}, output_dim={output_dim}, "
+            f"structured_features={has_structured_encoder}")
         return encoder
 
     def _get_encoder_embedding_dim(self) -> int:
@@ -278,13 +322,23 @@ class ContrastiveClassificationModel(nn.Module):
         logger.info(
             f"Trainable classification head parameters: {trainable_params:,}")
 
-    def _generate_embeddings(self, resume_text_emb: torch.Tensor, job_text_emb: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def uses_structured_features(self) -> bool:
+        """Check if the model uses structured features."""
+        return hasattr(self.contrastive_encoder, 'use_structured_features') and self.contrastive_encoder.use_structured_features
+
+    def _generate_embeddings(self, resume_text_emb: torch.Tensor, job_text_emb: torch.Tensor,
+                             resume_exp_idx: torch.Tensor = None, resume_num_features: torch.Tensor = None,
+                             job_exp_idx: torch.Tensor = None, job_num_features: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Generate embeddings using the frozen pre-trained contrastive encoder.
 
         Args:
             resume_text_emb: Text embeddings for resume (from SentenceTransformer)
             job_text_emb: Text embeddings for job (from SentenceTransformer)
+            resume_exp_idx: Experience level indices for resume (optional, for structured features)
+            resume_num_features: Numerical features for resume (optional, for structured features)
+            job_exp_idx: Experience level indices for job (optional, for structured features)
+            job_num_features: Numerical features for job (optional, for structured features)
 
         Returns:
             Tuple of (resume_embedding, job_embedding) from contrastive encoder
@@ -295,25 +349,42 @@ class ContrastiveClassificationModel(nn.Module):
 
         # Generate embeddings using the contrastive encoder
         with torch.set_grad_enabled(not self.config.freeze_contrastive_layers):
-            resume_emb = self.contrastive_encoder(resume_text_emb)
-            job_emb = self.contrastive_encoder(job_text_emb)
+            if self.uses_structured_features() and resume_exp_idx is not None:
+                resume_exp_idx = resume_exp_idx.to(self.device)
+                resume_num_features = resume_num_features.to(self.device)
+                job_exp_idx = job_exp_idx.to(self.device)
+                job_num_features = job_num_features.to(self.device)
+                
+                resume_emb = self.contrastive_encoder(resume_text_emb, resume_exp_idx, resume_num_features)
+                job_emb = self.contrastive_encoder(job_text_emb, job_exp_idx, job_num_features)
+            else:
+                resume_emb = self.contrastive_encoder(resume_text_emb)
+                job_emb = self.contrastive_encoder(job_text_emb)
 
         return resume_emb, job_emb
 
-    def forward(self, resume_text_emb: torch.Tensor, job_text_emb: torch.Tensor) -> torch.Tensor:
+    def forward(self, resume_text_emb: torch.Tensor, job_text_emb: torch.Tensor,
+                resume_exp_idx: torch.Tensor = None, resume_num_features: torch.Tensor = None,
+                job_exp_idx: torch.Tensor = None, job_num_features: torch.Tensor = None) -> torch.Tensor:
         """
         Forward pass through the complete model.
 
         Args:
             resume_text_emb: Text embeddings for resume (from SentenceTransformer)
             job_text_emb: Text embeddings for job (from SentenceTransformer)
+            resume_exp_idx: Experience level indices for resume (optional, for structured features)
+            resume_num_features: Numerical features for resume (optional, for structured features)
+            job_exp_idx: Experience level indices for job (optional, for structured features)
+            job_num_features: Numerical features for job (optional, for structured features)
 
         Returns:
             Classification probability (0-1) for interview prediction
         """
         # Generate embeddings using the pre-trained contrastive encoder
         resume_emb, job_emb = self._generate_embeddings(
-            resume_text_emb, job_text_emb)
+            resume_text_emb, job_text_emb,
+            resume_exp_idx, resume_num_features,
+            job_exp_idx, job_num_features)
 
         # Concatenate embeddings
         concatenated_emb = torch.cat([resume_emb, job_emb], dim=-1)

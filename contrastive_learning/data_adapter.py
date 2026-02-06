@@ -22,7 +22,7 @@ class DataAdapterConfig:
     output_path: str
     min_job_description_length: int = 50
     min_resume_experience_length: int = 20
-    max_samples_per_original: int = 5  # Maximum views per original record
+    max_samples_per_original: int = 10  # Maximum views per original record
     include_original_only: bool = False  # Whether to include only original views
     include_augmented_only: bool = False  # Whether to include only augmented views
     balance_labels: bool = False  # Whether to balance positive/negative samples
