@@ -1,8 +1,8 @@
 {
-  "batch_size": 32,
+  "batch_size": 64,
   "learning_rate": 0.000085,
   "num_epochs": 10,
-  "temperature": 0.2,
+  "temperature": 0.07,
   "negative_sampling_ratio": 0.7,
   "pathway_weight": 0.8,
   "use_pathway_negatives": true,
@@ -32,8 +32,8 @@
   "pretrained_model_path": null,
   "freeze_contrastive_layers": false,
   "classification_dropout": 0.0,
-  "max_negatives_per_anchor": 20,
-  "validation_path": "preprocess/data_splits_aug_fixed/validation.jsonl",
+  "max_negatives_per_anchor": 7,
+  "validation_path": "preprocess/data_splits_new_data/validation.jsonl",
   "validate_every_n_epochs": 1,
   "weight_decay": 0.001
 }
