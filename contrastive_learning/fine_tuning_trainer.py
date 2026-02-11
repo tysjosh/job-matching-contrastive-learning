@@ -293,6 +293,9 @@ class FineTuningTrainer:
         """
         Convert structured resume/job data to text embeddings using frozen SentenceTransformer.
 
+        Prioritizes the most discriminative fields first to fit within
+        the SentenceTransformer's 256-token window.
+
         Args:
             content: Content dictionary (resume or job)
             content_type: 'resume' or 'job'
@@ -301,90 +304,94 @@ class FineTuningTrainer:
             Text embedding tensor from SentenceTransformer
         """
         if content_type == 'resume':
-            # Extract text from resume data
             text_parts = []
 
-            # Add role and experience level (career positioning)
+            # 1. Role and experience level FIRST (most discriminative metadata)
             role = content.get('role', '')
             exp_level = content.get('experience_level', '')
             if role and exp_level:
                 text_parts.append(f"Position: {exp_level} {role}")
+            elif role:
+                text_parts.append(f"Position: {role}")
 
-            # Add experience description (handle nested structure)
+            # 2. Skills SECOND (key signal for matching, must always be included)
+            if 'skills' in content and content['skills']:
+                skill_names = []
+                if isinstance(content['skills'], list):
+                    for skill in content['skills']:
+                        if isinstance(skill, dict):
+                            skill_name = skill.get('name', '')
+                            if skill_name:
+                                skill_names.append(skill_name)
+                        elif isinstance(skill, str):
+                            skill_names.append(skill)
+                elif isinstance(content['skills'], str):
+                    skill_names.append(content['skills'])
+                if skill_names:
+                    text_parts.append(f"Skills: {', '.join(skill_names)}")
+
+            # 3. Experience text LAST (truncated, fills remaining token budget)
             if 'experience' in content and content['experience']:
+                experience_text = ''
                 if isinstance(content['experience'], list) and len(content['experience']) > 0:
                     exp_entry = content['experience'][0]
                     if isinstance(exp_entry, dict):
-                        # Handle nested description structure
                         desc_field = exp_entry.get('description', '')
-
-                        # Check if description is a nested list (common in preprocessed data)
                         if isinstance(desc_field, list) and len(desc_field) > 0:
                             if isinstance(desc_field[0], dict):
-                                experience_text = desc_field[0].get(
-                                    'description', '')
+                                experience_text = desc_field[0].get('description', '')
                             else:
                                 experience_text = str(desc_field[0])
                         elif isinstance(desc_field, str):
                             experience_text = desc_field
                         else:
-                            experience_text = str(
-                                desc_field) if desc_field else ''
-
-                        if experience_text:
-                            text_parts.append(f"Profile: {experience_text}")
+                            experience_text = str(desc_field) if desc_field else ''
                     elif isinstance(exp_entry, str):
-                        text_parts.append(f"Profile: {exp_entry}")
+                        experience_text = exp_entry
                 elif isinstance(content['experience'], str):
-                    text_parts.append(f"Profile: {content['experience']}")
+                    experience_text = content['experience']
 
-            # Add skills if available
-            if 'skills' in content and content['skills']:
-                if isinstance(content['skills'], list):
-                    skill_names = []
-                    for skill in content['skills']:
-                        if isinstance(skill, dict):
-                            skill_name = skill.get('name', '')
-                            skill_level = skill.get('level', '')
-                            if skill_name:
-                                skill_names.append(
-                                    f"{skill_name} ({skill_level})" if skill_level else skill_name)
-                        elif isinstance(skill, str):
-                            skill_names.append(skill)
-                    if skill_names:
-                        text_parts.append(
-                            "Skills: " + ", ".join(filter(None, skill_names)))
-                elif isinstance(content['skills'], str):
-                    text_parts.append("Skills: " + content['skills'])
+                if experience_text:
+                    if len(experience_text) > 800:
+                        experience_text = experience_text[:800] + "..."
+                    text_parts.append(f"Profile: {experience_text}")
 
-            # Add keywords for semantic enrichment
-            if 'keywords' in content and content['keywords']:
-                text_parts.append(
-                    f"Keywords: {', '.join(content['keywords'][:10])}")
-
-            # Fallback to any text field
             if not text_parts and 'text' in content:
                 text_parts.append(content['text'])
 
-            text = " [SEP] ".join(
-                text_parts) if text_parts else "No resume information available"
+            text = " [SEP] ".join(text_parts) if text_parts else "No resume information available"
 
         elif content_type == 'job':
-            # Extract text from job data
             text_parts = []
 
-            # Add job title
+            # 1. Title FIRST
             title = content.get('title', content.get('jobtitle', ''))
             if title:
                 text_parts.append(f"Position: {title}")
 
-            # Add company
-            if 'company' in content and content['company']:
-                text_parts.append(f"Company: {content['company']}")
+            # 2. Job skills SECOND (key signal for matching, must always be included)
+            skills = content.get('required_skills', content.get('skills', []))
+            if skills:
+                skill_strings = []
+                if isinstance(skills, list):
+                    for skill in skills:
+                        if isinstance(skill, dict):
+                            skill_name = skill.get('name', skill.get('skill', ''))
+                            if skill_name:
+                                skill_strings.append(skill_name)
+                        elif isinstance(skill, str):
+                            # Skip malformed skills (sentence fragments)
+                            if len(skill) <= 40 and '.' not in skill:
+                                skill_strings.append(skill)
+                            elif len(skill) <= 20:
+                                skill_strings.append(skill)
+                elif isinstance(skills, str):
+                    skill_strings.append(skills)
+                if skill_strings:
+                    text_parts.append(f"Required Skills: {', '.join(skill_strings)}")
 
-            # Add description (handle dict format with 'original' field)
-            description = content.get(
-                'description', content.get('jobdescription', ''))
+            # 3. Job description LAST (fills remaining token budget)
+            description = content.get('description', content.get('jobdescription', ''))
             if description:
                 if isinstance(description, dict):
                     desc_text = description.get('original', '')
@@ -394,42 +401,14 @@ class FineTuningTrainer:
                     desc_text = str(description)
 
                 if desc_text:
-                    # Truncate long descriptions
-                    desc_text = desc_text[:500] + \
-                        "..." if len(desc_text) > 500 else desc_text
+                    if len(desc_text) > 800:
+                        desc_text = desc_text[:800] + "..."
                     text_parts.append(f"Description: {desc_text}")
 
-            # Add required skills
-            skills = content.get('required_skills', content.get('skills', []))
-            if skills:
-                if isinstance(skills, list):
-                    skill_names = []
-                    for skill in skills:
-                        if isinstance(skill, dict):
-                            skill_name = skill.get(
-                                'name', skill.get('skill', ''))
-                            skill_level = skill.get('level', '')
-                            if skill_name:
-                                skill_names.append(
-                                    f"{skill_name} ({skill_level})" if skill_level else skill_name)
-                        elif isinstance(skill, str):
-                            skill_names.append(skill)
-                    if skill_names:
-                        text_parts.append(
-                            "Required Skills: " + ", ".join(filter(None, skill_names)))
-                elif isinstance(skills, str):
-                    text_parts.append("Required Skills: " + skills)
-
-            # Add requirements
-            if 'requirements' in content and content['requirements']:
-                text_parts.append(f"Requirements: {content['requirements']}")
-
-            # Fallback to any text field
             if not text_parts and 'text' in content:
                 text_parts.append(content['text'])
 
-            text = " [SEP] ".join(
-                text_parts) if text_parts else "No job information available"
+            text = " [SEP] ".join(text_parts) if text_parts else "No job information available"
 
         else:
             raise ValueError(f"Unknown content_type: {content_type}")
