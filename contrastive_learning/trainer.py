@@ -878,10 +878,8 @@ class ContrastiveLearningTrainer:
         """
         Convert structured resume/job data to text embeddings using frozen SentenceTransformer.
 
-        Research-grade approach:
-        1. Use frozen SentenceTransformer (no catastrophic forgetting)
-        2. Focus on contrastive learning innovations (global sampling, career-aware negatives)
-        3. Minimal projection for task adaptation
+        Prioritizes the most discriminative fields first to fit within
+        the SentenceTransformer's 256-token window.
 
         Args:
             content: Content dictionary with rich preprocessing data
@@ -891,19 +889,36 @@ class ContrastiveLearningTrainer:
             SentenceTransformer embedding tensor (from frozen encoder)
         """
         if content_type == 'resume':
-            # Extract rich text from preprocessed resume data
             text_parts = []
 
-            # 1. HIGHEST PRIORITY: Experience text (complete resume content)
+            # 1. Role and experience level FIRST (most discriminative metadata)
+            role = content.get('role', '')
+            exp_level = content.get('experience_level', '')
+            if role and exp_level:
+                text_parts.append(f"Position: {exp_level} {role}")
+            elif role:
+                text_parts.append(f"Position: {role}")
+
+            # 2. Skills SECOND (key signal for matching, must always be included)
+            if 'skills' in content:
+                skill_names = []
+                for skill in content['skills']:
+                    if isinstance(skill, dict):
+                        skill_name = skill.get('name', '')
+                        if skill_name:
+                            skill_names.append(skill_name)
+                    elif isinstance(skill, str):
+                        skill_names.append(skill)
+                if skill_names:
+                    text_parts.append(f"Skills: {', '.join(skill_names)}")
+
+            # 3. Experience text LAST (truncated, fills remaining token budget)
             if 'experience' in content:
                 experience = content['experience']
+                experience_text = ''
                 if isinstance(experience, list) and len(experience) > 0:
-                    # Extract description from first experience entry (most comprehensive)
                     if isinstance(experience[0], dict):
-                        # Handle nested description structure
                         desc_field = experience[0].get('description', '')
-                        
-                        # Check if description is a nested list (common in preprocessed data)
                         if isinstance(desc_field, list) and len(desc_field) > 0:
                             if isinstance(desc_field[0], dict):
                                 experience_text = desc_field[0].get('description', '')
@@ -913,96 +928,51 @@ class ContrastiveLearningTrainer:
                             experience_text = desc_field
                         else:
                             experience_text = str(desc_field) if desc_field else ''
-                        
-                        if experience_text:
-                            text_parts.append(f"Profile: {experience_text}")
                     else:
-                        text_parts.append(f"Profile: {str(experience[0])}")
+                        experience_text = str(experience[0])
                 elif isinstance(experience, str):
-                    text_parts.append(f"Profile: {experience}")
+                    experience_text = experience
 
-            # 2. Role and experience level (career positioning)
-            role = content.get('role', '')
-            exp_level = content.get('experience_level', '')
-            if role and exp_level:
-                text_parts.append(f"Position: {exp_level} {role}")
+                if experience_text:
+                    if len(experience_text) > 800:
+                        experience_text = experience_text[:800] + "..."
+                    text_parts.append(f"Profile: {experience_text}")
 
-            # 3. Structured skills by category (prioritize most common categories)
-            if 'skills' in content:
-                skills_by_category = {}
-                for skill in content['skills']:
-                    if isinstance(skill, dict):
-                        category = skill.get('category', 'Other')
-                        skill_name = skill.get('name', '')
-                        level = skill.get('level', '')
-
-                        if category not in skills_by_category:
-                            skills_by_category[category] = []
-                        skills_by_category[category].append(
-                            f"{skill_name} ({level})" if level else skill_name)
-
-                # Prioritize most frequent categories from data analysis
-                priority_categories = [
-                    'Programming Languages', 'Cloud Platforms  Devops Tools', 'Project Management Methodologies']
-
-                for category in priority_categories:
-                    if category in skills_by_category:
-                        text_parts.append(
-                            f"{category}: {', '.join(skills_by_category[category])}")
-
-                # Add remaining categories
-                for category, skill_list in skills_by_category.items():
-                    if category not in priority_categories:
-                        text_parts.append(
-                            f"{category}: {', '.join(skill_list)}")
-
-            # 4. Keywords for semantic enrichment (limit to top 10)
-            if 'keywords' in content:
-                text_parts.append(
-                    f"Keywords: {', '.join(content['keywords'][:10])}")
-
-            full_text = " [SEP] ".join(text_parts)
+            full_text = " [SEP] ".join(text_parts) if text_parts else "No resume information available"
 
         elif content_type == 'job':
-            # Similar semantic extraction for jobs
             text_parts = []
 
-            # Job title and basic info
+            # 1. Title FIRST
             title = content.get('title', content.get('jobtitle', ''))
             if title:
                 text_parts.append(f"Position: {title}")
 
-            # Extract skills from job - handle both string and dict formats
+            # 2. Job skills SECOND (key signal for matching, must always be included)
             skills = content.get('skills', [])
             if skills:
+                skill_strings = []
                 if isinstance(skills, str):
-                    text_parts.append(f"Required Skills: {skills}")
+                    skill_strings.append(skills)
                 elif isinstance(skills, list):
-                    # Handle list of skills that could be strings or dictionaries
-                    skill_strings = []
                     for skill in skills:
                         if isinstance(skill, dict):
-                            # Extract skill name and level from dictionary
-                            skill_name = skill.get('name', skill.get('skill'))
+                            skill_name = skill.get('name', skill.get('skill', ''))
                             if skill_name:
-                                skill_level = skill.get('level', '')
-                                if skill_level:
-                                    skill_strings.append(
-                                        f"{skill_name} ({skill_level})")
-                                else:
-                                    skill_strings.append(skill_name)
+                                skill_strings.append(skill_name)
                         elif isinstance(skill, str):
-                            skill_strings.append(skill)
+                            if len(skill) <= 40 and '.' not in skill:
+                                skill_strings.append(skill)
+                            elif len(skill) <= 20:
+                                skill_strings.append(skill)
+                if skill_strings:
+                    text_parts.append(
+                        f"Required Skills: {', '.join(skill_strings)}")
 
-                    if skill_strings:
-                        text_parts.append(
-                            f"Required Skills: {', '.join(skill_strings)}")
-
-            # Job description
+            # 3. Job description LAST (fills remaining token budget)
             description = content.get(
                 'description', content.get('jobdescription', ''))
             if description:
-                # Handle dict format (with 'original' field) or string format
                 if isinstance(description, dict):
                     desc_text = description.get('original', '')
                 elif isinstance(description, str):
@@ -1010,37 +980,30 @@ class ContrastiveLearningTrainer:
                 else:
                     desc_text = str(description)
 
-                # Truncate long descriptions
                 if desc_text:
-                    desc_text = desc_text[:500] + \
-                        "..." if len(desc_text) > 500 else desc_text
+                    if len(desc_text) > 800:
+                        desc_text = desc_text[:800] + "..."
                     text_parts.append(f"Description: {desc_text}")
 
-            full_text = " [SEP] ".join(text_parts)
+            full_text = " [SEP] ".join(text_parts) if text_parts else "No job information available"
 
         else:
-            # Fallback for unknown content type
             full_text = str(content)
 
-        # Use frozen SentenceTransformer for semantic encoding (research-grade approach)
         try:
-            # Always use no_grad for frozen encoder (saves memory and prevents gradients)
             with torch.no_grad():
                 embedding = self.text_encoder.encode(
                     full_text,
                     convert_to_tensor=True,
                     device=self.device,
                     show_progress_bar=False,
-                    normalize_embeddings=False  # Let the projection head handle normalization
+                    normalize_embeddings=False
                 )
 
-            # Clone the tensor to make it a regular tensor that can be used in autograd
-            # This fixes the "Inference tensors cannot be saved for backward" error
             return embedding.clone().detach().requires_grad_(False)
 
         except Exception as e:
             logger.error(f"Error encoding content with frozen SentenceTransformer: {e}")
-            # Fallback to simple encoding
             fallback_text = str(content)[:100]
             try:
                 with torch.no_grad():
@@ -1051,11 +1014,9 @@ class ContrastiveLearningTrainer:
                         show_progress_bar=False,
                         normalize_embeddings=False
                     )
-                # Clone the fallback tensor as well
                 embedding = embedding.clone().detach().requires_grad_(False)
             except Exception as fallback_error:
                 logger.error(f"Fallback encoding also failed: {fallback_error}")
-                # Create a zero tensor on the correct device as last resort
                 embedding_dim = self.text_encoder.get_sentence_embedding_dimension()
                 embedding = torch.zeros(embedding_dim, device=self.device)
             return embedding

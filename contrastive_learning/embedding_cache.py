@@ -461,20 +461,43 @@ class BatchEfficientEncoder:
                     for content_data, content_type in content_items]
 
     def _content_to_text(self, content: Dict[str, Any], content_type: str) -> str:
-        """Convert content dictionary to text representation."""
-        # This is the same text construction logic from the original trainer
+        """Convert content dictionary to text representation.
+
+        Prioritizes the most discriminative fields first to fit within
+        the SentenceTransformer's token window. Skills come before experience
+        to guarantee they are always encoded.
+        """
         text_parts = []
 
         if content_type == 'resume':
-            # Resume text construction
+            # 1. Role and experience level FIRST (most discriminative metadata)
+            role = content.get('role', '')
+            exp_level = content.get('experience_level', '')
+            if role and exp_level:
+                text_parts.append(f"Position: {exp_level} {role}")
+            elif role:
+                text_parts.append(f"Position: {role}")
+
+            # 2. Skills SECOND (key signal for matching, must always be included)
+            if 'skills' in content:
+                skill_names = []
+                for skill in content['skills']:
+                    if isinstance(skill, dict):
+                        skill_name = skill.get('name', '')
+                        if skill_name:
+                            skill_names.append(skill_name)
+                    elif isinstance(skill, str):
+                        skill_names.append(skill)
+                if skill_names:
+                    text_parts.append(f"Skills: {', '.join(skill_names)}")
+
+            # 3. Experience text LAST (truncated, fills remaining token budget)
             if 'experience' in content:
                 experience = content['experience']
+                experience_text = ''
                 if isinstance(experience, list) and len(experience) > 0:
                     if isinstance(experience[0], dict):
-                        # Handle nested description structure
                         desc_field = experience[0].get('description', '')
-                        
-                        # Check if description is a nested list (common in preprocessed data)
                         if isinstance(desc_field, list) and len(desc_field) > 0:
                             if isinstance(desc_field[0], dict):
                                 experience_text = desc_field[0].get('description', '')
@@ -484,73 +507,43 @@ class BatchEfficientEncoder:
                             experience_text = desc_field
                         else:
                             experience_text = str(desc_field) if desc_field else ''
-                        
-                        if experience_text:
-                            text_parts.append(f"Profile: {experience_text}")
                     else:
-                        text_parts.append(f"Profile: {str(experience[0])}")
+                        experience_text = str(experience[0])
                 elif isinstance(experience, str):
-                    text_parts.append(f"Profile: {experience}")
+                    experience_text = experience
 
-            # Role and experience level
-            role = content.get('role', '')
-            exp_level = content.get('experience_level', '')
-            if role and exp_level:
-                text_parts.append(f"Position: {exp_level} {role}")
-
-            # Skills
-            if 'skills' in content:
-                skills_by_category = {}
-                for skill in content['skills']:
-                    if isinstance(skill, dict):
-                        category = skill.get('category', 'Other')
-                        skill_name = skill.get('name', '')
-                        level = skill.get('level', '')
-
-                        if category not in skills_by_category:
-                            skills_by_category[category] = []
-                        skills_by_category[category].append(
-                            f"{skill_name} ({level})" if level else skill_name)
-
-                for category, skill_list in skills_by_category.items():
-                    text_parts.append(f"{category}: {', '.join(skill_list)}")
-
-            # Keywords
-            if 'keywords' in content:
-                text_parts.append(
-                    f"Keywords: {', '.join(content['keywords'][:10])}")
+                if experience_text:
+                    # Truncate to ~800 chars to fit within 512-token limit
+                    if len(experience_text) > 800:
+                        experience_text = experience_text[:800] + "..."
+                    text_parts.append(f"Profile: {experience_text}")
 
         elif content_type == 'job':
-            # Job text construction
+            # 1. Title FIRST
             title = content.get('title', content.get('jobtitle', ''))
             if title:
                 text_parts.append(f"Position: {title}")
 
-            # Job skills
+            # 2. Job skills SECOND (key signal for matching, must always be included)
             skills = content.get('skills', [])
             if skills:
-                if isinstance(skills, str):
-                    text_parts.append(f"Required Skills: {skills}")
-                elif isinstance(skills, list):
-                    skill_strings = []
-                    for skill in skills:
-                        if isinstance(skill, dict):
-                            skill_name = skill.get('name', skill.get('skill'))
-                            if skill_name:
-                                skill_level = skill.get('level', '')
-                                if skill_level:
-                                    skill_strings.append(
-                                        f"{skill_name} ({skill_level})")
-                                else:
-                                    skill_strings.append(skill_name)
-                        elif isinstance(skill, str):
+                skill_strings = []
+                for skill in skills:
+                    if isinstance(skill, dict):
+                        skill_name = skill.get('name', skill.get('skill', ''))
+                        if skill_name:
+                            skill_strings.append(skill_name)
+                    elif isinstance(skill, str):
+                        # Skip malformed skills (sentence fragments)
+                        if len(skill) <= 40 and '.' not in skill:
                             skill_strings.append(skill)
+                        elif len(skill) <= 20:
+                            skill_strings.append(skill)
+                if skill_strings:
+                    text_parts.append(
+                        f"Required Skills: {', '.join(skill_strings)}")
 
-                    if skill_strings:
-                        text_parts.append(
-                            f"Required Skills: {', '.join(skill_strings)}")
-
-            # Job description
+            # 3. Job description LAST (fills remaining token budget)
             description = content.get(
                 'description', content.get('jobdescription', ''))
             if description:
@@ -562,9 +555,8 @@ class BatchEfficientEncoder:
                     desc_text = str(description)
 
                 if desc_text:
-                    # Limit description length for efficiency
-                    desc_text = desc_text[:500] + \
-                        "..." if len(desc_text) > 500 else desc_text
+                    if len(desc_text) > 800:
+                        desc_text = desc_text[:800] + "..."
                     text_parts.append(f"Description: {desc_text}")
 
         return " [SEP] ".join(text_parts) if text_parts else str(content)
