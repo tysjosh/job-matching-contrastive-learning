@@ -93,6 +93,7 @@ class FineTuningTrainer:
 
         # Initialize text encoder (same as used in pre-training)
         self.text_encoder = SentenceTransformer(config.text_encoder_model)
+        self.text_encoder.max_seq_length = 512
         self.text_encoder.to(self.device)
 
         # Freeze text encoder to maintain consistency with pre-training
