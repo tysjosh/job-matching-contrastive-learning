@@ -3,6 +3,8 @@
 Test basic training functionality with minimal configuration.
 """
 
+from contrastive_learning.trainer import ContrastiveLearningTrainer
+from contrastive_learning.data_structures import TrainingConfig
 import sys
 from pathlib import Path
 import json
@@ -11,13 +13,10 @@ import json
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from contrastive_learning.data_structures import TrainingConfig
-from contrastive_learning.trainer import ContrastiveLearningTrainer
-
 
 def create_minimal_test_data():
     """Create minimal test data for verification."""
-    
+
     test_samples = [
         {
             "resume": {
@@ -58,54 +57,54 @@ def create_minimal_test_data():
             "metadata": {"augmentation_type": "Original", "label": 0}
         }
     ]
-    
+
     # Write test data
     with open("test_data.jsonl", "w") as f:
         for sample in test_samples:
             f.write(json.dumps(sample) + "\n")
-    
+
     print("Created minimal test data: test_data.jsonl")
 
 
 def test_basic_training():
     """Test basic training functionality."""
-    
+
     print("=" * 50)
     print("BASIC TRAINING TEST")
     print("=" * 50)
-    
+
     # Create minimal test data
     create_minimal_test_data()
-    
+
     # Create minimal configuration
     config = TrainingConfig(
         # Use supervised mode (simpler than self-supervised)
         training_phase="supervised",
-        
+
         # Minimal training parameters
         batch_size=32,
         learning_rate=0.001,
         num_epochs=1,
         temperature=0.2,
-        
+
         # Disable complex features
         use_pathway_negatives=False,
         use_view_augmentation=False,
         global_negative_sampling=False,
-        
+
         # Simple text encoder
-        text_encoder_model='sentence-transformers/all-MiniLM-L6-v2',
+        text_encoder_model='sentence-transformers/all-mpnet-base-v2',
         freeze_text_encoder=True,
-        
+
         # Minimal cache
         embedding_cache_size=100,
         enable_embedding_preload=False,
-        
+
         # Frequent logging
         log_frequency=1,
         checkpoint_frequency=10
     )
-    
+
     print(f"Configuration:")
     print(f"  - Training phase: {config.training_phase}")
     print(f"  - Batch size: {config.batch_size}")
@@ -113,7 +112,7 @@ def test_basic_training():
     print(f"  - Use pathway negatives: {config.use_pathway_negatives}")
     print(f"  - Use view augmentation: {config.use_view_augmentation}")
     print()
-    
+
     # Initialize trainer
     try:
         trainer = ContrastiveLearningTrainer(
@@ -124,20 +123,20 @@ def test_basic_training():
     except Exception as e:
         print(f"❌ Trainer initialization failed: {e}")
         return False
-    
+
     # Run training
     try:
         print("Starting basic training test...")
         results = trainer.train("test_data.jsonl")
-        
+
         print("✅ Training completed successfully!")
         print(f"  - Final loss: {results.final_loss:.4f}")
         print(f"  - Training time: {results.training_time:.2f}s")
         print(f"  - Total samples: {results.total_samples}")
         print(f"  - Total batches: {results.total_batches}")
-        
+
         return True
-        
+
     except Exception as e:
         print(f"❌ Training failed: {e}")
         print(f"Error type: {type(e).__name__}")
@@ -146,9 +145,9 @@ def test_basic_training():
 
 def main():
     """Run the basic test."""
-    
+
     success = test_basic_training()
-    
+
     if success:
         print("\n" + "=" * 50)
         print("✅ BASIC TEST PASSED!")
