@@ -107,6 +107,7 @@ class ContrastiveLearningTrainer:
 
         # Initialize semantic text encoder from config
         self.text_encoder = SentenceTransformer(config.text_encoder_model)
+        self.text_encoder.max_seq_length = 512
 
         # Set device for BOTH text encoder and main model consistently
         self.device = torch.device(
