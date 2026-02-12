@@ -10,7 +10,7 @@
   "checkpoint_frequency": 500,
   "log_frequency": 20,
   "shuffle_data": true,
-  "text_encoder_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "text_encoder_model": "sentence-transformers/all-mpnet-base-v2",
   "text_encoder_device": null,
   "max_resume_views": 8,
   "max_job_views": 8,
