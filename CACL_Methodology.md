@@ -97,42 +97,174 @@ Precomputed metadata fields:
 
 ## 4. ESCO Knowledge Graph Integration
 
-The ESCO framework provides a structured occupational ontology with ~13K occupations and ~14K skills connected in a graph. CACL uses this in two ways:
+### 4.1 What is ESCO?
+
+ESCO (European Skills, Competences, Qualifications and Occupations) is a standardized occupational taxonomy maintained by the European Commission. It provides a structured graph connecting occupations to the skills they require. CACL uses the ESCO knowledge graph to inject domain knowledge about skill relationships into the training process.
+
+### 4.2 Graph Structure
+
+The ESCO knowledge graph used in CACL contains 18,237 nodes and 132,679 edges:
+
+| Node Type | Count | Description |
+|-----------|-------|-------------|
+| Skills | 14,359 | Individual skills/competences (e.g., "Python programming", "project management") |
+| Occupations | 3,039 | Job roles (e.g., "Software developer", "Data analyst") |
+| ISCO Groups | 619 | Hierarchical occupation categories from the ISCO-08 classification |
+| Other | 220 | Additional classification nodes |
+
+Edges connect occupations to the skills they require (`occupation → skill`) and occupations to their ISCO group (`occupation → isco`). When converted to an undirected graph, this creates implicit paths between skills: two skills are "close" if they are required by the same or similar occupations.
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                    ESCO Knowledge Graph                    │
-│                                                           │
-│    Occupation A ──── skill_1 ──── Occupation B            │
-│         │              │              │                    │
-│      skill_2        skill_3        skill_4                │
-│         │              │              │                    │
-│    Occupation C ──── skill_5 ──── Occupation D            │
-│                                                           │
-├───────────────────────┬──────────────────────────────────┤
-│  Usage 1: Negative    │  Usage 2: Sample-level           │
-│  Selection (§5.6)     │  Loss Weighting (§5.7)           │
-│                       │                                   │
-│  Skill-level ontology │  Precomputed ontology_similarity  │
-│  distance determines  │  and ot_distance used to weight   │
-│  hard/medium/easy     │  each sample's contribution to    │
-│  negative buckets     │  the loss (0.5x – 1.5x)          │
-└───────────────────────┴──────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                    ESCO Knowledge Graph Structure                      │
+│                                                                       │
+│  Example: How "Python" and "Java" are connected                       │
+│                                                                       │
+│  skill:Python ◄────── occupation:Software_Developer ──────► skill:Java│
+│       │                        │                                │     │
+│       │                   isco:C2514                             │     │
+│       │                  (Software                               │     │
+│       │                  developers)                             │     │
+│       │                        │                                │     │
+│       └──── occupation:Data_Scientist ────► skill:Statistics ───┘     │
+│                                                                       │
+│  shortest_path(Python, Java) = 2  (through Software_Developer)        │
+│  shortest_path(Python, Statistics) = 2  (through Data_Scientist)      │
+│  shortest_path(Java, Statistics) = 4  (through two occupations)       │
+│                                                                       │
+│  Skills required by the same occupation are distance 2 apart.         │
+│  Skills in related occupations are further apart.                     │
+│  Skills in unrelated fields have no path (distance = ∞).             │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-### OntologySkillMatcher
+### 4.3 How CACL Uses the ESCO Graph
 
-Computes skill-level similarity between resume and job using shortest-path distances on the ESCO graph:
+The ESCO graph is used in two distinct ways during training:
 
 ```
-skill_sim(u, v) = exp(-α · shortest_path(u, v))     α = 0.7
-
-ontology_set_similarity(A, B) = 0.5 · (dir_score(A→B) + dir_score(B→A))
-
-where dir_score(X, Y) = (1/|X|) · Σ max_y∈Y skill_sim(x, y)
+┌───────────────────────────────────────────────────────────────────┐
+│                    Two Uses of ESCO in CACL                        │
+│                                                                    │
+│  ┌─────────────────────────────┐  ┌─────────────────────────────┐ │
+│  │  Usage 1: Negative          │  │  Usage 2: Sample-level      │ │
+│  │  Selection (§5.6)           │  │  Loss Weighting (§5.7)      │ │
+│  │                             │  │                             │ │
+│  │  COMPUTED AT TRAINING TIME  │  │  PRECOMPUTED DURING         │ │
+│  │                             │  │  DATA PREPROCESSING         │ │
+│  │  For each anchor resume,    │  │                             │ │
+│  │  compute skill similarity   │  │  Each sample stores:        │ │
+│  │  to every candidate         │  │  • ontology_similarity      │ │
+│  │  negative job. Bucket       │  │  • ot_distance              │ │
+│  │  into hard/medium/easy      │  │  • quality_tier             │ │
+│  │  based on distance.         │  │                             │ │
+│  │                             │  │  These scale each sample's  │ │
+│  │  Uses: ontology_set_        │  │  loss contribution by       │ │
+│  │  similarity (§4.4)          │  │  0.5x – 1.5x               │ │
+│  └─────────────────────────────┘  └─────────────────────────────┘ │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
-This gives a 0–1 similarity score: 1.0 = identical skill sets, 0.0 = completely unrelated.
+### 4.4 Pairwise Skill Similarity (ontology_set_similarity)
+
+To compare the skill sets of a resume and a job, CACL computes a symmetric similarity score using shortest-path distances on the ESCO graph. This is done in three steps:
+
+**Step 1: Skill-to-skill similarity.** Given two individual skill URIs `u` and `v`, their similarity decays exponentially with their shortest-path distance on the graph:
+
+```
+skill_sim(u, v) = exp(-α · d(u, v))       where α = 0.7, d = shortest path length
+
+Examples (using the graph above):
+  skill_sim(Python, Java)       = exp(-0.7 × 2) = 0.247   (same occupation → moderate)
+  skill_sim(Python, Statistics) = exp(-0.7 × 2) = 0.247   (same occupation → moderate)
+  skill_sim(Java, Statistics)   = exp(-0.7 × 4) = 0.061   (different occupations → low)
+  skill_sim(Python, Python)     = exp(-0.7 × 0) = 1.000   (identical → perfect)
+  skill_sim(Python, Cooking)    = 0.000                     (no path → zero)
+```
+
+The decay parameter α = 0.7 means similarity drops to ~0.25 at distance 2 (skills in the same occupation) and to ~0.06 at distance 4 (skills in related but different occupations). Skills with no connecting path get similarity 0.
+
+**Step 2: Directional set score.** For a set of skills X (e.g., resume skills) and a set Y (e.g., job skills), compute how well X is "covered" by Y. For each skill in X, find its best match in Y:
+
+```
+dir_score(X → Y) = (1 / |X|) · Σ_{x ∈ X} max_{y ∈ Y} skill_sim(x, y)
+```
+
+This measures: "on average, how well is each skill in X represented by at least one skill in Y?" A score of 1.0 means every skill in X has an identical match in Y. A score near 0 means X's skills are unrelated to anything in Y.
+
+**Step 3: Symmetric similarity.** The final similarity is the average of both directions:
+
+```
+ontology_set_similarity(A, B) = 0.5 · (dir_score(A → B) + dir_score(B → A))
+```
+
+This is symmetric: similarity(resume_skills, job_skills) = similarity(job_skills, resume_skills). It captures both "does the candidate have the skills the job needs?" and "are the candidate's skills relevant to this job?"
+
+### 4.5 Optimal Transport Distance (ot_distance)
+
+While `ontology_set_similarity` uses a greedy best-match approach (each skill matches independently), the Sinkhorn Optimal Transport (OT) distance provides a more holistic comparison by finding the minimum-cost assignment between two skill sets.
+
+**Intuition:** Imagine you need to "transport" the resume's skill distribution to match the job's skill distribution. Each unit of skill must be moved to some skill in the other set, and the cost of moving skill `u` to skill `v` is their shortest-path distance on the ESCO graph. OT finds the assignment that minimizes total transport cost.
+
+**Computation:**
+
+```
+Given:
+  A = {a₁, a₂, ..., aₙ}  (resume skill URIs)
+  B = {b₁, b₂, ..., bₘ}  (job skill URIs)
+
+1. Build cost matrix C ∈ ℝⁿˣᵐ:
+   C[i,j] = shortest_path(aᵢ, bⱼ)  on the ESCO graph
+   (If no path exists, C[i,j] = 10.0 as a penalty)
+
+2. Define uniform distributions:
+   p = (1/n, 1/n, ..., 1/n)   (each resume skill has equal weight)
+   q = (1/m, 1/m, ..., 1/m)   (each job skill has equal weight)
+
+3. Solve for the optimal transport plan P* using Sinkhorn iteration:
+   P* = argmin_P  Σᵢⱼ Pᵢⱼ · Cᵢⱼ  +  ε · KL(P || pqᵀ)
+
+   where ε = 0.4 (entropic regularization) and KL is the Kullback-Leibler divergence.
+
+4. OT distance = Σᵢⱼ P*ᵢⱼ · Cᵢⱼ
+```
+
+The Sinkhorn algorithm approximates the exact OT solution efficiently using iterative matrix scaling (200 iterations max, convergence tolerance 1e-6). The entropic regularization ε = 0.4 smooths the transport plan, making it differentiable and more robust to noise.
+
+**Difference from ontology_set_similarity:** The greedy best-match approach can "reuse" the same skill in Y to match multiple skills in X. OT enforces that each skill contributes proportionally, giving a more balanced comparison. For example, if a resume has 5 Python-related skills and a job needs 1 Python skill + 4 management skills, the greedy approach would score high (all 5 match Python), but OT would score lower (4 skills have no good match).
+
+**Usage in CACL:** Both `ontology_similarity` and `ot_distance` are precomputed during data preprocessing and stored in each sample's metadata. Neither is used directly as a training target or label. Instead, they serve as confidence signals in the sample-level loss weighting (§5.7):
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│         How ot_distance and ontology_similarity flow into training    │
+│                                                                       │
+│  Data Preprocessing (offline, before training):                       │
+│    For each resume-job pair:                                          │
+│      1. Map skill names → ESCO skill URIs                             │
+│      2. Compute ontology_similarity (greedy best-match, §4.4)         │
+│      3. Compute ot_distance (Sinkhorn OT, §4.5)                      │
+│      4. Assign quality_tier (A/B/C based on URI coverage)             │
+│      5. Store all three in sample metadata                            │
+│                                                                       │
+│  During Phase 1 Training (per triplet):                               │
+│    1. Compute InfoNCE loss as usual                                   │
+│    2. Read ontology_similarity, ot_distance, quality_tier             │
+│       from the anchor sample's metadata                               │
+│    3. Combine into a single weight w ∈ [0.5, 1.5]                    │
+│    4. Final loss = w × InfoNCE loss                                   │
+│                                                                       │
+│  Effect:                                                              │
+│    • High ontology_similarity + low ot_distance → w ≈ 1.5            │
+│      (ontology confirms this is a strong match → trust this sample)   │
+│    • Low ontology_similarity + high ot_distance → w ≈ 0.5            │
+│      (ontology says skills don't align → downweight this sample)      │
+│    • Missing URIs (tier C) → w ≈ 0.75                                │
+│      (no ontology signal → reduce influence)                          │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+The key idea: not all training samples are equally informative. Samples where the ESCO ontology agrees with the label (e.g., a positive pair with high skill overlap) should influence the model more than samples where the ontology data is missing or contradicts the label. The `ot_distance` and `ontology_similarity` together provide two complementary views of skill alignment — one greedy, one holistic — and their average forms the ontology signal used in the weight calculation.
 
 
 ## 5. Phase 1 — Contrastive Pretraining
