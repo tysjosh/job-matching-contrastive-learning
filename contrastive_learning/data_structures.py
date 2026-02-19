@@ -147,8 +147,11 @@ class TrainingConfig:
     # Maximum negatives sampled per anchor
     max_negatives_per_anchor: int = 20
     # ESCO graph configuration
-    # Path to ESCO graph file (.gexf format)
+    # Path to ESCO graph file (.gexf format) — used for career graph / pathway negatives
     esco_graph_path: Optional[str] = None
+    # Path to full ESCO knowledge graph (.gexf) — used for skill-level ontology matching
+    # Falls back to esco_graph_path if not set
+    esco_kg_path: Optional[str] = None
     
     # Global negative sampling configuration
     global_negative_sampling: bool = False  # Enable global negative sampling
@@ -191,6 +194,10 @@ class TrainingConfig:
     # Validation configuration
     validation_path: Optional[str] = None  # Path to validation dataset (JSONL format)
     validate_every_n_epochs: int = 1       # Run validation every N epochs
+
+    # Ontology-aware loss weighting (uses precomputed ESCO enrichment scores)
+    ontology_weight: float = 0.0           # 0.0 = disabled, 0.3 = moderate, 0.5 = strong
+    ot_distance_scale: float = 10.0        # Normalization scale for OT distance
 
     def __post_init__(self):
         """Validate configuration parameters."""
@@ -306,6 +313,7 @@ class TrainingConfig:
             'hard_negative_max_distance': self.hard_negative_max_distance,
             'medium_negative_max_distance': self.medium_negative_max_distance,
             'esco_graph_path': self.esco_graph_path,
+            'esco_kg_path': self.esco_kg_path,
             'global_negative_sampling': self.global_negative_sampling,
             'global_negative_pool_size': self.global_negative_pool_size,
             'freeze_text_encoder': self.freeze_text_encoder,
@@ -332,13 +340,18 @@ class TrainingConfig:
             'augmentation_similarity_thresholds': self.augmentation_similarity_thresholds,
             'augmentation_fallback_config': self.augmentation_fallback_config,
             'validation_path': self.validation_path,
-            'validate_every_n_epochs': self.validate_every_n_epochs
+            'validate_every_n_epochs': self.validate_every_n_epochs,
+            'ontology_weight': self.ontology_weight,
+            'ot_distance_scale': self.ot_distance_scale,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'TrainingConfig':
-        """Create TrainingConfig from dictionary."""
-        return cls(**data)
+        """Create TrainingConfig from dictionary, ignoring unknown keys."""
+        import dataclasses as _dc
+        valid_keys = {f.name for f in _dc.fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in valid_keys}
+        return cls(**filtered)
 
     @classmethod
     def from_yaml(cls, file_path: str) -> 'TrainingConfig':

@@ -407,46 +407,13 @@ class DataLoader:
                     logger.debug("Resume experience string is empty")
                     return False
             elif isinstance(experience, list):
-                # List format with enhanced experience objects
-                for exp in experience:
-                    if isinstance(exp, dict) and 'responsibilities' in exp:
-                        responsibilities = exp['responsibilities']
-                        # Validate enhanced responsibilities format
-                        if not isinstance(responsibilities, dict):
-                            logger.debug(
-                                "Experience responsibilities must be a dict")
-                            return False
-
-                        # Check for required responsibility fields - be flexible about format
-                        has_content = False
-
-                        # Check technical_terms (list format)
-                        if 'technical_terms' in responsibilities and isinstance(responsibilities['technical_terms'], list):
-                            # Any technical_terms list is acceptable (empty or not) as it's parsed from content
-                            has_content = True
-
-                        # Check achievements/impact (string format)
-                        for field in ['achievements', 'impact']:
-                            if field in responsibilities:
-                                value = responsibilities[field]
-                                if isinstance(value, str) and value.strip():
-                                    has_content = True
-                                elif isinstance(value, list) and value:  # non-empty list
-                                    has_content = True
-
-                        # If no valid content in any expected fields, check if we should accept anyway
-                        # Since this is generated training data, we can be more lenient
-                        has_any_fields = any(field in responsibilities for field in [
-                                             'technical_terms', 'achievements', 'impact', 'action_verbs'])
-                        if not has_content and has_any_fields:
-                            # Accept samples that at least have the proper responsibilities structure
-                            # even if content is empty (this is valid for our use case)
-                            has_content = True
-
-                        if not has_content:
-                            logger.debug(
-                                "No meaningful content found in responsibilities")
-                            return False
+                # List of experience entries — accept any non-empty list.
+                # Experience entries come in many formats (dicts with various keys,
+                # strings, nested structures). The text encoder serializes them all
+                # to text, so we only reject truly empty lists.
+                if not experience:
+                    logger.debug("Resume experience list is empty")
+                    return False
             else:
                 logger.debug("Resume experience must be a string or list")
                 return False
@@ -458,13 +425,13 @@ class DataLoader:
                 logger.debug("Resume skills must be a list")
                 return False
 
-            # Support enhanced skills format with categories and levels
+            # Support multiple skill formats
             for skill in skills:
                 if isinstance(skill, dict):
-                    # Enhanced skill format validation
-                    if 'name' not in skill and 'original_name' not in skill:
+                    # Accept any dict with a skill name field
+                    if not any(k in skill for k in ('name', 'original_name', 'skill')):
                         logger.debug(
-                            "Enhanced skill must have 'name' or 'original_name'")
+                            "Skill dict must have 'name', 'original_name', or 'skill'")
                         return False
 
         return True
@@ -479,24 +446,41 @@ class DataLoader:
         Returns:
             bool: True if valid, False otherwise
         """
-        # Check for essential job fields
-        required_fields = ['title', 'description']  # Minimal required fields
-
-        for field in required_fields:
-            if field not in job:
-                logger.debug(f"Job missing required field: {field}")
-                return False
-
         # Validate title is a non-empty string
-        if not isinstance(job.get('title'), str) or not job.get('title').strip():
+        title = job.get('title')
+        if not isinstance(title, str) or not title.strip():
             logger.debug("Job title must be a non-empty string")
             return False
 
-        # Validate description is a dictionary with a non-empty 'original' field
+        # Validate description — accept string or dict with content
         description = job.get('description')
-        if not isinstance(description, dict) or not description.get('original', '').strip():
-            logger.debug(
-                "Job description must be a dictionary with a non-empty 'original' field")
+        if description is None:
+            logger.debug("Job missing description field")
+            return False
+
+        if isinstance(description, str):
+            if not description.strip():
+                logger.debug("Job description string is empty")
+                return False
+        elif isinstance(description, dict):
+            # Accept dict with 'original', 'text', or any non-empty string value
+            has_content = False
+            for key in ('original', 'text', 'description'):
+                val = description.get(key, '')
+                if isinstance(val, str) and val.strip():
+                    has_content = True
+                    break
+            if not has_content:
+                # Check if any string value in the dict has content
+                for val in description.values():
+                    if isinstance(val, str) and len(val.strip()) > 20:
+                        has_content = True
+                        break
+            if not has_content:
+                logger.debug("Job description dict has no text content")
+                return False
+        else:
+            logger.debug(f"Job description must be a string or dict, got {type(description).__name__}")
             return False
 
         return True

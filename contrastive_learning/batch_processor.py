@@ -60,10 +60,29 @@ class BatchProcessor:
         else:
             self.career_graph = None
 
+        # Initialize OntologySkillMatcher for skill-level negative selection
+        self.skill_matcher = None
+        use_ontology = getattr(config, 'ontology_weight', 0.0) > 0.0
+        if use_ontology and esco_graph_path:
+            try:
+                from .ontology_skill_matcher import OntologySkillMatcher
+                # Use the full ESCO KG for skill matching (not the career graph)
+                # Fall back to esco_graph_path if no separate KG path configured
+                kg_path = getattr(config, 'esco_kg_path', None) or esco_graph_path
+                self.skill_matcher = OntologySkillMatcher(kg_path)
+                logger.info("OntologySkillMatcher enabled for skill-level negative selection")
+            except Exception as e:
+                logger.warning(f"Failed to initialize OntologySkillMatcher: {e}")
+
         # Set random seed for reproducible negative sampling
         random.seed(42)
 
+        # Curriculum learning state for ontology negative selection
+        self.current_epoch = 0
+        self.total_epochs = config.num_epochs
+
         logger.info(f"BatchProcessor initialized with pathway_negatives={'enabled' if self.career_graph else 'disabled'}, "
+                    f"skill_matcher={'enabled' if self.skill_matcher else 'disabled'}, "
                     f"hard_distance_threshold={config.hard_negative_max_distance}, "
                     f"medium_distance_threshold={config.medium_negative_max_distance}")
 
@@ -132,12 +151,15 @@ class BatchProcessor:
         # Determine sampling strategy for metadata
         sampling_strategy = 'global' if global_job_pool else 'in_batch'
 
-        # Create view metadata (placeholder for future view augmentation integration)
+        # Create view metadata including ontology scores for loss weighting
         view_metadata = {
             'anchor_id': anchor_sample.sample_id,
             'positive_job_applicant_id': anchor_sample.metadata.get('job_applicant_id', 'unknown'),
             'negative_count': len(negatives),
-            'sampling_strategy': sampling_strategy
+            'sampling_strategy': sampling_strategy,
+            'ontology_similarity': anchor_sample.metadata.get('ontology_similarity'),
+            'ot_distance': anchor_sample.metadata.get('ot_distance'),
+            'quality_tier': anchor_sample.metadata.get('quality_tier'),
         }
 
         return ContrastiveTriplet(
@@ -216,7 +238,6 @@ class BatchProcessor:
         # Check if pathway-aware negative selection is enabled
         if not self.use_pathway_negatives:
             # Use simple random negative sampling
-            import random
             selected_negatives = random.sample(
                 candidate_negatives, min(max_negatives, len(candidate_negatives)))
             # Return zeros for career distances since pathway analysis is disabled
@@ -226,61 +247,26 @@ class BatchProcessor:
                 f"Selected {len(selected_negatives)} random negatives (pathway negatives disabled)")
             return selected_negatives, career_distances
 
-        # Use CareerGraph for pathway-aware selection
-        if not self.career_graph:
-            raise ValueError("CareerGraph is required for pathway-aware negative selection. "
-                             "Provide either a CareerGraph instance or esco_graph_path parameter, "
-                             "or set use_pathway_negatives=False to disable this feature.")
+        # ── Skill-level ontology selection (preferred when available) ──
+        if self.skill_matcher:
+            try:
+                resume_uris = anchor_sample.resume.get('skill_uris', [])
+                if resume_uris:
+                    return self._select_ontology_negatives(
+                        resume_uris, candidate_negatives, max_negatives)
+            except Exception as e:
+                logger.warning(f"Ontology negative selection failed: {e}")
 
-        try:
-            logger.debug(
-                f"Using CareerGraph for pathway-aware negative sampling from {len(candidate_negatives)} candidates")
+        # ── Random fallback (no skill URIs or ontology selection failed) ──
+        # Samples without skill URIs get random negatives. The ontology weight
+        # in the loss engine already downweights these samples (tier C → 0.75x).
+        selected_negatives = random.sample(
+            candidate_negatives, min(max_negatives, len(candidate_negatives)))
+        career_distances = [0.0] * len(selected_negatives)
 
-            # Use CareerGraph's intelligent pathway-aware selection
-            selected_negatives = self.career_graph.select_pathway_negatives(
-                anchor_sample.job, candidate_negatives, max_negatives
-            )
-
-            # Compute career distances for the selected negatives
-            career_distances = []
-            for negative_job in selected_negatives:
-                distance = self.career_graph.compute_career_distance(
-                    anchor_sample.job, negative_job
-                )
-                career_distances.append(distance)
-
-            # Log detailed statistics about the career-aware selection
-            if career_distances:
-                avg_distance = sum(career_distances) / len(career_distances)
-                min_distance = min(career_distances)
-                max_distance = max(career_distances)
-
-                # Count negatives by category using updated thresholds
-                hard_count = sum(1 for d in career_distances if d <=
-                                 self.config.hard_negative_max_distance)
-                medium_count = sum(1 for d in career_distances
-                                   if self.config.hard_negative_max_distance < d <= self.config.medium_negative_max_distance)
-                easy_count = sum(1 for d in career_distances if d >
-                                 self.config.medium_negative_max_distance)
-
-                logger.info(
-                    f"CareerGraph selected {len(selected_negatives)} negatives: "
-                    f"avg_distance={avg_distance:.2f}, range=[{min_distance:.1f}, {max_distance:.1f}], "
-                    f"hard={hard_count}, medium={medium_count}, easy={easy_count}"
-                )
-
-            return selected_negatives, career_distances
-
-        except Exception as e:
-            logger.error(f"CareerGraph pathway-aware sampling failed: {e}")
-            # Check if it's due to missing URIs and provide helpful error message
-            if "Missing URIs" in str(e):
-                raise RuntimeError(
-                    f"Failed to select pathway-aware negatives: Jobs must have ESCO URIs for career distance calculation. "
-                    f"Ensure job data includes 'uri', 'job_uri', or 'occupation_uri' fields.") from e
-            else:
-                raise RuntimeError(
-                    f"Failed to select pathway-aware negatives: {e}") from e
+        logger.debug(
+            f"Selected {len(selected_negatives)} random negatives (no skill URIs available)")
+        return selected_negatives, career_distances
 
     @staticmethod
     def create_career_graph(config: TrainingConfig, esco_graph_path: str) -> 'CareerGraph':
@@ -337,3 +323,88 @@ class BatchProcessor:
             'unique_jobs': len(unique_jobs),
             'avg_negatives_per_positive': max(0, len(unique_jobs) - 1) if positive_count > 0 else 0
         }
+    def set_epoch(self, epoch: int) -> None:
+        """Set current epoch for curriculum learning in negative selection."""
+        self.current_epoch = epoch
+
+    def _select_ontology_negatives(
+        self,
+        resume_skill_uris: List[str],
+        candidate_negatives: List[Dict[str, Any]],
+        max_negatives: int,
+    ) -> tuple[List[Dict[str, Any]], List[float]]:
+        """
+        Select negatives based on skill-level ontology distance to the resume.
+
+        Uses curriculum learning to shift hard/medium/easy ratios over epochs:
+        - Early training: mostly easy negatives (model learns basic distinctions)
+        - Late training: mostly hard negatives (model learns fine-grained distinctions)
+
+        Args:
+            resume_skill_uris: Skill URIs from the anchor resume
+            candidate_negatives: Candidate negative jobs
+            max_negatives: Number of negatives to select
+
+        Returns:
+            Tuple of (selected_negatives, ontology_distances)
+        """
+        # Compute ontology distance for each candidate
+        scored = []
+        for job in candidate_negatives:
+            job_uris = job.get('skill_uris', [])
+            if job_uris and resume_skill_uris:
+                sim = self.skill_matcher.ontology_set_similarity(resume_skill_uris, job_uris)
+                distance = 1.0 - sim  # 0 = identical skills, 1 = no overlap
+            else:
+                distance = 0.5  # neutral when no URIs
+            scored.append((job, distance))
+
+        # Bucket by ontology distance
+        hard = [(j, d) for j, d in scored if d <= 0.3]       # very similar skills
+        medium = [(j, d) for j, d in scored if 0.3 < d <= 0.6]
+        easy = [(j, d) for j, d in scored if d > 0.6]        # very different skills
+
+        # Curriculum learning: shift ratios from easy-heavy to hard-heavy
+        # epoch_ratio: 0.0 at start → 1.0 at end
+        epoch_ratio = self.current_epoch / max(1, self.total_epochs)
+
+        # Early: 20% hard, 30% medium, 50% easy
+        # Late:  60% hard, 30% medium, 10% easy
+        hard_ratio = 0.2 + 0.4 * epoch_ratio    # 0.2 → 0.6
+        easy_ratio = 0.5 - 0.4 * epoch_ratio    # 0.5 → 0.1
+        medium_ratio = 1.0 - hard_ratio - easy_ratio  # stays ~0.3
+
+        hard_count = int(max_negatives * hard_ratio)
+        medium_count = int(max_negatives * medium_ratio)
+        easy_count = max_negatives - hard_count - medium_count
+
+        selected = []
+        if hard and hard_count > 0:
+            selected.extend(random.sample(hard, min(hard_count, len(hard))))
+        if medium and medium_count > 0:
+            selected.extend(random.sample(medium, min(medium_count, len(medium))))
+        if easy and easy_count > 0:
+            selected.extend(random.sample(easy, min(easy_count, len(easy))))
+
+        # Fill remaining from any bucket
+        if len(selected) < max_negatives:
+            used = set(id(j) for j, _ in selected)
+            remaining = [(j, d) for j, d in scored if id(j) not in used]
+            random.shuffle(remaining)
+            selected.extend(remaining[:max_negatives - len(selected)])
+
+        selected = selected[:max_negatives]
+
+        # Convert ontology distance to 0-10 scale for career_distances field
+        negatives = [j for j, _ in selected]
+        distances = [d * 10.0 for _, d in selected]
+
+        logger.debug(
+            f"Ontology negatives (epoch {self.current_epoch}): "
+            f"ratios=hard:{hard_ratio:.0%}/med:{medium_ratio:.0%}/easy:{easy_ratio:.0%}, "
+            f"selected=hard:{min(hard_count, len(hard))}/med:{min(medium_count, len(medium))}/easy:{min(easy_count, len(easy))}"
+        )
+
+        return negatives, distances
+
+

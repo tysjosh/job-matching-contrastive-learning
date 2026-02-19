@@ -473,8 +473,8 @@ class ContrastiveLearningTrainer:
         self.structured_logger.log_epoch_start(
             self.current_epoch, self.config.num_epochs)
 
-        # Update loss engine with current epoch for curriculum learning
-        self.loss_engine.set_epoch(self.current_epoch)
+        # Update batch processor with current epoch for curriculum negative selection
+        self.batch_processor.set_epoch(self.current_epoch)
 
         epoch_start_time = time.time()
         epoch_losses = []
@@ -816,49 +816,78 @@ class ContrastiveLearningTrainer:
         """
         Generate embeddings for all content in triplets using efficient caching.
 
-        This method uses the EmbeddingCache to avoid redundant encoding of the same
-        content across batches, providing significant speedup.
+        Caches only the frozen SentenceTransformer text embeddings, then passes
+        them through the trainable projection model fresh each batch so gradients
+        can flow for backpropagation.
 
         Args:
             triplets: List of contrastive triplets
 
         Returns:
-            Dictionary mapping content keys to final model embeddings
+            Dictionary mapping content keys to final model embeddings (with grad)
         """
         try:
-            # Ensure all models are on the correct device
             self.model.to(self.device)
             self.text_encoder.to(self.device)
 
-            # Collect all unique content items for this batch
-            content_items = []
-            content_key_mapping = {}
+            # Step 1: Collect unique content and get/cache TEXT embeddings only
+            content_key_to_type = {}  # key -> content_type
+            ordered_keys = []
 
             for triplet in triplets:
-                # Add anchor (resume)
                 anchor_key = self.embedding_cache.get_content_key(triplet.anchor)
-                if anchor_key not in content_key_mapping:
-                    content_items.append((triplet.anchor, 'resume'))
-                    content_key_mapping[anchor_key] = len(content_items) - 1
+                if anchor_key not in content_key_to_type:
+                    content_key_to_type[anchor_key] = (triplet.anchor, 'resume')
+                    ordered_keys.append(anchor_key)
 
-                # Add positive (job)
                 positive_key = self.embedding_cache.get_content_key(triplet.positive)
-                if positive_key not in content_key_mapping:
-                    content_items.append((triplet.positive, 'job'))
-                    content_key_mapping[positive_key] = len(content_items) - 1
+                if positive_key not in content_key_to_type:
+                    content_key_to_type[positive_key] = (triplet.positive, 'job')
+                    ordered_keys.append(positive_key)
 
-                # Add negatives (jobs)
                 for negative in triplet.negatives:
                     negative_key = self.embedding_cache.get_content_key(negative)
-                    if negative_key not in content_key_mapping:
-                        content_items.append((negative, 'job'))
-                        content_key_mapping[negative_key] = len(content_items) - 1
+                    if negative_key not in content_key_to_type:
+                        content_key_to_type[negative_key] = (negative, 'job')
+                        ordered_keys.append(negative_key)
 
-            # Get embeddings using the efficient cache
-            embeddings = self.embedding_cache.get_embeddings_batch(
-                content_items, 
-                self.batch_encoder.encode_batch
-            )
+            # Step 2: Get cached text embeddings or encode new ones
+            text_embeddings = {}
+            to_encode = []
+            to_encode_keys = []
+
+            for key in ordered_keys:
+                if key in self.embedding_cache.cache:
+                    text_embeddings[key] = self.embedding_cache.cache[key].detach().clone()
+                    self.embedding_cache._record_cache_access(key, hit=True)
+                else:
+                    content_data, content_type = content_key_to_type[key]
+                    to_encode.append((content_data, content_type))
+                    to_encode_keys.append(key)
+                    self.embedding_cache._record_cache_access(key, hit=False)
+
+            if to_encode:
+                texts = [self.batch_encoder._content_to_text(c, t) for c, t in to_encode]
+                with torch.no_grad():
+                    new_text_embs = self.text_encoder.encode(
+                        texts, convert_to_tensor=True, device=self.device,
+                        show_progress_bar=False, normalize_embeddings=False
+                    )
+                if new_text_embs.dim() == 1:
+                    new_text_embs = new_text_embs.unsqueeze(0)
+                for i, key in enumerate(to_encode_keys):
+                    emb = new_text_embs[i].detach().clone()
+                    text_embeddings[key] = emb
+                    self.embedding_cache._add_to_cache(key, emb, to_encode[i])
+
+            # Step 3: Pass ALL text embeddings through trainable model (creates grad graph)
+            self.model.train()
+            stacked = torch.stack([text_embeddings[k] for k in ordered_keys]).to(self.device)
+            final_embeddings = self.model(stacked)
+
+            embeddings = {}
+            for i, key in enumerate(ordered_keys):
+                embeddings[key] = final_embeddings[i]
 
             # Log cache statistics periodically
             if self.total_batches_processed % 50 == 0:
@@ -872,7 +901,6 @@ class ContrastiveLearningTrainer:
 
         except Exception as e:
             logger.error(f"Error generating embeddings with cache: {e}")
-            # Fallback to original method if cache fails
             return self._generate_embeddings_fallback(triplets)
 
     def _encode_content_to_text_embedding(self, content: Dict[str, Any], content_type: str) -> torch.Tensor:
@@ -1201,28 +1229,39 @@ class ContrastiveLearningTrainer:
         logger.info(f"Preloading embeddings for dataset: {dataset_path}")
         
         try:
-            # Collect all unique content from the dataset
-            all_content_items = set()
+            # Collect all unique content from the dataset (keyed by hash to deduplicate)
+            unique_content: Dict[str, tuple] = {}
             
             for batch in self.data_loader.load_batches(dataset_path):
                 for sample in batch:
-                    # Add resume
                     resume_key = self.embedding_cache.get_content_key(sample.resume)
-                    all_content_items.add((resume_key, sample.resume, 'resume'))
+                    if resume_key not in unique_content:
+                        unique_content[resume_key] = (sample.resume, 'resume')
                     
-                    # Add job
                     job_key = self.embedding_cache.get_content_key(sample.job)
-                    all_content_items.add((job_key, sample.job, 'job'))
+                    if job_key not in unique_content:
+                        unique_content[job_key] = (sample.job, 'job')
             
-            # Convert to list and remove keys (only need content and type)
-            content_items = [(content, content_type) for _, content, content_type in all_content_items]
-            
-            # Preload embeddings
-            self.embedding_cache.preload_embeddings(
-                content_items, 
-                self.batch_encoder.encode_batch,
-                batch_size=batch_size
-            )
+            # Encode text embeddings only (frozen SentenceTransformer output)
+            # The trainable projection model is applied fresh each batch for grad flow
+            items = list(unique_content.items())
+            batch_size_preload = batch_size
+            for start in range(0, len(items), batch_size_preload):
+                chunk = items[start:start + batch_size_preload]
+                texts = [self.batch_encoder._content_to_text(c, t) for _, (c, t) in chunk]
+                with torch.no_grad():
+                    text_embs = self.text_encoder.encode(
+                        texts, convert_to_tensor=True, device=self.device,
+                        show_progress_bar=False, normalize_embeddings=False
+                    )
+                if text_embs.dim() == 1:
+                    text_embs = text_embs.unsqueeze(0)
+                for i, (key, item) in enumerate(chunk):
+                    emb = text_embs[i].detach().clone()
+                    self.embedding_cache._add_to_cache(key, emb, item)
+                
+                if (start + batch_size_preload) % (batch_size_preload * 10) == 0 or start + batch_size_preload >= len(items):
+                    logger.info(f"Preloaded {min(start + batch_size_preload, len(items))}/{len(items)} text embeddings")
             
             # Log final stats
             stats = self.embedding_cache.get_cache_stats()
