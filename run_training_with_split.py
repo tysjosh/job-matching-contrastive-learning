@@ -120,6 +120,10 @@ def run_phase2(train_path: str, config_path: str, pretrained_path: str,
 def run_evaluation(script: str, dataset: str, checkpoint: str, config: str,
                    output_dir: str, validation_dataset: str = None) -> bool:
     """Run evaluation script."""
+    if not Path(script).exists():
+        logger.warning(f"Evaluation script not found: {script} — skipping")
+        return False
+
     cmd = ["python", script, "--dataset", dataset, "--checkpoint", checkpoint,
            "--config", config, "--output-dir", output_dir]
 
@@ -172,6 +176,14 @@ def main():
         splits = split_dataset(args.dataset, args.splits_dir, args.split_strategy, args.split_seed)
 
     train_path, val_path, test_path = splits['train'], splits['validation'], splits['test']
+
+    # Override training file if specified
+    if args.train_file:
+        if not Path(args.train_file).exists():
+            logger.error(f"Custom training file not found: {args.train_file}")
+            return 1
+        train_path = args.train_file
+        logger.info(f"Using custom training file: {train_path}")
 
     # Early exit if only splitting
     if args.skip_phase1 and args.skip_phase2 and args.skip_phase2_eval:

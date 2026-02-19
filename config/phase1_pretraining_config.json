@@ -14,14 +14,15 @@
   "text_encoder_device": null,
   "embedding_cache_size": 10000,
   "enable_embedding_preload": true,
-  "clear_cache_between_epochs": true,
+  "clear_cache_between_epochs": false,
   "max_resume_views": 5,
   "max_job_views": 5,
   "fallback_on_augmentation_failure": true,
   "hard_negative_max_distance": 2.0,
   "medium_negative_max_distance": 4.0,
   "esco_graph_path": "training_output/career_graph_bridged_complete.gexf",
-  "global_negative_sampling": false,
+  "esco_kg_path": "dataset/esco/esco_kg.gexf",
+  "global_negative_sampling": true,
   "global_negative_pool_size": 1000,
   "freeze_text_encoder": true,
   "projection_dim": 128,
@@ -33,7 +34,8 @@
   "freeze_contrastive_layers": false,
   "classification_dropout": 0.0,
   "max_negatives_per_anchor": 7,
-  "validation_path": "preprocess/data_splits_new_data/validation.jsonl",
+  "validation_path": "preprocess/data_splits_v3/validation.jsonl",
   "validate_every_n_epochs": 1,
-  "weight_decay": 0.001
+  "ontology_weight": 0.3,
+  "ot_distance_scale": 10.0
 }

@@ -644,7 +644,8 @@ def cmd_validate_config(args: argparse.Namespace) -> int:
         print(f"  Temperature: {config.temperature}")
         print(
             f"  Negative sampling ratio (deprecated, ignored): {config.negative_sampling_ratio}")
-        print(f"  Pathway weight: {config.pathway_weight}")
+        print(f"  Pathway weight (deprecated, handled by selection): {config.pathway_weight}")
+        print(f"  Ontology weight (sample-level): {config.ontology_weight}")
         print(f"  Use pathway negatives: {config.use_pathway_negatives}")
         print(f"  Use view augmentation: {config.use_view_augmentation}")
 

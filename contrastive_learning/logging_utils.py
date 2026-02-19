@@ -121,6 +121,7 @@ class StructuredLogger:
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(log_level)
         self.logger.handlers.clear()  # Clear existing handlers
+        self.logger.propagate = False  # Prevent duplicate logs from root logger
         
         # Console handler with structured format
         console_handler = logging.StreamHandler()

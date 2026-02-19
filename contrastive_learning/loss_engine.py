@@ -48,7 +48,6 @@ class ContrastiveLossEngine:
 
         self.config = config
         self.temperature = config.temperature
-        self.pathway_weight = config.pathway_weight
         self.device = torch.device(
             'cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -56,13 +55,13 @@ class ContrastiveLossEngine:
         self.eps = 1e-8
         self.max_exp = 50.0  # Prevent overflow in exp
         self.gradient_clip_value = 1.0
-        
-        # Curriculum learning parameters
-        self.current_epoch = 0
-        self.total_epochs = config.num_epochs
+
+        # Sample-level weighting: quality tier + ontology coverage
+        self.ontology_weight = getattr(config, 'ontology_weight', 0.3)
+        self.ot_distance_scale = getattr(config, 'ot_distance_scale', 10.0)
 
         logger.info(f"Initialized ContrastiveLossEngine with temperature={self.temperature}, "
-                    f"pathway_weight={self.pathway_weight}, device={self.device}")
+                    f"ontology_weight={self.ontology_weight}, device={self.device}")
 
     def compute_loss(self, triplets: List[ContrastiveTriplet],
                      embeddings: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -112,6 +111,9 @@ class ContrastiveLossEngine:
         """
         Compute contrastive loss for a single triplet.
 
+        Applies ontology-aware positive weighting when scores are available
+        in view_metadata (from precomputed ESCO enrichment).
+
         Args:
             triplet: ContrastiveTriplet containing anchor, positive, and negatives
             embeddings: Dictionary mapping content to embeddings
@@ -133,155 +135,130 @@ class ContrastiveLossEngine:
 
             # Get negative embeddings
             negative_embs = []
-            negative_distances = []
 
             for i, negative in enumerate(triplet.negatives):
                 negative_key = self._get_content_key(negative)
                 if negative_key in embeddings:
                     negative_embs.append(embeddings[negative_key])
-                    negative_distances.append(triplet.career_distances[i])
 
             if not negative_embs:
                 logger.warning("No valid negative embeddings found")
                 return None
 
-            # Compute pathway-weighted contrastive loss
-            return self._pathway_weighted_loss(
-                anchor_emb, positive_emb, negative_embs, negative_distances
-            )
+            # Compute plain InfoNCE loss (no per-negative weighting)
+            loss = self._infonce_loss(anchor_emb, positive_emb, negative_embs)
+
+            if loss is None:
+                return None
+
+            # Apply sample-level ontology weight (label confidence + data quality)
+            ont_weight = self._compute_ontology_weight(triplet.view_metadata)
+            loss = loss * ont_weight
+
+            return loss
 
         except Exception as e:
             logger.error(f"Error computing triplet loss: {e}")
             return None
 
-    def _pathway_weighted_loss(self, anchor: torch.Tensor, positive: torch.Tensor,
-                               negatives: List[torch.Tensor],
-                               career_distances: List[float]) -> torch.Tensor:
+    def _compute_ontology_weight(self, view_metadata: Dict[str, Any]) -> float:
         """
-        Compute pathway-weighted contrastive loss.
+        Compute a sample-level weight based on precomputed ontology scores.
 
-        This implements InfoNCE loss with pathway weighting that gives higher
-        importance to negatives that are career-relevant (closer in career space).
+        Uses ontology_similarity and ot_distance from ESCO enrichment to
+        upweight samples where the ontology confirms the label signal,
+        and downweight samples with weak/missing ontology evidence.
 
         Args:
-            anchor: Anchor embedding (resume)
-            positive: Positive embedding (matching job)
-            negatives: List of negative embeddings (non-matching jobs)
-            career_distances: Career distances for pathway weighting
+            view_metadata: Triplet metadata containing ontology scores
 
         Returns:
-            torch.Tensor: Pathway-weighted contrastive loss
+            float: Multiplicative weight for this sample's loss (0.5 to 1.5)
+        """
+        if self.ontology_weight == 0.0:
+            return 1.0
+
+        ont_sim = view_metadata.get('ontology_similarity')
+        ot_dist = view_metadata.get('ot_distance')
+        tier = view_metadata.get('quality_tier', 'F')
+
+        # Base weight from quality tier
+        tier_weights = {'A': 1.0, 'B': 0.9, 'C': 0.75, 'D': 0.6, 'F': 0.5}
+        base = tier_weights.get(tier, 0.5)
+
+        if ont_sim is None and ot_dist is None:
+            return base
+
+        # Ontology signal: blend similarity and normalized OT distance
+        ont_signal = 0.0
+        count = 0
+        if ont_sim is not None:
+            ont_signal += ont_sim  # 0-1, higher = more similar
+            count += 1
+        if ot_dist is not None:
+            # Normalize OT distance to 0-1 (inverted: lower distance = higher signal)
+            normalized_ot = max(0.0, 1.0 - ot_dist / self.ot_distance_scale)
+            ont_signal += normalized_ot
+            count += 1
+
+        if count > 0:
+            ont_signal /= count  # average of available signals, 0-1
+
+        # Final weight: base ± ontology adjustment
+        weight = base * (1.0 + self.ontology_weight * (2.0 * ont_signal - 1.0))
+
+        # Clamp to reasonable range
+        return max(0.5, min(1.5, weight))
+
+    def _infonce_loss(self, anchor: torch.Tensor, positive: torch.Tensor,
+                      negatives: List[torch.Tensor]) -> torch.Tensor:
+        """
+        Compute standard InfoNCE contrastive loss.
+
+        Negative difficulty is handled by the selection strategy (ontology-based
+        bucketing with curriculum learning), not by per-negative weighting.
+
+        Args:
+            anchor: Anchor embedding (resume), L2-normalized
+            positive: Positive embedding (matching job), L2-normalized
+            negatives: List of negative embeddings (non-matching jobs), L2-normalized
+
+        Returns:
+            torch.Tensor: InfoNCE loss
         """
         # Ensure all tensors are on the same device
         anchor = anchor.to(self.device)
         positive = positive.to(self.device)
         negatives = [neg.to(self.device) for neg in negatives]
 
-        # FIXED: Model now returns normalized embeddings, no need to normalize here
-        # This provides consistent scale and stable gradients across all batches
-        # anchor, positive, and negatives are already L2-normalized from the model
-
-        # Compute similarities (cosine similarity via dot product on normalized vectors)
+        # Compute similarities (dot product on normalized vectors = cosine similarity)
         pos_sim = torch.sum(anchor * positive, dim=-1) / self.temperature
 
-        # Compute negative similarities with pathway weighting
         neg_sims = []
-        pathway_weights = []
-
-        for neg_emb, distance in zip(negatives, career_distances):
+        for neg_emb in negatives:
             neg_sim = torch.sum(anchor * neg_emb, dim=-1) / self.temperature
             neg_sims.append(neg_sim)
-
-            # Higher career distance means less similar career path
-            # Apply higher weight to closer career paths (harder negatives)
-            pathway_weight = self._compute_pathway_weight(distance)
-            pathway_weights.append(pathway_weight)
 
         # Clamp similarities to prevent overflow
         pos_sim = torch.clamp(pos_sim, max=self.max_exp)
         neg_sims = [torch.clamp(sim, max=self.max_exp) for sim in neg_sims]
 
-        # Compute weighted negative log-likelihood
+        # Standard InfoNCE: -log(exp(pos) / (exp(pos) + sum(exp(neg_i))))
         pos_exp = torch.exp(pos_sim)
+        neg_exps = torch.stack([torch.exp(s) for s in neg_sims])
+        denominator = pos_exp + torch.sum(neg_exps)
 
-        # Apply pathway weights to negative exponentials with better numerical stability
-        weighted_neg_exps = []
-        for neg_sim, weight in zip(neg_sims, pathway_weights):
-            # Clamp weight to prevent extreme values
-            weight = torch.clamp(torch.tensor(weight), min=0.1, max=5.0)
-            weighted_neg_exp = weight * torch.exp(neg_sim)
-            weighted_neg_exps.append(weighted_neg_exp)
-
-        # Sum all exponentials (positive + weighted negatives)
-        denominator = pos_exp + torch.sum(torch.stack(weighted_neg_exps))
-
-        # Add epsilon for numerical stability and clamp to prevent overflow
+        # Numerical stability
         denominator = torch.clamp(denominator, min=self.eps, max=1e10)
-
-        # Compute negative log-likelihood with additional stability checks
         ratio = pos_exp / denominator
-        ratio = torch.clamp(ratio, min=self.eps, max=1.0)  # Ensure valid probability
+        ratio = torch.clamp(ratio, min=self.eps, max=1.0)
         loss = -torch.log(ratio)
 
-        # Check for NaN or infinite values
         if torch.isnan(loss) or torch.isinf(loss):
-            logger.warning(
-                "NaN or infinite loss detected, returning zero loss")
+            logger.warning("NaN or infinite loss detected, returning zero loss")
             return torch.tensor(0.0, device=self.device, requires_grad=True)
 
         return loss
-
-    def _compute_pathway_weight(self, career_distance: float) -> float:
-        """
-        Compute pathway weight based on career distance with curriculum learning.
-        
-        Uses curriculum learning to gradually increase focus on hard negatives:
-        - Early training (epoch 0): All negatives weighted equally (weight=1.0)
-        - Late training (final epoch): Hard negatives weighted more (up to 1.0 + pathway_weight)
-        
-        This prevents early collapse while still learning career structure later.
-
-        Args:
-            career_distance: Career distance between positive and negative job
-
-        Returns:
-            float: Pathway weight (higher for closer career paths, increases over time)
-        """
-        # If pathway_weight is 0, disable weighting entirely
-        if self.pathway_weight == 0.0:
-            return 1.0
-        
-        # Compute curriculum progress (0.0 at start, 1.0 at end)
-        epoch_ratio = self.current_epoch / max(1, self.total_epochs)
-        
-        # Normalize distance to [0, 1] range
-        # 0 = adjacent (same career path), 1 = distant (different domains)
-        normalized_distance = min(career_distance, 10.0) / 10.0
-        
-        # Curriculum strength: gradually increase from 0 to 1
-        curriculum_strength = epoch_ratio
-        
-        # Base weight (always 1.0 for all negatives)
-        base_weight = 1.0
-        
-        # Hard negative bonus: increases over training
-        # - Adjacent careers (d=0): get full bonus
-        # - Distant careers (d=10): get no bonus
-        hard_negative_bonus = curriculum_strength * self.pathway_weight * (1.0 - normalized_distance)
-        
-        # Final weight: starts at 1.0 for all, gradually increases for hard negatives
-        weight = base_weight + hard_negative_bonus
-        
-        return weight
-    
-    def set_epoch(self, epoch: int) -> None:
-        """
-        Set the current epoch for curriculum learning.
-        
-        Args:
-            epoch: Current training epoch
-        """
-        self.current_epoch = epoch
 
     def compute_view_combinations_loss(self, triplets: List[ContrastiveTriplet],
                                        resume_embeddings: Dict[str, torch.Tensor],
@@ -377,18 +354,16 @@ class ContrastiveLossEngine:
 
             # Get negative embeddings
             negative_embs = []
-            negative_distances = []
 
             for i, neg_key in enumerate(negative_view_keys):
                 if neg_key in job_embeddings and i < len(triplet.career_distances):
                     negative_embs.append(job_embeddings[neg_key])
-                    negative_distances.append(triplet.career_distances[i])
 
             if not negative_embs:
                 return None
 
-            return self._pathway_weighted_loss(
-                anchor_emb, positive_emb, negative_embs, negative_distances
+            return self._infonce_loss(
+                anchor_emb, positive_emb, negative_embs
             )
 
         except Exception as e:
@@ -515,14 +490,14 @@ class ContrastiveLossEngine:
             'total_loss': 0.0,
             'avg_positive_similarity': 0.0,
             'avg_negative_similarity': 0.0,
-            'avg_pathway_weight': 0.0,
+            'avg_ontology_weight': 0.0,
             'valid_triplets': 0,
             'failed_triplets': 0
         }
 
         total_pos_sim = 0.0
         total_neg_sim = 0.0
-        total_pathway_weight = 0.0
+        total_ontology_weight = 0.0
         total_negatives = 0
 
         for triplet in triplets:
@@ -543,20 +518,18 @@ class ContrastiveLossEngine:
                 pos_sim = torch.sum(anchor_emb * positive_emb, dim=-1).item()
                 total_pos_sim += pos_sim
 
-                # Compute negative similarities and pathway weights
+                # Track ontology weight
+                ontology_weight = self._compute_ontology_weight(triplet.view_metadata)
+                total_ontology_weight += ontology_weight
+
+                # Compute negative similarities
                 for i, negative in enumerate(triplet.negatives):
                     negative_key = self._get_content_key(negative)
                     if negative_key in embeddings:
-                        # Embeddings are already normalized by the model
                         neg_emb = embeddings[negative_key]
                         neg_sim = torch.sum(
                             anchor_emb * neg_emb, dim=-1).item()
                         total_neg_sim += neg_sim
-
-                        pathway_weight = self._compute_pathway_weight(
-                            triplet.career_distances[i]
-                        )
-                        total_pathway_weight += pathway_weight
                         total_negatives += 1
 
                 components['valid_triplets'] += 1
@@ -569,11 +542,11 @@ class ContrastiveLossEngine:
         if components['valid_triplets'] > 0:
             components['avg_positive_similarity'] = total_pos_sim / \
                 components['valid_triplets']
+            components['avg_ontology_weight'] = total_ontology_weight / \
+                components['valid_triplets']
 
         if total_negatives > 0:
             components['avg_negative_similarity'] = total_neg_sim / \
-                total_negatives
-            components['avg_pathway_weight'] = total_pathway_weight / \
                 total_negatives
 
         # Compute total loss
