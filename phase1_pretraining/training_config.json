@@ -1,7 +1,7 @@
 {
   "batch_size": 64,
   "learning_rate": 8.5e-05,
-  "num_epochs": 10,
+  "num_epochs": 15,
   "temperature": 0.07,
   "negative_sampling_ratio": 0.7,
   "pathway_weight": 0.8,
@@ -14,7 +14,7 @@
   "text_encoder_device": null,
   "embedding_cache_size": 10000,
   "enable_embedding_preload": true,
-  "clear_cache_between_epochs": true,
+  "clear_cache_between_epochs": false,
   "max_resume_views": 5,
   "max_job_views": 5,
   "fallback_on_augmentation_failure": true,
@@ -48,5 +48,6 @@
   "validation_path": "preprocess/data_splits_v3/validation.jsonl",
   "validate_every_n_epochs": 1,
   "ontology_weight": 0.3,
-  "ot_distance_scale": 10.0
+  "ot_distance_scale": 10.0,
+  "pos_class_weight": 0.0
 }
