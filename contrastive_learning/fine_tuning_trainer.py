@@ -122,8 +122,16 @@ class FineTuningTrainer:
         logger.info(
             f"Optimizer: Adam with lr={config.learning_rate}, weight_decay={weight_decay}")
 
-        # Configure binary cross-entropy loss for binary classification
-        self.criterion = nn.BCELoss()
+        # Configure binary cross-entropy loss with class weighting
+        # pos_class_weight > 1.0 upweights positive samples to handle imbalance
+        # (72% negative / 28% positive → weight ≈ 2.5 recommended)
+        self.pos_class_weight = getattr(config, 'pos_class_weight', 0.0)
+        if self.pos_class_weight > 0:
+            self.criterion = nn.BCELoss(reduction='none')  # per-sample loss for weighting
+            logger.info(f"Using BCELoss with pos_class_weight={self.pos_class_weight}")
+        else:
+            self.criterion = nn.BCELoss()
+            logger.info("Using standard BCELoss (no class weighting)")
 
         # Training state
         self.current_epoch = 0
@@ -530,8 +538,18 @@ class FineTuningTrainer:
                 job_exp_batch, job_num_batch
             )
 
-            # Compute loss
-            loss = self.criterion(predictions, label_batch)
+            # Compute loss (with optional class weighting)
+            if self.pos_class_weight > 0:
+                # Per-sample loss with class weighting
+                per_sample_loss = self.criterion(predictions, label_batch)
+                weights = torch.where(
+                    label_batch == 1.0,
+                    torch.tensor(self.pos_class_weight, device=self.device),
+                    torch.tensor(1.0, device=self.device)
+                )
+                loss = (per_sample_loss * weights).mean()
+            else:
+                loss = self.criterion(predictions, label_batch)
 
             # Backward pass and optimization
             self.optimizer.zero_grad()
@@ -711,8 +729,17 @@ class FineTuningTrainer:
                     )
                     predictions = outputs.squeeze()
 
-                    # Calculate loss
-                    loss = self.criterion(predictions, labels)
+                    # Calculate loss (with optional class weighting)
+                    if self.pos_class_weight > 0:
+                        per_sample_loss = self.criterion(predictions, labels)
+                        weights = torch.where(
+                            labels == 1.0,
+                            torch.tensor(self.pos_class_weight, device=self.device),
+                            torch.tensor(1.0, device=self.device)
+                        )
+                        loss = (per_sample_loss * weights).mean()
+                    else:
+                        loss = self.criterion(predictions, labels)
                     val_losses.append(loss.item())
 
                     # Calculate accuracy

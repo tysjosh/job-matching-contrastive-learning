@@ -1,6 +1,6 @@
 {
   "batch_size": 32,
-  "learning_rate": 1e-05,
+  "learning_rate": 0.0005,
   "num_epochs": 10,
   "temperature": 0.2,
   "negative_sampling_ratio": 0.7,
@@ -35,7 +35,7 @@
   "use_augmentation_labels_only": false,
   "augmentation_positive_ratio": 1.0,
   "pretrained_model_path": "phase1_pretraining/best_checkpoint.pt",
-  "freeze_contrastive_layers": false,
+  "freeze_contrastive_layers": true,
   "classification_dropout": 0.3,
   "augmentation_config_path": null,
   "augmentation_quality_profile": "balanced",
@@ -48,5 +48,6 @@
   "validation_path": "preprocess/data_splits_v3/validation.jsonl",
   "validate_every_n_epochs": 1,
   "ontology_weight": 0.3,
-  "ot_distance_scale": 10.0
+  "ot_distance_scale": 10.0,
+  "pos_class_weight": 2.5
 }

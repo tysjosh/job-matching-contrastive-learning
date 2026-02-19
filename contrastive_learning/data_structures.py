@@ -199,6 +199,9 @@ class TrainingConfig:
     ontology_weight: float = 0.0           # 0.0 = disabled, 0.3 = moderate, 0.5 = strong
     ot_distance_scale: float = 10.0        # Normalization scale for OT distance
 
+    # Phase 2 class imbalance handling
+    pos_class_weight: float = 0.0          # 0.0 = disabled, 2.5 = recommended for 28% positive ratio
+
     def __post_init__(self):
         """Validate configuration parameters."""
         if self.batch_size <= 0:
@@ -343,6 +346,7 @@ class TrainingConfig:
             'validate_every_n_epochs': self.validate_every_n_epochs,
             'ontology_weight': self.ontology_weight,
             'ot_distance_scale': self.ot_distance_scale,
+            'pos_class_weight': self.pos_class_weight,
         }
 
     @classmethod

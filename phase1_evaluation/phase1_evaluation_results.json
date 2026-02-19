@@ -1,26 +1,26 @@
 {
   "phase": "phase1_contrastive",
   "evaluation_method": "cosine_similarity",
-  "optimal_threshold": 0.48,
+  "optimal_threshold": 0.52,
   "metrics": {
-    "accuracy": 0.47775628626692457,
-    "precision": 0.30319148936170215,
-    "recall": 0.9344262295081968,
-    "f1_score": 0.4578313253012048,
-    "auc_roc": 0.6931521062461091
+    "accuracy": 0.5725338491295938,
+    "precision": 0.3377049180327869,
+    "recall": 0.8442622950819673,
+    "f1_score": 0.48243559718969553,
+    "auc_roc": 0.7205851836480598
   },
   "confusion_matrix": {
-    "true_positives": 114,
-    "true_negatives": 133,
-    "false_positives": 262,
-    "false_negatives": 8
+    "true_positives": 103,
+    "true_negatives": 193,
+    "false_positives": 202,
+    "false_negatives": 19
   },
   "similarity_stats": {
-    "positive_mean": 0.8206444978713989,
-    "positive_std": 0.0516500324010849,
-    "negative_mean": 0.7606032490730286,
-    "negative_std": 0.092702716588974,
-    "separation": 0.06004124879837036
+    "positive_mean": 0.8208892345428467,
+    "positive_std": 0.059214938431978226,
+    "negative_mean": 0.7430891394615173,
+    "negative_std": 0.10751704126596451,
+    "separation": 0.07780009508132935
   },
   "dataset_size": 517,
   "checkpoint": "phase1_pretraining/best_checkpoint.pt",
