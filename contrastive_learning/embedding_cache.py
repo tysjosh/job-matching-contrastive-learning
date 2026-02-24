@@ -347,6 +347,34 @@ class EmbeddingCache:
         logger.info(f"Preloading complete. Cache size: {stats['cache_size']}, "
                     f"Memory usage: {stats['memory_usage_mb']:.1f} MB")
 
+    def save_to_disk(self, path: str) -> None:
+        """Save cached embeddings to disk for reuse across training runs."""
+        import os
+        os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+        data = {
+            'cache': {k: v.cpu() for k, v in self.cache.items()},
+            'metadata': self.content_metadata,
+        }
+        torch.save(data, path)
+        logger.info(f"Saved {len(self.cache)} cached embeddings to {path}")
+
+    def load_from_disk(self, path: str) -> bool:
+        """Load cached embeddings from disk. Returns True if successful."""
+        import os
+        if not os.path.exists(path):
+            logger.info(f"No cache file found at {path}, will preload from scratch")
+            return False
+        try:
+            data = torch.load(path, map_location=self.device, weights_only=False)
+            self.cache = {k: v.to(self.device) for k, v in data['cache'].items()}
+            self.content_metadata = data.get('metadata', {})
+            logger.info(f"Loaded {len(self.cache)} cached embeddings from {path}")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to load cache from {path}: {e}, will preload from scratch")
+            return False
+
+
 
 class BatchEfficientEncoder:
     """

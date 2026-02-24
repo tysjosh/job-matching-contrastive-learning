@@ -1228,6 +1228,12 @@ class ContrastiveLearningTrainer:
         """
         logger.info(f"Preloading embeddings for dataset: {dataset_path}")
         
+        # Try loading from disk cache first
+        cache_path = "embedding_cache/text_embeddings.pt"
+        if self.embedding_cache.load_from_disk(cache_path):
+            logger.info("Skipped preloading — loaded embeddings from disk cache")
+            return
+        
         try:
             # Collect all unique content from the dataset (keyed by hash to deduplicate)
             unique_content: Dict[str, tuple] = {}
@@ -1267,6 +1273,9 @@ class ContrastiveLearningTrainer:
             stats = self.embedding_cache.get_cache_stats()
             logger.info(f"Preloading complete. Cache size: {stats['cache_size']}, "
                        f"Memory usage: {stats['memory_usage_mb']:.1f} MB")
+            
+            # Save to disk for future runs
+            self.embedding_cache.save_to_disk(cache_path)
             
         except Exception as e:
             logger.error(f"Failed to preload embeddings: {e}")

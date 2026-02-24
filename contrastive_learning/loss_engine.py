@@ -59,9 +59,11 @@ class ContrastiveLossEngine:
         # Sample-level weighting: quality tier + ontology coverage
         self.ontology_weight = getattr(config, 'ontology_weight', 0.3)
         self.ot_distance_scale = getattr(config, 'ot_distance_scale', 10.0)
+        self.use_ot_distance = getattr(config, 'use_ot_distance', True)
 
         logger.info(f"Initialized ContrastiveLossEngine with temperature={self.temperature}, "
-                    f"ontology_weight={self.ontology_weight}, device={self.device}")
+                    f"ontology_weight={self.ontology_weight}, use_ot_distance={self.use_ot_distance}, "
+                    f"device={self.device}")
 
     def compute_loss(self, triplets: List[ContrastiveTriplet],
                      embeddings: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -179,7 +181,7 @@ class ContrastiveLossEngine:
             return 1.0
 
         ont_sim = view_metadata.get('ontology_similarity')
-        ot_dist = view_metadata.get('ot_distance')
+        ot_dist = view_metadata.get('ot_distance') if self.use_ot_distance else None
         tier = view_metadata.get('quality_tier', 'F')
 
         # Base weight from quality tier

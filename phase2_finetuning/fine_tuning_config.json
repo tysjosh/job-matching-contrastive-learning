@@ -49,5 +49,6 @@
   "validate_every_n_epochs": 1,
   "ontology_weight": 0.3,
   "ot_distance_scale": 10.0,
+  "use_ot_distance": true,
   "pos_class_weight": 2.5
 }
