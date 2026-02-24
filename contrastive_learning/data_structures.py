@@ -198,6 +198,7 @@ class TrainingConfig:
     # Ontology-aware loss weighting (uses precomputed ESCO enrichment scores)
     ontology_weight: float = 0.0           # 0.0 = disabled, 0.3 = moderate, 0.5 = strong
     ot_distance_scale: float = 10.0        # Normalization scale for OT distance
+    use_ot_distance: bool = True           # Include OT distance in ontology weight (false = only ontology_similarity)
 
     # Phase 2 class imbalance handling
     pos_class_weight: float = 0.0          # 0.0 = disabled, 2.5 = recommended for 28% positive ratio
@@ -346,6 +347,7 @@ class TrainingConfig:
             'validate_every_n_epochs': self.validate_every_n_epochs,
             'ontology_weight': self.ontology_weight,
             'ot_distance_scale': self.ot_distance_scale,
+            'use_ot_distance': self.use_ot_distance,
             'pos_class_weight': self.pos_class_weight,
         }
 
