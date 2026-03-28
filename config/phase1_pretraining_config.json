@@ -34,9 +34,11 @@
   "freeze_contrastive_layers": false,
   "classification_dropout": 0.0,
   "max_negatives_per_anchor": 7,
-  "validation_path": "preprocess/data_splits_v3/validation.jsonl",
+  "validation_path": "preprocess/data_splits_v5/validation.jsonl",
   "validate_every_n_epochs": 1,
   "ontology_weight": 0.3,
   "ot_distance_scale": 10.0,
-  "use_ot_distance": true
+  "use_ot_distance": true,
+  "loss_type": "infonce",
+  "ws2_weight": 0.3
 }

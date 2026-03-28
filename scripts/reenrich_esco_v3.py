@@ -81,9 +81,10 @@ SKILL_ALIASES = {
 }
 
 _CAMEL_RE = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
-_PROFICIENCY_RE = re.compile(r"\s*\((?:expert|intermediate|beginner|basic|advanced|"
-                             r"good knowledge|experienced|proficient|master|"
-                             r"entry|junior|mid|senior|lead)\)\s*$", re.I)
+# Strip ANY trailing parenthetical — covers (expert), (N/A), (not provided), (certified), etc.
+# Only matches parentheticals at the END of the string to avoid stripping
+# legitimate skill parts like "C++ (programming language)" mid-string.
+_PROFICIENCY_RE = re.compile(r"\s*\([^)]*\)\s*$")
 
 
 def _split_camel(s: str) -> str:
