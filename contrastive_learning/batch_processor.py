@@ -160,6 +160,10 @@ class BatchProcessor:
             'ontology_similarity': anchor_sample.metadata.get('ontology_similarity'),
             'ot_distance': anchor_sample.metadata.get('ot_distance'),
             'quality_tier': anchor_sample.metadata.get('quality_tier'),
+            'phi': anchor_sample.metadata.get('phi'),
+            # Graduated relevance labels for Wasserstein loss
+            'positive_original_label': anchor_sample.metadata.get('original_label', 'good_fit'),
+            'negative_original_labels': [neg.get('original_label', 'no_fit') for neg in negatives],
         }
 
         return ContrastiveTriplet(
@@ -368,11 +372,20 @@ class BatchProcessor:
         # epoch_ratio: 0.0 at start → 1.0 at end
         epoch_ratio = self.current_epoch / max(1, self.total_epochs)
 
-        # Early: 20% hard, 30% medium, 50% easy
-        # Late:  60% hard, 30% medium, 10% easy
-        hard_ratio = 0.2 + 0.4 * epoch_ratio    # 0.2 → 0.6
-        easy_ratio = 0.5 - 0.4 * epoch_ratio    # 0.5 → 0.1
-        medium_ratio = 1.0 - hard_ratio - easy_ratio  # stays ~0.3
+        # Check if negative curriculum is enabled
+        use_curriculum = getattr(self.config, 'negative_curriculum', True)
+
+        if use_curriculum:
+            # Early: 20% hard, 30% medium, 50% easy
+            # Late:  60% hard, 30% medium, 10% easy
+            hard_ratio = 0.2 + 0.4 * epoch_ratio    # 0.2 → 0.6
+            easy_ratio = 0.5 - 0.4 * epoch_ratio    # 0.5 → 0.1
+            medium_ratio = 1.0 - hard_ratio - easy_ratio  # stays ~0.3
+        else:
+            # Fixed ratios from config
+            hard_ratio = getattr(self.config, 'negative_hard_ratio', 0.33)
+            medium_ratio = getattr(self.config, 'negative_medium_ratio', 0.34)
+            easy_ratio = getattr(self.config, 'negative_easy_ratio', 0.33)
 
         hard_count = int(max_negatives * hard_ratio)
         medium_count = int(max_negatives * medium_ratio)

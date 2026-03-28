@@ -1,0 +1,118 @@
+{
+  "OG-OCL": {
+    "Q1 [0, 0.25)": {
+      "n_total": 62,
+      "n_good": 10,
+      "n_potential": 12,
+      "n_no": 40,
+      "phi_range": "[0.0, 0.25)",
+      "phi_mean": 0.12881783870967745,
+      "d_g_p": 0.5906000137329102,
+      "triplet_accuracy": 0.2933,
+      "triplet_total": 4800,
+      "mean_sim_good": 0.5146,
+      "mean_sim_potential": 0.4261,
+      "mean_sim_no": 0.3354
+    },
+    "Q2 [0.25, 0.50)": {
+      "n_total": 225,
+      "n_good": 47,
+      "n_potential": 50,
+      "n_no": 128,
+      "phi_range": "[0.25, 0.5)",
+      "phi_mean": 0.3538926133333333,
+      "d_g_p": 0.40709999203681946,
+      "triplet_accuracy": 0.3226,
+      "triplet_total": 300800,
+      "mean_sim_good": 0.5713,
+      "mean_sim_potential": 0.5104,
+      "mean_sim_no": 0.4103
+    },
+    "Q3 [0.50, 0.75)": {
+      "n_total": 190,
+      "n_good": 63,
+      "n_potential": 42,
+      "n_no": 85,
+      "phi_range": "[0.5, 0.75)",
+      "phi_mean": 0.5546903315789474,
+      "d_g_p": 0.3741999864578247,
+      "triplet_accuracy": 0.2231,
+      "triplet_total": 224910,
+      "mean_sim_good": 0.5421,
+      "mean_sim_potential": 0.4866,
+      "mean_sim_no": 0.4398
+    },
+    "Q4 [0.75, 1.0]": {
+      "n_total": 46,
+      "n_good": 17,
+      "n_potential": 11,
+      "n_no": 18,
+      "phi_range": "[0.75, 1.01)",
+      "phi_mean": 0.9186938913043478,
+      "d_g_p": 0.6769999861717224,
+      "triplet_accuracy": 0.3925,
+      "triplet_total": 3366,
+      "mean_sim_good": 0.6304,
+      "mean_sim_potential": 0.537,
+      "mean_sim_no": 0.4155
+    }
+  },
+  "Fixed Margin": {
+    "Q1 [0, 0.25)": {
+      "n_total": 62,
+      "n_good": 10,
+      "n_potential": 12,
+      "n_no": 40,
+      "phi_range": "[0.0, 0.25)",
+      "phi_mean": 0.12881783870967745,
+      "d_g_p": 0.27489998936653137,
+      "triplet_accuracy": 0.3469,
+      "triplet_total": 4800,
+      "mean_sim_good": 0.4778,
+      "mean_sim_potential": 0.442,
+      "mean_sim_no": 0.3015
+    },
+    "Q2 [0.25, 0.50)": {
+      "n_total": 225,
+      "n_good": 47,
+      "n_potential": 50,
+      "n_no": 128,
+      "phi_range": "[0.25, 0.5)",
+      "phi_mean": 0.3538926133333333,
+      "d_g_p": 0.7555999755859375,
+      "triplet_accuracy": 0.3614,
+      "triplet_total": 300800,
+      "mean_sim_good": 0.5791,
+      "mean_sim_potential": 0.4691,
+      "mean_sim_no": 0.4095
+    },
+    "Q3 [0.50, 0.75)": {
+      "n_total": 190,
+      "n_good": 63,
+      "n_potential": 42,
+      "n_no": 85,
+      "phi_range": "[0.5, 0.75)",
+      "phi_mean": 0.5546903315789474,
+      "d_g_p": 0.44530001282691956,
+      "triplet_accuracy": 0.2693,
+      "triplet_total": 224910,
+      "mean_sim_good": 0.5497,
+      "mean_sim_potential": 0.4863,
+      "mean_sim_no": 0.4423
+    },
+    "Q4 [0.75, 1.0]": {
+      "n_total": 46,
+      "n_good": 17,
+      "n_potential": 11,
+      "n_no": 18,
+      "phi_range": "[0.75, 1.01)",
+      "phi_mean": 0.9186938913043478,
+      "d_g_p": 0.3871000111103058,
+      "triplet_accuracy": 0.3592,
+      "triplet_total": 3366,
+      "mean_sim_good": 0.5803,
+      "mean_sim_potential": 0.5211,
+      "mean_sim_no": 0.3975
+    }
+  }
+}

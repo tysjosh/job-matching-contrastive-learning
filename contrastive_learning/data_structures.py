@@ -200,6 +200,24 @@ class TrainingConfig:
     ot_distance_scale: float = 10.0        # Normalization scale for OT distance
     use_ot_distance: bool = True           # Include OT distance in ontology weight (false = only ontology_similarity)
 
+    # Phase 1 loss function selection
+    loss_type: str = "infonce"             # "infonce" (standard), "wasserstein" (graduated), "hybrid" (infonce + ws2), or "ordinal" (OCL)
+    ws2_weight: float = 0.3               # Weight for WS2 component in hybrid loss (0.0-1.0)
+
+    # Ordinal contrastive loss (OCL) configuration
+    ordinal_alpha: float = 0.5            # φ-guided margin scale: m₁(φ) = α·(1 − φ)
+    ordinal_lambda1: float = 1.0          # Weight for L₂ (good_fit vs potential_fit margin)
+    ordinal_lambda2: float = 1.0          # Weight for L₃ (potential_fit vs no_fit margin)
+    ordinal_m2: float = 0.3              # Fixed margin for L₃ (potential_fit above no_fit)
+    ordinal_fixed_m1: bool = False        # If True, L₂ uses fixed margin (ordinal_m2) instead of φ-guided m₁=α·(1−φ)
+    ordinal_curriculum_switch: float = 0.3 # Fraction of epochs before enabling L₂ + L₃ (0.3 = 30%)
+
+    # Negative selection curriculum control
+    negative_curriculum: bool = True       # True = shift hard/medium/easy ratios over epochs; False = fixed ratios
+    negative_hard_ratio: float = 0.33      # Fixed hard ratio when negative_curriculum=False
+    negative_medium_ratio: float = 0.34    # Fixed medium ratio when negative_curriculum=False
+    negative_easy_ratio: float = 0.33      # Fixed easy ratio when negative_curriculum=False
+
     # Phase 2 class imbalance handling
     pos_class_weight: float = 0.0          # 0.0 = disabled, 2.5 = recommended for 28% positive ratio
 
@@ -349,6 +367,18 @@ class TrainingConfig:
             'ot_distance_scale': self.ot_distance_scale,
             'use_ot_distance': self.use_ot_distance,
             'pos_class_weight': self.pos_class_weight,
+            'loss_type': self.loss_type,
+            'ws2_weight': self.ws2_weight,
+            'ordinal_alpha': self.ordinal_alpha,
+            'ordinal_lambda1': self.ordinal_lambda1,
+            'ordinal_lambda2': self.ordinal_lambda2,
+            'ordinal_m2': self.ordinal_m2,
+            'ordinal_fixed_m1': self.ordinal_fixed_m1,
+            'ordinal_curriculum_switch': self.ordinal_curriculum_switch,
+            'negative_curriculum': self.negative_curriculum,
+            'negative_hard_ratio': self.negative_hard_ratio,
+            'negative_medium_ratio': self.negative_medium_ratio,
+            'negative_easy_ratio': self.negative_easy_ratio,
         }
 
     @classmethod

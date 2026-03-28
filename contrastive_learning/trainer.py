@@ -103,7 +103,8 @@ class ContrastiveLearningTrainer:
         # Initialize BatchProcessor with proper ESCO graph path
         self.batch_processor = BatchProcessor(
             config, esco_graph_path=final_esco_path)
-        self.loss_engine = ContrastiveLossEngine(config)
+        self.loss_engine = ContrastiveLossEngine(
+            config, skill_matcher=self.batch_processor.skill_matcher)
 
         # Initialize semantic text encoder from config
         self.text_encoder = SentenceTransformer(config.text_encoder_model)
@@ -475,6 +476,9 @@ class ContrastiveLearningTrainer:
 
         # Update batch processor with current epoch for curriculum negative selection
         self.batch_processor.set_epoch(self.current_epoch)
+
+        # Update loss engine with current epoch for ordinal curriculum learning
+        self.loss_engine.set_epoch(self.current_epoch)
 
         epoch_start_time = time.time()
         epoch_losses = []
