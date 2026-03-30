@@ -608,7 +608,7 @@ def main():
     checkpoint_path = args.checkpoint
     config_path = args.config
     output_dir = Path(args.output_dir)
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Check files exist
     if not Path(dataset_path).exists():

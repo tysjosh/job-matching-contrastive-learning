@@ -35,9 +35,9 @@
   "freeze_contrastive_layers": true,
   "classification_dropout": 0.3,
   "max_negatives_per_anchor": 20,
-  "validation_path": "preprocess/data_splits_v6/validation.jsonl",
+  "validation_path": "preprocess/data_splits_v6_lenient/validation.jsonl",
   "validate_every_n_epochs": 1,
   "ontology_weight": 0.3,
   "ot_distance_scale": 10.0,
-  "pos_class_weight": 2.5
+  "pos_class_weight": 1.1
 }

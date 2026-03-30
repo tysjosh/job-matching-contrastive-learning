@@ -1,0 +1,60 @@
+{
+  "Enhanced OG-OCL": {
+    "Q1 [0, 0.25)": {
+      "n_total": 62,
+      "n_good": 10,
+      "n_potential": 12,
+      "n_no": 40,
+      "phi_range": "[0.0, 0.25)",
+      "phi_mean": 0.12881783870967745,
+      "d_g_p": 1.0313999652862549,
+      "triplet_accuracy": 0.3565,
+      "triplet_total": 4800,
+      "mean_sim_good": 0.4586,
+      "mean_sim_potential": 0.3524,
+      "mean_sim_no": 0.3421
+    },
+    "Q2 [0.25, 0.50)": {
+      "n_total": 225,
+      "n_good": 47,
+      "n_potential": 50,
+      "n_no": 128,
+      "phi_range": "[0.25, 0.5)",
+      "phi_mean": 0.3538926133333333,
+      "d_g_p": 0.9168999791145325,
+      "triplet_accuracy": 0.3066,
+      "triplet_total": 300800,
+      "mean_sim_good": 0.5457,
+      "mean_sim_potential": 0.4115,
+      "mean_sim_no": 0.3925
+    },
+    "Q3 [0.50, 0.75)": {
+      "n_total": 190,
+      "n_good": 63,
+      "n_potential": 42,
+      "n_no": 85,
+      "phi_range": "[0.5, 0.75)",
+      "phi_mean": 0.5546903315789474,
+      "d_g_p": 0.4927999973297119,
+      "triplet_accuracy": 0.2351,
+      "triplet_total": 224910,
+      "mean_sim_good": 0.5076,
+      "mean_sim_potential": 0.4375,
+      "mean_sim_no": 0.423
+    },
+    "Q4 [0.75, 1.0]": {
+      "n_total": 46,
+      "n_good": 17,
+      "n_potential": 11,
+      "n_no": 18,
+      "phi_range": "[0.75, 1.01)",
+      "phi_mean": 0.9186938913043478,
+      "d_g_p": 0.5033000111579895,
+      "triplet_accuracy": 0.2739,
+      "triplet_total": 3366,
+      "mean_sim_good": 0.5342,
+      "mean_sim_potential": 0.4618,
+      "mean_sim_no": 0.4012
+    }
+  }
+}

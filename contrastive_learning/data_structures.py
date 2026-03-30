@@ -212,6 +212,19 @@ class TrainingConfig:
     ordinal_fixed_m1: bool = False        # If True, L₂ uses fixed margin (ordinal_m2) instead of φ-guided m₁=α·(1−φ)
     ordinal_curriculum_switch: float = 0.3 # Fraction of epochs before enabling L₂ + L₃ (0.3 = 30%)
 
+    # Enhanced φ configuration
+    phi_essential_weight: float = 1.0      # Weight for essential skills in φ denominator
+    phi_optional_weight: float = 0.5       # Weight for optional skills in φ denominator
+    phi_use_weighted: bool = False          # If True, weight essential > optional in φ computation
+    esco_relations_path: Optional[str] = None  # Path to occupationSkillRelations_en.csv
+
+    # Adaptive margin annealing: λ₁(t) = λ₁ · (1 − anneal_rate · t/T)
+    margin_anneal: bool = False            # If True, decay λ₁ over training
+    margin_anneal_rate: float = 1.0        # 1.0 = full decay to 0; 0.5 = decay to 50%
+
+    # Confidence-gated margins: only apply φ-derived L₂ when φ < threshold
+    phi_gate_threshold: float = 1.0        # 1.0 = no gating (always apply); 0.25 = only low-φ tuples
+
     # Negative selection curriculum control
     negative_curriculum: bool = True       # True = shift hard/medium/easy ratios over epochs; False = fixed ratios
     negative_hard_ratio: float = 0.33      # Fixed hard ratio when negative_curriculum=False

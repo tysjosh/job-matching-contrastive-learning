@@ -90,6 +90,28 @@ class ContrastiveLossEngine:
         elif self.loss_type == 'ordinal' and not self.ordinal_fixed_m1 and not skill_matcher:
             logger.warning("No skill_matcher provided — L₂ will fall back to precomputed φ(resume_p, job_p)")
 
+        # ── Enhanced φ: essential/optional skill weighting ──
+        self.phi_use_weighted = getattr(config, 'phi_use_weighted', False)
+        self.phi_essential_weight = getattr(config, 'phi_essential_weight', 1.0)
+        self.phi_optional_weight = getattr(config, 'phi_optional_weight', 0.5)
+        self.essential_skills = {}  # occupation_uri -> set of essential skill URIs
+        self.optional_skills = {}   # occupation_uri -> set of optional skill URIs
+
+        if self.phi_use_weighted:
+            esco_relations_path = getattr(config, 'esco_relations_path', None)
+            if esco_relations_path:
+                self._load_essential_optional_skills(esco_relations_path)
+            else:
+                logger.warning("phi_use_weighted=True but no esco_relations_path — falling back to uniform weighting")
+                self.phi_use_weighted = False
+
+        # ── Adaptive margin annealing ──
+        self.margin_anneal = getattr(config, 'margin_anneal', False)
+        self.margin_anneal_rate = getattr(config, 'margin_anneal_rate', 1.0)
+
+        # ── Confidence-gated margins ──
+        self.phi_gate_threshold = getattr(config, 'phi_gate_threshold', 1.0)
+
         logger.info(f"Initialized ContrastiveLossEngine with temperature={self.temperature}, "
                     f"loss_type={self.loss_type}, ws2_weight={self.ws2_weight}, "
                     f"ontology_weight={self.ontology_weight}, use_ot_distance={self.use_ot_distance}, "
@@ -379,6 +401,87 @@ class ContrastiveLossEngine:
         """Set current epoch for curriculum learning in ordinal loss."""
         self.current_epoch = epoch
 
+    def _load_essential_optional_skills(self, csv_path: str) -> None:
+        """Load essential/optional skill sets per occupation from ESCO relations CSV."""
+        import csv
+        count = 0
+        with open(csv_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                occ_uri = row['occupationUri']
+                skill_uri = row['skillUri']
+                rel_type = row['relationType']
+                if rel_type == 'essential':
+                    self.essential_skills.setdefault(occ_uri, set()).add(skill_uri)
+                elif rel_type == 'optional':
+                    self.optional_skills.setdefault(occ_uri, set()).add(skill_uri)
+                count += 1
+        logger.info(f"Loaded {count} ESCO skill-occupation relations "
+                    f"({len(self.essential_skills)} occupations with essential skills)")
+
+    def _compute_phi_weighted(self, resume_skill_uris: List[str],
+                               job_skill_uris: List[str],
+                               job_occupation_uri: Optional[str] = None) -> Optional[float]:
+        """
+        Compute weighted φ where essential skills count more than optional.
+
+        Each job skill's contribution to the denominator is weighted:
+          - essential skill: phi_essential_weight (default 1.0)
+          - optional skill:  phi_optional_weight (default 0.5)
+          - unknown:         1.0 (fallback)
+
+        Numerator credit per skill uses the same Strategy D as before.
+        """
+        if not self.skill_matcher:
+            return None
+
+        job_skills = list(set(job_skill_uris))
+        resume_skills = list(set(resume_skill_uris))
+
+        if not job_skills:
+            return None
+        if not resume_skills:
+            return 0.0
+
+        # Look up essential/optional sets for this occupation
+        ess_set = self.essential_skills.get(job_occupation_uri, set()) if job_occupation_uri else set()
+        opt_set = self.optional_skills.get(job_occupation_uri, set()) if job_occupation_uri else set()
+
+        total_credit = 0.0
+        total_weight = 0.0
+        for j_uri in job_skills:
+            # Determine weight for this skill
+            if j_uri in ess_set:
+                w = self.phi_essential_weight
+            elif j_uri in opt_set:
+                w = self.phi_optional_weight
+            else:
+                w = 1.0  # unknown relation — treat as essential
+
+            # Compute credit (Strategy D)
+            best_credit = 0.0
+            for r_uri in resume_skills:
+                d = self.skill_matcher.skill_distance(j_uri, r_uri)
+                if d is not None:
+                    if d == 0:
+                        best_credit = 1.0
+                        break
+                    elif d <= 2 and best_credit < 0.5:
+                        best_credit = 0.5
+
+            total_credit += w * best_credit
+            total_weight += w
+
+        return total_credit / total_weight if total_weight > 0 else 0.0
+
+    def _get_effective_lambda1(self) -> float:
+        """Get λ₁ with optional adaptive annealing: λ₁(t) = λ₁ · (1 − rate · t/T)."""
+        if not self.margin_anneal:
+            return self.ordinal_lambda1
+        epoch_ratio = self.current_epoch / max(1, self.total_epochs)
+        decay = 1.0 - self.margin_anneal_rate * epoch_ratio
+        return self.ordinal_lambda1 * max(0.0, decay)
+
     def _compute_phi_on_the_fly(self, resume_skill_uris: List[str],
                                 job_skill_uris: List[str]) -> Optional[float]:
         """
@@ -486,6 +589,7 @@ class ContrastiveLossEngine:
                 # Skill URIs for on-the-fly φ computation
                 'resume_skill_uris': triplet.anchor.get('skill_uris', []),
                 'job_skill_uris': triplet.positive.get('skill_uris', []),
+                'job_occupation_uri': triplet.positive.get('occupation_uri'),
             })
 
             # Also collect negatives with their labels
@@ -504,6 +608,7 @@ class ContrastiveLossEngine:
                     # For negatives: resume is the anchor's resume, job is the negative's job
                     'resume_skill_uris': triplet.anchor.get('skill_uris', []),
                     'job_skill_uris': negative.get('skill_uris', []),
+                    'job_occupation_uri': negative.get('occupation_uri'),
                 })
 
         # ── Group by label for Strategy B tuple selection ──
@@ -566,19 +671,36 @@ class ContrastiveLossEngine:
                     # FIXED: compute φ against the ANCHOR's job, not the pf candidate's own job
                     phi_p = None
                     if self.skill_matcher:
-                        phi_p = self._compute_phi_on_the_fly(
-                            best_pf['resume_skill_uris'],  # potential_fit candidate's resume skills
-                            gf['job_skill_uris'],           # anchor (good_fit) job's skills
-                        )
+                        if self.phi_use_weighted:
+                            # Improvement 1: weighted φ (essential > optional)
+                            job_occ_uri = gf.get('job_occupation_uri')
+                            phi_p = self._compute_phi_weighted(
+                                best_pf['resume_skill_uris'],
+                                gf['job_skill_uris'],
+                                job_occupation_uri=job_occ_uri,
+                            )
+                        else:
+                            phi_p = self._compute_phi_on_the_fly(
+                                best_pf['resume_skill_uris'],
+                                gf['job_skill_uris'],
+                            )
                     if phi_p is None:
                         # Fallback to precomputed φ (old behavior, against own job)
                         phi_p = best_pf['phi'] if best_pf['phi'] is not None else 0.5
-                    m1 = self.ordinal_alpha * (1.0 - phi_p)
+
+                    # Improvement 3: confidence gating — skip φ-derived L₂ when φ is high
+                    if phi_p >= self.phi_gate_threshold:
+                        # φ too high → margin unreliable, fall back to fixed margin
+                        m1 = self.ordinal_m2
+                    else:
+                        m1 = self.ordinal_alpha * (1.0 - phi_p)
                 l2_term = F.relu(m1 - (s_alpha - s_p))
 
             # ── Combine margins for this tuple ──
+            # Improvement 2: adaptive margin annealing for λ₁
+            effective_lambda1 = self._get_effective_lambda1()
             if is_full_phase:
-                margin = self.ordinal_lambda1 * l2_term + self.ordinal_lambda2 * l3_term
+                margin = effective_lambda1 * l2_term + self.ordinal_lambda2 * l3_term
             else:
                 margin = self.ordinal_lambda2 * l3_term
 

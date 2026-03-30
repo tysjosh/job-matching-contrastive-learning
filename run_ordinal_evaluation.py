@@ -652,7 +652,7 @@ def main():
     sims_ord, labels_ord, phis_ord = compute_embeddings(ordinal_model, text_encoder, data_loader, device)
     results_ord = ordinal_metrics(sims_ord, labels_ord)
     all_results['ordinal_v3'] = results_ord
-    print_results("ORDINAL v3 (InfoNCE + L₂ + L₃)", results_ord)
+    print_results("Three-Class Embedding Evaluation", results_ord)
 
     # ── Evaluate baseline model (if provided) ──
     if args.baseline_checkpoint and args.baseline_config:
@@ -665,7 +665,7 @@ def main():
 
         # ── Comparison table ──
         print(f"\n{'=' * 70}")
-        print(f"  COMPARISON: Ordinal v3 vs Baseline")
+        print(f"  COMPARISON: Primary vs Baseline")
         print(f"{'=' * 70}")
         print(f"\n  {'Metric':<35} {'Baseline':>10} {'Ordinal':>10} {'Delta':>10}")
         print(f"  {'-'*68}")
