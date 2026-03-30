@@ -152,6 +152,7 @@ def main():
     parser.add_argument('--skip-phase2-eval', action='store_true')
     parser.add_argument('--phase1-checkpoint', type=str, help='Existing Phase 1 checkpoint')
     parser.add_argument('--phase2-checkpoint', type=str, help='Existing Phase 2 checkpoint (skips Phase 2 training)')
+    parser.add_argument('--phase2-output-dir', type=str, default='phase2_finetuning', help='Output directory for Phase 2')
 
     args = parser.parse_args()
 
@@ -219,7 +220,7 @@ def main():
         if not Path(args.phase2_config).exists():
             logger.error(f"Config not found: {args.phase2_config}")
             return 1
-        phase2_ckpt = run_phase2(train_path, args.phase2_config, phase1_ckpt, val_path)
+        phase2_ckpt = run_phase2(train_path, args.phase2_config, phase1_ckpt, val_path, output_dir=args.phase2_output_dir)
 
     # Step 4: Phase 2 evaluation
     if not args.skip_phase2_eval and phase2_ckpt:

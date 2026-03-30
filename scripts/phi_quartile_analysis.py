@@ -21,16 +21,12 @@ from torch.utils.data import Dataset, DataLoader
 # ── Paths ──
 TEST_PATH = "preprocess/data_splits_v6/test.jsonl"
 STRATEGIES = {
-    "OG-OCL": {
-        "checkpoint": "results_ordinal_v6_phi_corrected/phase1_pretraining/best_checkpoint.pt",
-        "config": "CDCL/config/phase1_ordinal_config.json",
-    },
-    "Fixed Margin": {
-        "checkpoint": "results_ordinal_v6_fixed_margin/phase1_pretraining/best_checkpoint.pt",
-        "config": "CDCL/config/phase1_ordinal_fixed_margin_config.json",
+    "Enhanced OG-OCL": {
+        "checkpoint": "results_ordinal_v6_enhanced/phase1_pretraining/best_checkpoint.pt",
+        "config": "CDCL/config/phase1_ordinal_enhanced_config.json",
     },
 }
-OUTPUT_PATH = "results_phi_quartile_analysis.json"
+OUTPUT_PATH = "results_phi_quartile_enhanced.json"
 
 # φ quartile boundaries
 QUARTILE_BOUNDS = [(0.0, 0.25), (0.25, 0.50), (0.50, 0.75), (0.75, 1.01)]
@@ -250,28 +246,8 @@ def main():
             phi_str = f"{r['phi_mean']:.3f}" if r['phi_mean'] is not None else "N/A"
             print(f"  {qname:<20} {r['n_total']:>5} {gpn:>12} {d_str:>8} {t_str:>10} {phi_str:>6}")
 
-    # ── Comparison table ──
-    print(f"\n{'='*70}")
-    print(f"  COMPARISON: OG-OCL vs Fixed Margin by φ quartile")
-    print(f"{'='*70}")
-    print(f"\n  {'Quartile':<20} {'d(g,p) FM':>10} {'d(g,p) OG':>10} {'Δd':>8} {'Trip FM':>9} {'Trip OG':>9} {'ΔTrip':>8}")
-    print(f"  {'-'*78}")
-    for qname in QUARTILE_NAMES:
-        fm = all_results["Fixed Margin"][qname]
-        og = all_results["OG-OCL"][qname]
-        d_fm = fm["d_g_p"]
-        d_og = og["d_g_p"]
-        t_fm = fm["triplet_accuracy"]
-        t_og = og["triplet_accuracy"]
-        dd = (d_og - d_fm) if (d_og is not None and d_fm is not None) else None
-        dt = (t_og - t_fm) if (t_og is not None and t_fm is not None) else None
-        d_fm_s = f"{d_fm:.3f}" if d_fm is not None else "N/A"
-        d_og_s = f"{d_og:.3f}" if d_og is not None else "N/A"
-        dd_s = f"{dd:+.3f}" if dd is not None else "N/A"
-        t_fm_s = f"{t_fm:.3f}" if t_fm is not None else "N/A"
-        t_og_s = f"{t_og:.3f}" if t_og is not None else "N/A"
-        dt_s = f"{dt:+.3f}" if dt is not None else "N/A"
-        print(f"  {qname:<20} {d_fm_s:>10} {d_og_s:>10} {dd_s:>8} {t_fm_s:>9} {t_og_s:>9} {dt_s:>8}")
+    # ── Print results ──
+    print(f"\nResults saved to {OUTPUT_PATH}")
 
     # Save (convert numpy types for JSON)
     def to_native(obj):
