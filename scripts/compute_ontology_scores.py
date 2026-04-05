@@ -143,11 +143,18 @@ def main():
                         help="Sinkhorn regularization")
     parser.add_argument("--max-hops", type=int, default=8)
     parser.add_argument("--disconnected-cost", type=float, default=10.0)
+    parser.add_argument("--v6", action="store_true",
+                        help="Use v6 data format (skill_uris on resume/job, scores in metadata)")
     args = parser.parse_args()
 
     global UG
     logger.info(f"Loading ESCO graph from {args.graph}...")
-    directed = nx.read_gexf(args.graph)
+    if args.graph.endswith('.gpickle'):
+        import pickle
+        with open(args.graph, 'rb') as f:
+            directed = pickle.load(f)
+    else:
+        directed = nx.read_gexf(args.graph)
     UG = directed.to_undirected()
     logger.info(f"Undirected graph: {UG.number_of_nodes()} nodes, {UG.number_of_edges()} edges")
 
@@ -162,26 +169,37 @@ def main():
         for line in fin:
             rec = json.loads(line)
             total += 1
-            e = rec.get("esco_enrichment_v3", {})
-            r_uris = e.get("resume_skill_uris", [])
-            j_uris = e.get("job_skill_uris", [])
+
+            if args.v6:
+                r_uris = rec.get("resume", {}).get("skill_uris", [])
+                j_uris = rec.get("job", {}).get("skill_uris", [])
+            else:
+                e = rec.get("esco_enrichment_v3", {})
+                r_uris = e.get("resume_skill_uris", [])
+                j_uris = e.get("job_skill_uris", [])
 
             if not r_uris or not j_uris:
-                e.setdefault("scores", {})["ontology_similarity"] = None
-                e["scores"]["ot_distance"] = None
+                ont_sim_val = None
+                ot_dist_val = None
                 skipped_empty += 1
             else:
-                ont_sim = ontology_set_similarity(
-                    r_uris, j_uris, alpha=args.alpha, max_hops=args.max_hops)
-                ot_dist = ot_graph_distance(
+                ont_sim_val = round(ontology_set_similarity(
+                    r_uris, j_uris, alpha=args.alpha, max_hops=args.max_hops), 6)
+                ot_raw = ot_graph_distance(
                     r_uris, j_uris, reg=args.ot_reg,
                     max_hops=args.max_hops, disconnected_cost=args.disconnected_cost)
-
-                e.setdefault("scores", {})["ontology_similarity"] = round(ont_sim, 6)
-                e["scores"]["ot_distance"] = round(ot_dist, 6) if ot_dist is not None else None
+                ot_dist_val = round(ot_raw, 6) if ot_raw is not None else None
                 computed += 1
 
-            rec["esco_enrichment_v3"] = e
+            if args.v6:
+                rec.setdefault("metadata", {})["ontology_similarity"] = ont_sim_val
+                rec["metadata"]["ot_distance"] = ot_dist_val
+            else:
+                e = rec.get("esco_enrichment_v3", {})
+                e.setdefault("scores", {})["ontology_similarity"] = ont_sim_val
+                e["scores"]["ot_distance"] = ot_dist_val
+                rec["esco_enrichment_v3"] = e
+
             fout.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
             if total % 1000 == 0:

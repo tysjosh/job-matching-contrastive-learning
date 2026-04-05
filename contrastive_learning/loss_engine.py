@@ -112,6 +112,17 @@ class ContrastiveLossEngine:
         # ── Confidence-gated margins ──
         self.phi_gate_threshold = getattr(config, 'phi_gate_threshold', 1.0)
 
+        # ── ISCO proximity for loss weighting ──
+        self.isco_loss_weight = getattr(config, 'isco_loss_weight', False)
+        self.occ_to_isco = {}
+        if self.isco_loss_weight:
+            esco_occ_path = getattr(config, 'esco_occupations_path', None)
+            if esco_occ_path:
+                self._load_isco_codes(esco_occ_path)
+            else:
+                logger.warning("isco_loss_weight=True but no esco_occupations_path")
+                self.isco_loss_weight = False
+
         logger.info(f"Initialized ContrastiveLossEngine with temperature={self.temperature}, "
                     f"loss_type={self.loss_type}, ws2_weight={self.ws2_weight}, "
                     f"ontology_weight={self.ontology_weight}, use_ot_distance={self.use_ot_distance}, "
@@ -280,6 +291,18 @@ class ContrastiveLossEngine:
         if count > 0:
             ont_signal /= count  # average of available signals, 0-1
 
+        # Add ISCO proximity signal if enabled
+        if self.isco_loss_weight:
+            # Get occupation URIs from the triplet's positive job
+            # The anchor is a resume, positive is the matched job
+            # ISCO proximity measures how well the job's occupation aligns
+            job_occ = view_metadata.get('job_occupation_uri', '')
+            resume_occ = view_metadata.get('resume_occupation_uri', '')
+            if job_occ and resume_occ:
+                isco_prox = self._isco_proximity(job_occ, resume_occ)
+                ont_signal = (ont_signal * count + isco_prox) / (count + 1)
+                count += 1
+
         # Final weight: base ± ontology adjustment
         weight = base * (1.0 + self.ontology_weight * (2.0 * ont_signal - 1.0))
 
@@ -400,6 +423,34 @@ class ContrastiveLossEngine:
     def set_epoch(self, epoch: int) -> None:
         """Set current epoch for curriculum learning in ordinal loss."""
         self.current_epoch = epoch
+
+    def _load_isco_codes(self, csv_path: str) -> None:
+        """Load occupation_uri -> ISCO code mapping."""
+        import csv
+        with open(csv_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                uri = row.get('conceptUri', '')
+                isco = row.get('iscoGroup', '')
+                if uri and isco:
+                    self.occ_to_isco[uri] = isco
+        logger.info(f"Loaded {len(self.occ_to_isco)} ISCO codes for loss weighting")
+
+    def _isco_proximity(self, occ_uri_a: str, occ_uri_b: str) -> float:
+        """ISCO proximity score (0-1, higher = closer occupations). 5-level hierarchy."""
+        isco_a = self.occ_to_isco.get(occ_uri_a, '')
+        isco_b = self.occ_to_isco.get(occ_uri_b, '')
+        if not isco_a or not isco_b:
+            return 0.5
+        if isco_a == isco_b:
+            return 1.0
+        if len(isco_a) >= 3 and len(isco_b) >= 3 and isco_a[:3] == isco_b[:3]:
+            return 0.8
+        if len(isco_a) >= 2 and len(isco_b) >= 2 and isco_a[:2] == isco_b[:2]:
+            return 0.6
+        if isco_a[:1] == isco_b[:1]:
+            return 0.3
+        return 0.0
 
     def _load_essential_optional_skills(self, csv_path: str) -> None:
         """Load essential/optional skill sets per occupation from ESCO relations CSV."""

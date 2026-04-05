@@ -225,6 +225,19 @@ class TrainingConfig:
     # Confidence-gated margins: only apply φ-derived L₂ when φ < threshold
     phi_gate_threshold: float = 1.0        # 1.0 = no gating (always apply); 0.25 = only low-φ tuples
 
+    # ISCO group distance for negative selection and loss weighting
+    use_isco_negatives: bool = False        # Use ISCO group distance in negative bucketing
+    isco_weight: float = 0.4               # Weight for ISCO distance in combined signal (0=skill only, 1=ISCO only)
+    isco_loss_weight: bool = False          # Include ISCO proximity in loss weighting
+    esco_occupations_path: Optional[str] = None  # Path to occupations_en.csv
+
+    # Skill reuse level downweighting in similarity computation
+    use_reuse_weighting: bool = False       # Downweight transversal skills in similarity
+    esco_skills_path: Optional[str] = None  # Path to skills_en.csv
+    reuse_weight_transversal: float = 0.3   # Weight for transversal skills
+    reuse_weight_cross_sector: float = 0.6  # Weight for cross-sector skills
+    reuse_weight_sector_specific: float = 1.0  # Weight for sector-specific skills
+
     # Negative selection curriculum control
     negative_curriculum: bool = True       # True = shift hard/medium/easy ratios over epochs; False = fixed ratios
     negative_hard_ratio: float = 0.33      # Fixed hard ratio when negative_curriculum=False

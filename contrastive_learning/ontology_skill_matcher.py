@@ -31,9 +31,16 @@ class OntologySkillMatcher:
         ot_reg: float = 0.4,
         disconnected_cost: float = 10.0,
         cache_size: int = 500_000,
+        esco_skills_path: str = None,
+        reuse_weights: dict = None,
     ):
         logger.info(f"Loading ESCO graph from {esco_graph_path} for skill matching...")
-        directed = nx.read_gexf(esco_graph_path)
+        if esco_graph_path.endswith('.gpickle'):
+            import pickle
+            with open(esco_graph_path, 'rb') as f:
+                directed = pickle.load(f)
+        else:
+            directed = nx.read_gexf(esco_graph_path)
         self._graph = directed.to_undirected()
         logger.info(
             f"OntologySkillMatcher ready: {self._graph.number_of_nodes()} nodes, "
@@ -44,6 +51,16 @@ class OntologySkillMatcher:
         self.max_hops = max_hops
         self.ot_reg = ot_reg
         self.disconnected_cost = disconnected_cost
+
+        # Skill reuse level weights
+        self.skill_reuse_level = {}  # skill_uri -> reuse level string
+        self.reuse_weights = reuse_weights or {}
+        if esco_skills_path and reuse_weights:
+            self._load_skill_reuse_levels(esco_skills_path)
+
+        # Transversal skill mask (curated list, overrides reuse level)
+        self.transversal_skills = set()
+        self.transversal_weight = 0.3  # default weight for transversal skills
 
         # Build the cached distance function bound to this graph
         @lru_cache(maxsize=cache_size)
@@ -57,6 +74,78 @@ class OntologySkillMatcher:
                 return None
 
         self._skill_distance = _cached_distance
+
+        # Build the cached distance function bound to this graph
+        @lru_cache(maxsize=cache_size)
+        def _cached_distance(u: str, v: str) -> Optional[int]:
+            if u == v:
+                return 0
+            try:
+                d = nx.shortest_path_length(self._graph, u, v)
+                return d if d <= max_hops else None
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                return None
+
+        self._skill_distance = _cached_distance
+
+    def _load_skill_reuse_levels(self, csv_path: str) -> None:
+        """Load skill reuse levels from skills CSV."""
+        import csv
+        count = 0
+        with open(csv_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                uri = row.get('conceptUri', '')
+                reuse = row.get('reuseLevel', '')
+                if uri and reuse:
+                    self.skill_reuse_level[uri] = reuse
+                    count += 1
+        logger.info(f"Loaded {count} skill reuse levels")
+
+    def load_transversal_skills(self, csv_path: str, weight: float = 0.3) -> None:
+        """Load curated transversal skills list for downweighting."""
+        import csv
+        with open(csv_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                uri = row.get('conceptUri', '')
+                if uri:
+                    self.transversal_skills.add(uri)
+        self.transversal_weight = weight
+        logger.info(f"Loaded {len(self.transversal_skills)} transversal skills (weight={weight})")
+
+    def load_precomputed_distances(self, cache_path: str) -> None:
+        """Load precomputed skill-pair distances to seed the LRU cache.
+        Replaces the cached function with a dict-backed version."""
+        import pickle
+        with open(cache_path, 'rb') as f:
+            precomputed = pickle.load(f)
+
+        # Replace the LRU-cached function with a dict-backed one that falls back to graph
+        original_fn = self._skill_distance.__wrapped__ if hasattr(self._skill_distance, '__wrapped__') else None
+        _graph = self._graph
+        _max_hops = self.max_hops
+        _precomputed = precomputed
+
+        @lru_cache(maxsize=500_000)
+        def _cached_with_precomputed(u: str, v: str) -> Optional[int]:
+            key = (u, v)
+            if key in _precomputed:
+                return _precomputed[key]
+            rev_key = (v, u)
+            if rev_key in _precomputed:
+                return _precomputed[rev_key]
+            # Fall back to graph computation
+            if u == v:
+                return 0
+            try:
+                d = nx.shortest_path_length(_graph, u, v)
+                return d if d <= _max_hops else None
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                return None
+
+        self._skill_distance = _cached_with_precomputed
+        logger.info(f"Loaded {len(precomputed):,} precomputed skill distances")
 
     # ── Public API ──
 
@@ -72,22 +161,36 @@ class OntologySkillMatcher:
         return math.exp(-self.alpha * d)
 
     def ontology_set_similarity(self, A: List[str], B: List[str]) -> float:
-        """Symmetric best-match average similarity between two skill URI sets."""
+        """Symmetric best-match average similarity between two skill URI sets.
+        When reuse weights are configured, downweights transversal skills."""
         A = list(set(A))
         B = list(set(B))
         if not A or not B:
             return 0.0
 
+        def skill_weight(uri: str) -> float:
+            # Transversal mask takes priority (curated list)
+            if self.transversal_skills and uri in self.transversal_skills:
+                return self.transversal_weight
+            # Fall back to reuse level weights
+            if not self.reuse_weights:
+                return 1.0
+            reuse = self.skill_reuse_level.get(uri, '')
+            return self.reuse_weights.get(reuse, 1.0)
+
         def dir_score(X, Y):
-            s = 0.0
+            total_weighted_sim = 0.0
+            total_weight = 0.0
             for x in X:
                 best = 0.0
                 for y in Y:
                     best = max(best, self.skill_sim(x, y))
                     if best >= 0.999:
                         break
-                s += best
-            return s / len(X)
+                w = skill_weight(x)
+                total_weighted_sim += w * best
+                total_weight += w
+            return total_weighted_sim / total_weight if total_weight > 0 else 0.0
 
         return 0.5 * (dir_score(A, B) + dir_score(B, A))
 

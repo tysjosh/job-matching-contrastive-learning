@@ -69,7 +69,28 @@ class BatchProcessor:
                 # Use the full ESCO KG for skill matching (not the career graph)
                 # Fall back to esco_graph_path if no separate KG path configured
                 kg_path = getattr(config, 'esco_kg_path', None) or esco_graph_path
-                self.skill_matcher = OntologySkillMatcher(kg_path)
+                # Build reuse weights if configured
+                reuse_weights = None
+                skills_path = None
+                if getattr(config, 'use_reuse_weighting', False):
+                    skills_path = getattr(config, 'esco_skills_path', None)
+                    if skills_path:
+                        reuse_weights = {
+                            'transversal': getattr(config, 'reuse_weight_transversal', 0.3),
+                            'cross-sector': getattr(config, 'reuse_weight_cross_sector', 0.6),
+                            'sector-specific': getattr(config, 'reuse_weight_sector_specific', 1.0),
+                        }
+                self.skill_matcher = OntologySkillMatcher(
+                    kg_path, esco_skills_path=skills_path, reuse_weights=reuse_weights)
+                # Load transversal skills mask if available
+                transversal_path = "dataset/esco/transversalSkillsCollection_en.csv"
+                import os
+                if os.path.exists(transversal_path) and getattr(config, 'use_reuse_weighting', False):
+                    self.skill_matcher.load_transversal_skills(transversal_path, weight=0.3)
+                # Load precomputed skill distances if available
+                dist_cache_path = "embedding_cache/skill_distances.pkl"
+                if os.path.exists(dist_cache_path):
+                    self.skill_matcher.load_precomputed_distances(dist_cache_path)
                 logger.info("OntologySkillMatcher enabled for skill-level negative selection")
             except Exception as e:
                 logger.warning(f"Failed to initialize OntologySkillMatcher: {e}")
@@ -80,6 +101,18 @@ class BatchProcessor:
         # Curriculum learning state for ontology negative selection
         self.current_epoch = 0
         self.total_epochs = config.num_epochs
+
+        # ISCO group distance for negative selection
+        self.use_isco_negatives = getattr(config, 'use_isco_negatives', False)
+        self.isco_weight = getattr(config, 'isco_weight', 0.4)
+        self.occ_to_isco = {}
+        if self.use_isco_negatives:
+            esco_occ_path = getattr(config, 'esco_occupations_path', None)
+            if esco_occ_path:
+                self._load_isco_codes(esco_occ_path)
+            else:
+                logger.warning("use_isco_negatives=True but no esco_occupations_path")
+                self.use_isco_negatives = False
 
         logger.info(f"BatchProcessor initialized with pathway_negatives={'enabled' if self.career_graph else 'disabled'}, "
                     f"skill_matcher={'enabled' if self.skill_matcher else 'disabled'}, "
@@ -164,6 +197,9 @@ class BatchProcessor:
             # Graduated relevance labels for Wasserstein loss
             'positive_original_label': anchor_sample.metadata.get('original_label', 'good_fit'),
             'negative_original_labels': [neg.get('original_label', 'no_fit') for neg in negatives],
+            # Occupation URIs for ISCO proximity weighting
+            'job_occupation_uri': anchor_sample.job.get('occupation_uri', ''),
+            'resume_occupation_uri': anchor_sample.metadata.get('resume_occupation_uri', ''),
         }
 
         return ContrastiveTriplet(
@@ -256,8 +292,9 @@ class BatchProcessor:
             try:
                 resume_uris = anchor_sample.resume.get('skill_uris', [])
                 if resume_uris:
+                    anchor_occ = anchor_sample.job.get('occupation_uri', '')
                     return self._select_ontology_negatives(
-                        resume_uris, candidate_negatives, max_negatives)
+                        resume_uris, candidate_negatives, max_negatives, anchor_occ_uri=anchor_occ)
             except Exception as e:
                 logger.warning(f"Ontology negative selection failed: {e}")
 
@@ -331,14 +368,45 @@ class BatchProcessor:
         """Set current epoch for curriculum learning in negative selection."""
         self.current_epoch = epoch
 
+    def _load_isco_codes(self, csv_path: str) -> None:
+        """Load occupation_uri -> ISCO code mapping from occupations CSV."""
+        import csv
+        with open(csv_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                uri = row.get('conceptUri', '')
+                isco = row.get('iscoGroup', '')
+                if uri and isco:
+                    self.occ_to_isco[uri] = isco
+        logger.info(f"Loaded {len(self.occ_to_isco)} ISCO codes for negative selection")
+
+    def _isco_distance(self, occ_uri_a: str, occ_uri_b: str) -> float:
+        """Compute ISCO group distance between two occupations (0-1 scale).
+        Uses 5-level hierarchy: same 4-digit=0.0, 3-digit=0.2, 2-digit=0.4, 1-digit=0.7, different=1.0."""
+        isco_a = self.occ_to_isco.get(occ_uri_a, '')
+        isco_b = self.occ_to_isco.get(occ_uri_b, '')
+        if not isco_a or not isco_b:
+            return 0.5
+        if isco_a == isco_b:
+            return 0.0
+        if len(isco_a) >= 3 and len(isco_b) >= 3 and isco_a[:3] == isco_b[:3]:
+            return 0.2
+        if len(isco_a) >= 2 and len(isco_b) >= 2 and isco_a[:2] == isco_b[:2]:
+            return 0.4
+        if isco_a[:1] == isco_b[:1]:
+            return 0.7
+        return 1.0
+
     def _select_ontology_negatives(
         self,
         resume_skill_uris: List[str],
         candidate_negatives: List[Dict[str, Any]],
         max_negatives: int,
+        anchor_occ_uri: str = '',
     ) -> tuple[List[Dict[str, Any]], List[float]]:
         """
-        Select negatives based on skill-level ontology distance to the resume.
+        Select negatives based on skill-level ontology distance to the resume,
+        optionally combined with ISCO group distance.
 
         Uses curriculum learning to shift hard/medium/easy ratios over epochs:
         - Early training: mostly easy negatives (model learns basic distinctions)
@@ -355,12 +423,23 @@ class BatchProcessor:
         # Compute ontology distance for each candidate
         scored = []
         for job in candidate_negatives:
+            # Skill-level distance
             job_uris = job.get('skill_uris', [])
             if job_uris and resume_skill_uris:
                 sim = self.skill_matcher.ontology_set_similarity(resume_skill_uris, job_uris)
-                distance = 1.0 - sim  # 0 = identical skills, 1 = no overlap
+                skill_distance = 1.0 - sim
             else:
-                distance = 0.5  # neutral when no URIs
+                skill_distance = 0.5
+
+            # Blend with ISCO distance if enabled
+            if self.use_isco_negatives and anchor_occ_uri:
+                job_occ = job.get('occupation_uri', '')
+                isco_dist = self._isco_distance(anchor_occ_uri, job_occ)
+                w = self.isco_weight
+                distance = (1.0 - w) * skill_distance + w * isco_dist
+            else:
+                distance = skill_distance
+
             scored.append((job, distance))
 
         # Bucket by ontology distance

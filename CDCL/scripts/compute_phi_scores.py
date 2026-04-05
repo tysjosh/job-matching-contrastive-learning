@@ -195,7 +195,12 @@ def main():
     # Load graph
     global UG
     logger.info(f"Loading ESCO graph from {args.graph}...")
-    directed = nx.read_gexf(args.graph)
+    if args.graph.endswith('.gpickle'):
+        import pickle
+        with open(args.graph, 'rb') as f:
+            directed = pickle.load(f)
+    else:
+        directed = nx.read_gexf(args.graph)
     UG = directed.to_undirected()
     logger.info(f"Undirected graph: {UG.number_of_nodes()} nodes, {UG.number_of_edges()} edges")
 
