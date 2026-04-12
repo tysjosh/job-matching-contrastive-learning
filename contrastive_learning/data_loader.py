@@ -495,6 +495,11 @@ class DataLoader:
         Returns:
             bool: True if sample should be included, False otherwise
         """
+        # ConFit-style: only include positive samples in batches
+        if getattr(self.config, 'positive_only_batches', False):
+            if sample.label != 'positive':
+                return False
+
         # If using augmentation labels only, only include augmented samples
         if self.config.use_augmentation_labels_only:
             return self._is_augmented_sample(sample)
@@ -892,6 +897,47 @@ class DataLoader:
 
         logger.info(f"Loaded {len(jobs)} unique jobs into global pool")
         return jobs
+
+    def load_global_resume_pool(self, file_path: Union[str, Path], max_resumes: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Load all unique resumes from dataset for symmetric loss reverse direction.
+
+        Args:
+            file_path: Path to JSONL file containing training samples
+            max_resumes: Maximum number of resumes to load
+
+        Returns:
+            List of unique resume dictionaries
+        """
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Training data file not found: {file_path}")
+
+        logger.info(f"Loading global resume pool from {file_path}")
+
+        resumes = []
+        seen_ids = set()
+
+        with open(path, 'r', encoding='utf-8') as file:
+            for line_number, line in enumerate(file, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                    resume = record.get('resume')
+                    if resume and isinstance(resume, dict):
+                        resume_id = resume.get('resume_id', resume.get('name', f'resume_{line_number}'))
+                        if resume_id not in seen_ids:
+                            resumes.append(resume)
+                            seen_ids.add(resume_id)
+                            if max_resumes and len(resumes) >= max_resumes:
+                                break
+                except (json.JSONDecodeError, Exception):
+                    continue
+
+        logger.info(f"Loaded {len(resumes)} unique resumes into global pool")
+        return resumes
 
     def estimate_memory_usage(self, file_path: Union[str, Path], sample_size: int = 1000) -> Dict[str, Any]:
         """

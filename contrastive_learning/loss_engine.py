@@ -114,6 +114,9 @@ class ContrastiveLossEngine:
 
         # ── ISCO proximity for loss weighting ──
         self.isco_loss_weight = getattr(config, 'isco_loss_weight', False)
+
+        # ── Symmetric loss (ConFit-inspired) ──
+        self.use_symmetric_loss = getattr(config, 'use_symmetric_loss', False)
         self.occ_to_isco = {}
         if self.isco_loss_weight:
             esco_occ_path = getattr(config, 'esco_occupations_path', None)
@@ -234,6 +237,27 @@ class ContrastiveLossEngine:
                 # InfoNCE for both "infonce" and "hybrid" modes
                 # (hybrid's WS2 component is computed at batch level in _compute_hybrid_loss)
                 loss = self._infonce_loss(anchor_emb, positive_emb, negative_embs)
+
+                # Symmetric loss: also compute job→resume direction with resume negatives
+                if self.use_symmetric_loss:
+                    # Get resume negatives from view_metadata (populated by batch processor)
+                    resume_negatives = triplet.view_metadata.get('resume_negatives', [])
+                    if resume_negatives:
+                        # Use actual resume negatives for the reverse direction
+                        resume_neg_embs = []
+                        for resume_neg in resume_negatives:
+                            neg_key = self._get_content_key(resume_neg)
+                            if neg_key in embeddings:
+                                resume_neg_embs.append(embeddings[neg_key])
+                        if resume_neg_embs:
+                            reverse_loss = self._infonce_loss(positive_emb, anchor_emb, resume_neg_embs)
+                            if reverse_loss is not None:
+                                loss = (loss + reverse_loss) / 2.0
+                    else:
+                        # Fallback: use job negatives (old behavior, semantically wrong)
+                        reverse_loss = self._infonce_loss(positive_emb, anchor_emb, negative_embs)
+                        if reverse_loss is not None:
+                            loss = (loss + reverse_loss) / 2.0
 
             if loss is None:
                 return None

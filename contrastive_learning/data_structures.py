@@ -247,6 +247,14 @@ class TrainingConfig:
     # Phase 2 class imbalance handling
     pos_class_weight: float = 0.0          # 0.0 = disabled, 2.5 = recommended for 28% positive ratio
 
+    # ConFit-inspired improvements
+    use_symmetric_loss: bool = False        # If True, compute L_R + L_J (both directions)
+    use_in_batch_negatives: bool = False    # If True, use in-batch negatives instead of global pool
+    use_rejection_hard_negatives: bool = False  # If True, sample hard negatives from explicit rejections
+    rejection_hard_neg_count: int = 4       # Number of rejection-based hard negatives per anchor
+    positive_only_batches: bool = False     # If True, only load positive samples into batches (ConFit-style)
+    global_resume_pool_size: int = 1000     # Max resumes to keep in memory for symmetric loss reverse direction
+
     def __post_init__(self):
         """Validate configuration parameters."""
         if self.batch_size <= 0:

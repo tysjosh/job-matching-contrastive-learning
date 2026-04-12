@@ -119,13 +119,36 @@ class BatchProcessor:
                     f"hard_distance_threshold={config.hard_negative_max_distance}, "
                     f"medium_distance_threshold={config.medium_negative_max_distance}")
 
-    def process_batch(self, batch: List[TrainingSample], global_job_pool: Optional[List[Dict[str, Any]]] = None) -> List[ContrastiveTriplet]:
+        # ConFit-inspired: rejection-based hard negatives and in-batch negatives
+        self.use_in_batch_negatives = getattr(config, 'use_in_batch_negatives', False)
+        self.use_rejection_hard_negatives = getattr(config, 'use_rejection_hard_negatives', False)
+        self.rejection_hard_neg_count = getattr(config, 'rejection_hard_neg_count', 4)
+        self.rejection_index = {}  # job_id -> list of rejected resume dicts
+
+    def build_rejection_index(self, dataset_path: str) -> None:
+        """Build index of rejected resumes per job from the training data.
+        Also builds reverse index (job_id -> rejected job dicts for resumes that applied)."""
+        import json
+        from collections import defaultdict
+        job_rejections = defaultdict(list)  # job_title -> list of rejected resume dicts
+        with open(dataset_path) as f:
+            for line in f:
+                d = json.loads(line)
+                if d.get("label") == 0:  # rejected/not_satisfied
+                    job_id = d["job"].get("title", "")
+                    job_rejections[job_id].append(d["job"])  # Store the job as a negative
+        self.rejection_index = dict(job_rejections)
+        total = sum(len(v) for v in self.rejection_index.values())
+        logger.info(f"Rejection index: {len(self.rejection_index)} jobs, {total} rejected pairs")
+
+    def process_batch(self, batch: List[TrainingSample], global_job_pool: Optional[List[Dict[str, Any]]] = None, global_resume_pool: Optional[List[Dict[str, Any]]] = None) -> List[ContrastiveTriplet]:
         """
         Process a batch of training samples to create contrastive triplets.
 
         Args:
             batch: List of TrainingSample objects
             global_job_pool: Optional global pool of jobs for negative sampling
+            global_resume_pool: Optional global pool of resumes for symmetric loss reverse direction
 
         Returns:
             List of ContrastiveTriplet objects
@@ -151,7 +174,7 @@ class BatchProcessor:
         # Create triplets for each positive sample
         for anchor_sample in positive_samples:
             try:
-                triplet = self._create_triplet(anchor_sample, batch, global_job_pool)
+                triplet = self._create_triplet(anchor_sample, batch, global_job_pool, global_resume_pool)
                 triplets.append(triplet)
             except Exception as e:
                 logger.warning(
@@ -161,7 +184,7 @@ class BatchProcessor:
         logger.debug(f"Created {len(triplets)} triplets from batch")
         return triplets
 
-    def _create_triplet(self, anchor_sample: TrainingSample, batch: List[TrainingSample], global_job_pool: Optional[List[Dict[str, Any]]] = None) -> ContrastiveTriplet:
+    def _create_triplet(self, anchor_sample: TrainingSample, batch: List[TrainingSample], global_job_pool: Optional[List[Dict[str, Any]]] = None, global_resume_pool: Optional[List[Dict[str, Any]]] = None) -> ContrastiveTriplet:
         """
         Create a contrastive triplet for a single anchor sample.
 
@@ -169,6 +192,7 @@ class BatchProcessor:
             anchor_sample: The positive sample to use as anchor
             batch: Full batch of samples for negative selection
             global_job_pool: Optional global pool of jobs for negative sampling
+            global_resume_pool: Optional global pool of resumes for symmetric loss reverse direction
 
         Returns:
             ContrastiveTriplet with anchor, positive, and negatives
@@ -180,6 +204,28 @@ class BatchProcessor:
         # Select negative jobs from the batch or global pool
         negatives, career_distances = self._select_negatives(
             anchor_sample, batch, global_job_pool)
+
+        # Add rejection-based hard negatives (ConFit-inspired)
+        if self.use_rejection_hard_negatives and self.rejection_index:
+            job_title = anchor_sample.job.get('title', '')
+            rejected_jobs = self.rejection_index.get(job_title, [])
+            if rejected_jobs:
+                # These are jobs from rejected pairs with the same job title
+                # They serve as hard negatives because they're real jobs candidates applied to
+                n_hard = min(self.rejection_hard_neg_count, len(rejected_jobs))
+                hard_negs = random.sample(rejected_jobs, n_hard)
+                negatives.extend(hard_negs)
+                career_distances.extend([0.0] * n_hard)
+
+        # Select resume negatives for symmetric loss reverse direction
+        resume_negatives = []
+        if global_resume_pool and getattr(self.config, 'use_symmetric_loss', False):
+            anchor_resume_id = anchor_sample.resume.get('resume_id', anchor_sample.resume.get('name', ''))
+            candidates = [r for r in global_resume_pool
+                          if r.get('resume_id', r.get('name', '')) != anchor_resume_id]
+            n_resume_neg = min(self.max_negatives_per_anchor, len(candidates))
+            if candidates and n_resume_neg > 0:
+                resume_negatives = random.sample(candidates, n_resume_neg)
 
         # Determine sampling strategy for metadata
         sampling_strategy = 'global' if global_job_pool else 'in_batch'
@@ -200,6 +246,8 @@ class BatchProcessor:
             # Occupation URIs for ISCO proximity weighting
             'job_occupation_uri': anchor_sample.job.get('occupation_uri', ''),
             'resume_occupation_uri': anchor_sample.metadata.get('resume_occupation_uri', ''),
+            # Resume negatives for symmetric loss reverse direction
+            'resume_negatives': resume_negatives,
         }
 
         return ContrastiveTriplet(
@@ -230,8 +278,18 @@ class BatchProcessor:
         Returns:
             Tuple of (negative_jobs, career_distances)
         """
-        # Choose negative candidate source: global pool or batch
-        if global_job_pool:
+        # Choose negative candidate source
+        if self.use_in_batch_negatives:
+            # ConFit-style: use other jobs in the batch as negatives
+            candidate_negatives = []
+            anchor_job_id = anchor_sample.job.get('job_id', anchor_sample.job.get('title', ''))
+            for sample in batch:
+                job = sample.job
+                job_id = job.get('job_id', job.get('title', ''))
+                if job_id != anchor_job_id:
+                    candidate_negatives.append(job)
+            logger.debug(f"Using in-batch negatives: {len(candidate_negatives)} candidates")
+        elif global_job_pool:
             # Use global negative sampling for consistent training
             candidate_negatives = []
             anchor_job_id = anchor_sample.job.get('job_id', anchor_sample.job.get('title', ''))

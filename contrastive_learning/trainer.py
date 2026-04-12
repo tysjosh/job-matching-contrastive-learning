@@ -216,6 +216,7 @@ class ContrastiveLearningTrainer:
         
         # Global negative sampling state
         self.global_job_pool = None
+        self.global_resume_pool = None
 
         # Metrics tracking
         self.epoch_losses = []
@@ -315,6 +316,19 @@ class ContrastiveLearningTrainer:
                     dataset_path, max_jobs=self.config.global_negative_pool_size
                 )
                 logger.info(f"Global job pool loaded with {len(self.global_job_pool)} jobs")
+
+                # Load global resume pool for symmetric loss reverse direction
+                if getattr(self.config, 'use_symmetric_loss', False):
+                    logger.info("Loading global resume pool for symmetric loss...")
+                    self.global_resume_pool = self.data_loader.load_global_resume_pool(
+                        dataset_path, max_resumes=getattr(self.config, 'global_resume_pool_size', 1000)
+                    )
+                    logger.info(f"Global resume pool loaded with {len(self.global_resume_pool)} resumes")
+
+            # Build rejection index if enabled (ConFit-inspired hard negatives)
+            if getattr(self.config, 'use_rejection_hard_negatives', False):
+                logger.info("Building rejection index for hard negatives...")
+                self.batch_processor.build_rejection_index(str(dataset_path))
             
             # Preload embeddings if enabled
             if self.config.enable_embedding_preload:
@@ -721,7 +735,7 @@ class ContrastiveLearningTrainer:
 
         try:
             # Process batch to create triplets (with optional global job pool)
-            triplets = self.batch_processor.process_batch(batch, self.global_job_pool)
+            triplets = self.batch_processor.process_batch(batch, self.global_job_pool, self.global_resume_pool)
             batch_stats['triplets_created'] = len(triplets)
 
             if not triplets:
@@ -854,6 +868,13 @@ class ContrastiveLearningTrainer:
                     if negative_key not in content_key_to_type:
                         content_key_to_type[negative_key] = (negative, 'job')
                         ordered_keys.append(negative_key)
+
+                # Also collect resume negatives for symmetric loss
+                for resume_neg in triplet.view_metadata.get('resume_negatives', []):
+                    rn_key = self.embedding_cache.get_content_key(resume_neg)
+                    if rn_key not in content_key_to_type:
+                        content_key_to_type[rn_key] = (resume_neg, 'resume')
+                        ordered_keys.append(rn_key)
 
             # Step 2: Get cached text embeddings or encode new ones
             text_embeddings = {}
@@ -1103,6 +1124,11 @@ class ContrastiveLearningTrainer:
                 for negative in triplet.negatives:
                     negative_key = self._get_content_key(negative)
                     all_content[negative_key] = ('job', negative)
+
+                # Add resume negatives for symmetric loss
+                for resume_neg in triplet.view_metadata.get('resume_negatives', []):
+                    rn_key = self._get_content_key(resume_neg)
+                    all_content[rn_key] = ('resume', resume_neg)
 
             # Batch process content for efficiency
             content_keys = list(all_content.keys())
