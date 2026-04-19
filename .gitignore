@@ -163,3 +163,10 @@ training_output/*.png
 PIPELINE_STRATEGY.md
 PIPELINE_USAGE_GUIDE.md
 # TRAINING_INTEGRATION_GUIDE.md
+
+# Embedding cache (large precomputed files)
+embedding_cache/
+
+# Large CSV files
+train_with_skills.csv
+test_with_skills.csv
