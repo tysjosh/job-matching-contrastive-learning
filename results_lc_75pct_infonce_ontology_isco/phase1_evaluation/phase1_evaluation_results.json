@@ -1,0 +1,28 @@
+{
+  "phase": "phase1_contrastive",
+  "evaluation_method": "cosine_similarity",
+  "optimal_threshold": 0.56,
+  "metrics": {
+    "accuracy": 0.6057692307692307,
+    "precision": 0.38144329896907214,
+    "recall": 0.8161764705882353,
+    "f1_score": 0.5199063231850117,
+    "auc_roc": 0.7144799325980392
+  },
+  "confusion_matrix": {
+    "true_positives": 111,
+    "true_negatives": 204,
+    "false_positives": 180,
+    "false_negatives": 25
+  },
+  "similarity_stats": {
+    "positive_mean": 0.8180736303329468,
+    "positive_std": 0.05080046132206917,
+    "negative_mean": 0.7630261778831482,
+    "negative_std": 0.0809856653213501,
+    "separation": 0.055047452449798584
+  },
+  "dataset_size": 520,
+  "checkpoint": "phase1_pretraining/best_checkpoint.pt",
+  "dataset_path": "preprocess/learning_curve/frac_75/validation.jsonl"
+}

@@ -32,9 +32,11 @@ try:
     DIAGNOSTICS_AVAILABLE = True
 except ImportError:
     DIAGNOSTICS_AVAILABLE = False
-    logger.warning("Diagnostic system not available - limited monitoring capabilities")
 
 logger = logging.getLogger(__name__)
+
+if not DIAGNOSTICS_AVAILABLE:
+    logger.warning("Diagnostic system not available - limited monitoring capabilities")
 
 
 @dataclass

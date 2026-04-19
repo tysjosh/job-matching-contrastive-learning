@@ -510,11 +510,11 @@ def main():
             rec = json.loads(line)
 
             # ── Extract raw data ──
-            raw_job = rec.get("_raw", {}).get("job", {})
-            raw_resume = rec.get("_raw", {}).get("resume", {})
-            resume_skills_raw = rec.get("resume_skills", []) or []
-            job_skills_raw = rec.get("job_skills", []) or []
-            job_title = rec.get("job_title", "") or ""
+            raw_job = rec.get("_raw", {}).get("job", rec.get("job", {}))
+            raw_resume = rec.get("_raw", {}).get("resume", rec.get("resume", {}))
+            resume_skills_raw = rec.get("resume_skills", []) or raw_resume.get("skills", []) or []
+            job_skills_raw = rec.get("job_skills", []) or raw_job.get("skills", []) or []
+            job_title = rec.get("job_title", "") or raw_job.get("title", "") or ""
             raw_occ_uri = raw_job.get("occupation_uri", "") or ""
 
             # ── Fix #5: Clean skills ──
