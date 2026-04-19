@@ -24,6 +24,9 @@ try:
 except ImportError:
     TORCH_AVAILABLE = False
 
+import random
+import numpy as np
+
 from .data_structures import TrainingConfig, TrainingResults, TrainingSample, ContrastiveTriplet
 from .data_loader import DataLoader
 from .batch_processor import BatchProcessor
@@ -51,6 +54,17 @@ except ImportError:
 class TrainingInterruptedException(Exception):
     """Exception raised when training is interrupted by user signal."""
     pass
+
+
+def _set_seed(seed: int = 42):
+    """Set all random seeds for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    if TORCH_AVAILABLE:
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 class ContrastiveLearningTrainer:
@@ -294,6 +308,10 @@ class ContrastiveLearningTrainer:
         dataset_path = Path(dataset_path)
         if not dataset_path.exists():
             raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
+
+        # Set global seed for reproducibility
+        _set_seed(42)
+        logger.info("Random seed set to 42 for reproducibility")
 
         # Start training session with comprehensive logging
         session_id = self.structured_logger.start_training_session({

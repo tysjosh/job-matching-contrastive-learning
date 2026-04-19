@@ -49,11 +49,13 @@ def convert_record(rec: dict) -> dict | None:
     Returns None for records that would fail DataLoader validation.
     """
     raw = rec.get("_raw", {})
-    raw_resume = raw.get("resume", {})
-    raw_job = raw.get("job", {})
+    raw_resume = raw.get("resume", {}) if raw else rec.get("resume", {})
+    raw_job = raw.get("job", {}) if raw else rec.get("job", {})
     enrichment = rec.get("esco_enrichment_v3", {})
 
     label_str = rec.get("label", "")
+    # Normalize label format: "Good Fit" -> "good_fit"
+    label_str = label_str.strip().lower().replace(" ", "_")
     binary_label = BINARY_LABEL_MAP.get(label_str)
     if binary_label is None:
         return None
@@ -74,13 +76,13 @@ def convert_record(rec: dict) -> dict | None:
     else:
         return None
 
-    # Resume must have experience or skills
-    if not raw_resume.get("experience") and not raw_resume.get("skills"):
+    # Resume must have experience, skills, or text
+    if not raw_resume.get("experience") and not raw_resume.get("skills") and not raw_resume.get("text"):
         return None
 
     resume = {
         "role": raw_resume.get("role", ""),
-        "experience": raw_resume.get("experience", []),
+        "experience": raw_resume.get("experience", []) or ([{"description": raw_resume.get("text", "")}] if raw_resume.get("text") else []),
         "experience_level": raw_resume.get("experience_level", ""),
         "skills": raw_resume.get("skills", []),
         "keywords": raw_resume.get("keywords", []),

@@ -21,7 +21,7 @@
   "hard_negative_max_distance": 2.0,
   "medium_negative_max_distance": 4.0,
   "esco_graph_path": "training_output/career_graph_bridged_complete.gexf",
-  "esco_kg_path": "dataset/esco/esco_kg_enriched.gpickle",
+  "esco_kg_path": "dataset/esco/esco_kg.gexf",
   "global_negative_sampling": true,
   "global_negative_pool_size": 1000,
   "freeze_text_encoder": true,
@@ -47,7 +47,7 @@
   "isco_loss_weight": true,
   "esco_occupations_path": "dataset/esco/occupations_en.csv",
 
-  "use_reuse_weighting": true,
+  "use_reuse_weighting": false,
   "esco_skills_path": "dataset/esco/skills_en.csv",
   "reuse_weight_transversal": 0.3,
   "reuse_weight_cross_sector": 0.6,
