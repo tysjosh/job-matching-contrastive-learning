@@ -229,6 +229,7 @@ class TrainingConfig:
     use_isco_negatives: bool = False        # Use ISCO group distance in negative bucketing
     isco_weight: float = 0.4               # Weight for ISCO distance in combined signal (0=skill only, 1=ISCO only)
     isco_loss_weight: bool = False          # Include ISCO proximity in loss weighting
+    isco_only_weight: bool = False          # Use ONLY ISCO proximity for loss weighting (skip skill signals)
     esco_occupations_path: Optional[str] = None  # Path to occupations_en.csv
 
     # Skill reuse level downweighting in similarity computation

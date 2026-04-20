@@ -244,8 +244,7 @@ class FineTuningTrainer:
                         sample_id = data.get('sample_id') or data.get(
                             'job_applicant_id')
                         if not sample_id:
-                            raise ValueError(
-                                "Missing required field: sample_id or job_applicant_id")
+                            sample_id = f"sample_{line_num}"
 
                         # Extract label (try metadata.label first, then fall back to label field)
                         label_value = None
