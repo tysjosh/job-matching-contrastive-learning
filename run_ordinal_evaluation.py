@@ -527,8 +527,17 @@ def print_results(name, results):
     print(f"  {'Tier':<15} {'Count':>6} {'Mean':>8} {'Std':>8} {'Median':>8}")
     print(f"  {'-'*50}")
     for tier in ['good_fit', 'potential_fit', 'no_fit']:
-        s = results['tier_stats'][tier]
-        print(f"  {tier:<15} {s['count']:>6} {s['mean']:>8.4f} {s['std']:>8.4f} {s['median']:>8.4f}")
+        s = results['tier_stats'].get(tier)
+        if s is None or s.get('count') is None or s.get('count') == 0:
+            print(f"  {tier:<15}      — (no samples)")
+            continue
+        mean_val = s.get('mean')
+        std_val = s.get('std')
+        med_val = s.get('median')
+        if mean_val is None or std_val is None or med_val is None:
+            print(f"  {tier:<15} {s.get('count', 0):>6}      — (no stats)")
+            continue
+        print(f"  {tier:<15} {s['count']:>6} {mean_val:>8.4f} {std_val:>8.4f} {med_val:>8.4f}")
 
     # Separations
     print(f"\n  Pairwise Separations:")

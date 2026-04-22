@@ -45,7 +45,7 @@
   "augmentation_quality_gates": null,
   "augmentation_similarity_thresholds": null,
   "augmentation_fallback_config": null,
-  "validation_path": "preprocess/indian_learning_curve/frac_50/validation.jsonl",
+  "validation_path": "preprocess/indian_splits/validation.jsonl",
   "validate_every_n_epochs": 1,
   "ontology_weight": 0.0,
   "ot_distance_scale": 10.0,

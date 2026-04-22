@@ -635,6 +635,17 @@ def main():
 
     # Load Phase 2 classification model
     print(f"Loading Phase 2 model from: {checkpoint_path}")
+    # Point pretrained_model_path to the phase 1 checkpoint within the same results dir
+    # so ContrastiveClassificationModel.__init__ can create the encoder architecture.
+    # The actual weights will be overwritten by the phase 2 checkpoint below.
+    import os
+    results_dir = os.path.dirname(os.path.dirname(checkpoint_path))  # e.g. results/results_v7_isco
+    phase1_ckpt = os.path.join(results_dir, "phase1_pretraining", "best_checkpoint.pt")
+    if os.path.exists(phase1_ckpt):
+        training_config.pretrained_model_path = phase1_ckpt
+    else:
+        # Fallback: use the phase 2 checkpoint itself and handle key prefix stripping
+        training_config.pretrained_model_path = checkpoint_path
     model = ContrastiveClassificationModel(config=training_config)
 
     checkpoint = torch.load(checkpoint_path, map_location=device)
