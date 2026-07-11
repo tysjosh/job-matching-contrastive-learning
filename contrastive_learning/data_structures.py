@@ -218,6 +218,11 @@ class TrainingConfig:
     #   True  -> force on;  False -> force off (e.g., ordinal ablation)
     group_by_resume: Optional[bool] = None
 
+    # Encoder sequence-length cap used ONLY when fine-tuning the encoder
+    # (freeze_text_encoder=False). Attention activations scale with seq_len^2
+    # and are retained for backprop, so long resume texts cause GPU OOM.
+    unfrozen_max_seq_length: int = 256
+
     # Enhanced φ configuration
     phi_essential_weight: float = 1.0      # Weight for essential skills in φ denominator
     phi_optional_weight: float = 0.5       # Weight for optional skills in φ denominator
