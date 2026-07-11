@@ -223,6 +223,11 @@ class TrainingConfig:
     # and are retained for backprop, so long resume texts cause GPU OOM.
     unfrozen_max_seq_length: int = 256
 
+    # General encoder seq-length cap applied in BOTH frozen and unfrozen modes
+    # when set (overrides unfrozen_max_seq_length). Used for the seq-length
+    # control experiment (e.g., frozen encoder at 256 to isolate truncation).
+    encoder_max_seq_length: Optional[int] = None
+
     # Enhanced φ configuration
     phi_essential_weight: float = 1.0      # Weight for essential skills in φ denominator
     phi_optional_weight: float = 0.5       # Weight for optional skills in φ denominator
