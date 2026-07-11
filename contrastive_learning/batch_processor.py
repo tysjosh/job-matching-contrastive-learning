@@ -248,6 +248,10 @@ class BatchProcessor:
             'resume_occupation_uri': anchor_sample.metadata.get('resume_occupation_uri', ''),
             # Resume negatives for symmetric loss reverse direction
             'resume_negatives': resume_negatives,
+            # Stable resume identity for query-anchored ordinal grouping.
+            # Falls back to a content hash if the loader did not inject one.
+            'resume_id': anchor_sample.metadata.get('resume_id')
+                          or self._compute_resume_id(anchor_sample.resume),
         }
 
         return ContrastiveTriplet(
@@ -257,6 +261,25 @@ class BatchProcessor:
             career_distances=career_distances,
             view_metadata=view_metadata
         )
+
+    @staticmethod
+    def _compute_resume_id(resume: Dict[str, Any]) -> str:
+        """
+        Deterministic resume identifier from content (role + first experience +
+        sorted skills). Mirrors DataLoader._compute_resume_id so the ordinal loss
+        can group graded jobs per query even when the loader did not inject one.
+        """
+        import hashlib
+        role = str(resume.get('role', ''))
+        exp = resume.get('experience', [])
+        first_desc = ''
+        if isinstance(exp, list) and exp:
+            first = exp[0]
+            first_desc = str(first.get('description', ''))[:300] if isinstance(first, dict) else str(first)[:300]
+        skills = resume.get('skills', [])
+        skills_str = '|'.join(sorted(map(str, skills))) if isinstance(skills, list) else str(skills)
+        basis = f"{role}||{first_desc}||{skills_str}"
+        return hashlib.sha256(basis.encode('utf-8')).hexdigest()[:16]
 
     def _select_negatives(self, anchor_sample: TrainingSample, batch: List[TrainingSample], global_job_pool: Optional[List[Dict[str, Any]]] = None) -> tuple[List[Dict[str, Any]], List[float]]:
         """
@@ -426,6 +449,103 @@ class BatchProcessor:
         """Set current epoch for curriculum learning in negative selection."""
         self.current_epoch = epoch
 
+    def update_scheduler_metrics(self, metrics: Dict[str, float]) -> None:
+        """Feed validation metrics back to the negative scheduler.
+        
+        Used by adaptive_val_dgp and performance_gated_triplet schedulers.
+        
+        Args:
+            metrics: Dict with keys like 'val_loss', 'd_gp' (mean positive distance),
+                     'triplet_accuracy', etc.
+        """
+        self._scheduler_metrics = getattr(self, '_scheduler_metrics', {})
+        self._scheduler_metrics.update(metrics)
+        # Track d(g,p) history for adaptive scheduler
+        if 'd_gp' in metrics:
+            history = getattr(self, '_dgp_history', [])
+            history.append(metrics['d_gp'])
+            self._dgp_history = history
+        if 'triplet_accuracy' in metrics:
+            self._last_triplet_acc = metrics['triplet_accuracy']
+
+    def _compute_negative_ratios(self) -> tuple:
+        """Compute hard/medium/easy ratios based on the configured scheduler.
+        
+        Returns:
+            Tuple of (hard_ratio, medium_ratio, easy_ratio)
+        """
+        scheduler = getattr(self.config, 'negative_scheduler', 'fixed')
+        use_curriculum = getattr(self.config, 'negative_curriculum', True)
+        epoch_ratio = self.current_epoch / max(1, self.total_epochs)
+
+        # Legacy: negative_curriculum=True with no explicit scheduler → linear_easy_to_hard
+        if use_curriculum and scheduler == 'fixed':
+            scheduler = 'linear_easy_to_hard'
+
+        if scheduler == 'fixed':
+            return (
+                getattr(self.config, 'negative_hard_ratio', 0.33),
+                getattr(self.config, 'negative_medium_ratio', 0.34),
+                getattr(self.config, 'negative_easy_ratio', 0.33),
+            )
+
+        elif scheduler == 'linear_easy_to_hard':
+            # Linear interpolation: easy-heavy → hard-heavy over training
+            # Early: 20% hard, 30% medium, 50% easy
+            # Late:  60% hard, 30% medium, 10% easy
+            hard_ratio = 0.2 + 0.4 * epoch_ratio
+            easy_ratio = 0.5 - 0.4 * epoch_ratio
+            medium_ratio = 1.0 - hard_ratio - easy_ratio
+            return (hard_ratio, medium_ratio, easy_ratio)
+
+        elif scheduler == 'adaptive_val_dgp':
+            # Adaptive: increase hard negatives when d(g,p) separation improves.
+            # If d(g,p) is growing (model separating well), push harder negatives.
+            # If d(g,p) stalls or drops, ease off.
+            dgp_history = getattr(self, '_dgp_history', [])
+            if len(dgp_history) >= 2:
+                # Compare latest d(g,p) to the one 2 epochs ago (smoothed trend)
+                recent = dgp_history[-1]
+                prev = dgp_history[-2]
+                improving = recent > prev
+            else:
+                improving = False
+
+            # Base: start conservative, ramp up if improving
+            if improving:
+                # Model is separating well → push harder
+                hard_ratio = min(0.6, 0.3 + 0.05 * len(dgp_history))
+                easy_ratio = max(0.1, 0.4 - 0.05 * len(dgp_history))
+            else:
+                # Model struggling → stay moderate
+                hard_ratio = 0.25
+                easy_ratio = 0.45
+            medium_ratio = 1.0 - hard_ratio - easy_ratio
+            return (hard_ratio, medium_ratio, easy_ratio)
+
+        elif scheduler == 'performance_gated_triplet':
+            # Only increase hard negatives when triplet accuracy exceeds a threshold.
+            # Below threshold: mostly easy. Above: shift to hard.
+            triplet_acc = getattr(self, '_last_triplet_acc', 0.0)
+            threshold = 0.6  # Gate: need 60% triplet accuracy before ramping hard
+
+            if triplet_acc >= threshold:
+                # Scale hard ratio linearly from 0.3 to 0.6 as accuracy goes 0.6→0.9
+                progress = min(1.0, (triplet_acc - threshold) / 0.3)
+                hard_ratio = 0.3 + 0.3 * progress
+                easy_ratio = 0.4 - 0.3 * progress
+            else:
+                # Below threshold: conservative
+                hard_ratio = 0.15
+                easy_ratio = 0.55
+            medium_ratio = 1.0 - hard_ratio - easy_ratio
+            return (hard_ratio, medium_ratio, easy_ratio)
+
+        else:
+            # Unknown scheduler, fall back to fixed
+            logger.warning(f"Unknown negative_scheduler '{scheduler}', using fixed ratios")
+            return (0.33, 0.34, 0.33)
+
     def _load_isco_codes(self, csv_path: str) -> None:
         """Load occupation_uri -> ISCO code mapping from occupations CSV."""
         import csv
@@ -480,14 +600,19 @@ class BatchProcessor:
         """
         # Compute ontology distance for each candidate
         scored = []
+        # Skip expensive skill matching when isco_weight=1.0 (pure ISCO mode)
+        skip_skill_matching = (self.use_isco_negatives and self.isco_weight >= 1.0)
         for job in candidate_negatives:
             # Skill-level distance
-            job_uris = job.get('skill_uris', [])
-            if job_uris and resume_skill_uris:
-                sim = self.skill_matcher.ontology_set_similarity(resume_skill_uris, job_uris)
-                skill_distance = 1.0 - sim
+            if skip_skill_matching:
+                skill_distance = 0.5  # placeholder, won't be used
             else:
-                skill_distance = 0.5
+                job_uris = job.get('skill_uris', [])
+                if job_uris and resume_skill_uris:
+                    sim = self.skill_matcher.ontology_set_similarity(resume_skill_uris, job_uris)
+                    skill_distance = 1.0 - sim
+                else:
+                    skill_distance = 0.5
 
             # Blend with ISCO distance if enabled
             if self.use_isco_negatives and anchor_occ_uri:
@@ -505,24 +630,8 @@ class BatchProcessor:
         medium = [(j, d) for j, d in scored if 0.3 < d <= 0.6]
         easy = [(j, d) for j, d in scored if d > 0.6]        # very different skills
 
-        # Curriculum learning: shift ratios from easy-heavy to hard-heavy
-        # epoch_ratio: 0.0 at start → 1.0 at end
-        epoch_ratio = self.current_epoch / max(1, self.total_epochs)
-
-        # Check if negative curriculum is enabled
-        use_curriculum = getattr(self.config, 'negative_curriculum', True)
-
-        if use_curriculum:
-            # Early: 20% hard, 30% medium, 50% easy
-            # Late:  60% hard, 30% medium, 10% easy
-            hard_ratio = 0.2 + 0.4 * epoch_ratio    # 0.2 → 0.6
-            easy_ratio = 0.5 - 0.4 * epoch_ratio    # 0.5 → 0.1
-            medium_ratio = 1.0 - hard_ratio - easy_ratio  # stays ~0.3
-        else:
-            # Fixed ratios from config
-            hard_ratio = getattr(self.config, 'negative_hard_ratio', 0.33)
-            medium_ratio = getattr(self.config, 'negative_medium_ratio', 0.34)
-            easy_ratio = getattr(self.config, 'negative_easy_ratio', 0.33)
+        # Get ratios from the configured scheduler
+        hard_ratio, medium_ratio, easy_ratio = self._compute_negative_ratios()
 
         hard_count = int(max_negatives * hard_ratio)
         medium_count = int(max_negatives * medium_ratio)

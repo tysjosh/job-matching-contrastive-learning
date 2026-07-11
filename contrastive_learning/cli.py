@@ -124,6 +124,8 @@ Environment Variables:
                               help='Log progress every N batches')
     train_parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                               default='INFO', help='Logging level')
+    train_parser.add_argument('--seed', type=int,
+                              help='Random seed for reproducibility (default: 42)')
 
     # Generate config command
     config_parser = subparsers.add_parser('generate-config',
@@ -301,6 +303,7 @@ def apply_cli_overrides(config: TrainingConfig, args: argparse.Namespace) -> Tra
         'checkpoint_frequency': 'checkpoint_frequency',
         'log_frequency': 'log_frequency',
         'esco_graph_path': 'esco_graph_path',
+        'seed': 'training_seed',
     }
 
     for cli_arg, config_key in cli_mappings.items():
@@ -412,6 +415,7 @@ def cmd_train(args: argparse.Namespace) -> int:
         print(f"  Batch size: {config.batch_size}")
         print(f"  Learning rate: {config.learning_rate}")
         print(f"  Epochs: {config.num_epochs}")
+        print(f"  Seed: {config.training_seed}")
         print(f"  Use pathway negatives: {config.use_pathway_negatives}")
         print(f"  Use view augmentation: {config.use_view_augmentation}")
 
