@@ -54,11 +54,16 @@ def main():
                          "with seq_len^2). 256 fits ~44GB GPUs; use 512 on an "
                          "A100 80GB for parity with the frozen runs.")
     ap.add_argument("--seeds", type=int, nargs="+", default=[13, 42])
+    ap.add_argument("--variant-prefix", default="UF",
+                    help="Run-id prefix. Use 'UF' for the main probe, or e.g. "
+                         "'UFG' for a gentler variant (lower lr / fewer epochs) "
+                         "so it doesn't overwrite the main UF runs.")
     ap.add_argument("--execute-list", default="run_unfrozen_probe.sh")
     args = ap.parse_args()
 
     # (probe variant name, source frozen config prefix)
-    variants = [("UF-Ordinal", "EO-A"), ("UF-InfoNCE", "E4-InfoNCE")]
+    p = args.variant_prefix
+    variants = [(f"{p}-Ordinal", "EO-A"), (f"{p}-InfoNCE", "E4-InfoNCE")]
 
     cmds = []
     written = 0
