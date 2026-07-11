@@ -31,19 +31,22 @@ METRICS = {
 }
 
 VARIANT_NAME = {
-    "E4-InfoNCE": "InfoNCE (baseline)",
-    "EO-A": "Ordinal-Base",
+    "E4-InfoNCE": "InfoNCE (frozen baseline)",
+    "EO-A": "Ordinal-Base (frozen)",
     "EO-B": "Ordinal+OSCAR-Skill",
     "EO-C": "Ordinal-NoCurriculum",
     "EO-D": "Ordinal-FixedMargin",
     "EO-E": "Ordinal-NoGrouping",
+    "UF-InfoNCE": "InfoNCE (unfrozen)",
+    "UF-Ordinal": "Ordinal (unfrozen)",
 }
 
 # InfoNCE reference baseline (same v7 dataset, same metrics) always included.
 BASELINE = "E4-InfoNCE"
 
-# Column order: baseline first, then EO variants.
-ORDER = ["E4-InfoNCE", "EO-A", "EO-B", "EO-C", "EO-D", "EO-E"]
+# Column order: frozen baseline + EO variants, then unfrozen probe.
+ORDER = ["E4-InfoNCE", "EO-A", "EO-B", "EO-C", "EO-D", "EO-E",
+         "UF-InfoNCE", "UF-Ordinal"]
 
 
 def load_ordinal(path):
@@ -54,11 +57,13 @@ def load_ordinal(path):
 
 
 def main():
-    # Include EO variants and the E4-InfoNCE baseline (all on v7).
+    # Include EO variants, the E4-InfoNCE frozen baseline, and the UF unfrozen probe.
     patterns = [
         str(ROOT / "results/research_runs/EO-*__cnamuangtoun__s*/"
                    "phase1_evaluation/ordinal_evaluation_results.json"),
         str(ROOT / "results/research_runs/E4-InfoNCE__cnamuangtoun__s*/"
+                   "phase1_evaluation/ordinal_evaluation_results.json"),
+        str(ROOT / "results/research_runs/UF-*__cnamuangtoun__s*/"
                    "phase1_evaluation/ordinal_evaluation_results.json"),
     ]
     files = sorted(f for p in patterns for f in glob.glob(p))
@@ -68,7 +73,7 @@ def main():
     seeds_seen = defaultdict(list)
 
     for fp in files:
-        m = re.search(r"(EO-[A-E]|E4-InfoNCE)__cnamuangtoun__s(\d+)", fp)
+        m = re.search(r"(EO-[A-E]|E4-InfoNCE|UF-Ordinal|UF-InfoNCE)__cnamuangtoun__s(\d+)", fp)
         if not m:
             continue
         variant, seed = m.group(1), m.group(2)
