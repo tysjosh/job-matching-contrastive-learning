@@ -49,12 +49,21 @@ def main():
     ap.add_argument("--batch-size", type=int, default=64,
                     help="Batch size. Default 64 to match the frozen EO/E4 runs "
                          "(use smaller, e.g. 16, only on memory-constrained CPUs).")
+    ap.add_argument("--max-seq-length", type=int, default=256,
+                    help="Encoder seq-length cap while fine-tuning (memory scales "
+                         "with seq_len^2). 256 fits ~44GB GPUs; use 512 on an "
+                         "A100 80GB for parity with the frozen runs.")
     ap.add_argument("--seeds", type=int, nargs="+", default=[13, 42])
+    ap.add_argument("--variant-prefix", default="UF",
+                    help="Run-id prefix. Use 'UF' for the main probe, or e.g. "
+                         "'UFG' for a gentler variant (lower lr / fewer epochs) "
+                         "so it doesn't overwrite the main UF runs.")
     ap.add_argument("--execute-list", default="run_unfrozen_probe.sh")
     args = ap.parse_args()
 
     # (probe variant name, source frozen config prefix)
-    variants = [("UF-Ordinal", "EO-A"), ("UF-InfoNCE", "E4-InfoNCE")]
+    p = args.variant_prefix
+    variants = [(f"{p}-Ordinal", "EO-A"), (f"{p}-InfoNCE", "E4-InfoNCE")]
 
     cmds = []
     written = 0
@@ -65,6 +74,7 @@ def main():
             cfg["learning_rate"] = args.lr
             cfg["num_epochs"] = args.epochs
             cfg["batch_size"] = args.batch_size
+            cfg["unfrozen_max_seq_length"] = args.max_seq_length
             cfg["enable_embedding_preload"] = False
             cfg["training_seed"] = seed
             cfg["validation_path"] = "preprocess/data_splits_v7/validation.jsonl"
