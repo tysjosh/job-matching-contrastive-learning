@@ -1,0 +1,46 @@
+{
+  "run_id": "E3-D__cnamuangtou_sparse_v6__s13",
+  "experiment_id": "E3-D",
+  "dataset": "cnamuangtou_sparse_v6",
+  "seed": 13,
+  "model": {
+    "encoder": "all-mpnet-base-v2",
+    "freeze_encoder": true,
+    "projection_dims": [
+      768,
+      256,
+      128
+    ],
+    "dropout": 0.3
+  },
+  "training": {
+    "batch_size": 64,
+    "lr": 8.5e-05,
+    "epochs": 15,
+    "temperature": 0.07,
+    "max_negatives": 7,
+    "loss": "InfoNCE"
+  },
+  "evaluation": {
+    "metrics": [
+      "auc",
+      "dgp",
+      "triplet_acc",
+      "ndcg10",
+      "mrr10",
+      "recall10",
+      "recall50",
+      "recall100"
+    ],
+    "track_latency": true
+  },
+  "family": "weighting",
+  "ontology": {
+    "negative_scheduler": "fixed_033_034_033",
+    "weighting": "none"
+  },
+  "output": {
+    "root": "results/research_runs",
+    "artifact_dir": "results/research_runs/E3-D__cnamuangtou_sparse_v6__s13"
+  }
+}

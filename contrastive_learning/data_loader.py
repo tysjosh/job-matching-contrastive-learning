@@ -54,6 +54,16 @@ class DataLoader:
         self.shuffle = config.shuffle_data
         self.stats = DataLoaderStats()
 
+        # Resume-grouped batching keeps all records of the same resume in the
+        # same batch so the query-anchored ordinal loss can see graded siblings
+        # (good_fit / potential_fit / no_fit for one resume).
+        #   group_by_resume=None  -> auto (on when loss_type == "ordinal")
+        #   True/False            -> explicit override (e.g., ordinal ablation)
+        gbr = getattr(config, 'group_by_resume', None)
+        if gbr is None:
+            gbr = getattr(config, 'loss_type', 'infonce') == 'ordinal'
+        self.group_by_resume = bool(gbr)
+
         # Validate batch size is within acceptable range
         if not 32 <= self.batch_size <= 512:
             logger.warning(
@@ -86,7 +96,10 @@ class DataLoader:
         self.stats = DataLoaderStats()
 
         with open(path, 'r', encoding='utf-8') as file:
-            if self.config.training_phase == "self_supervised":
+            if self.group_by_resume:
+                logger.info("Resume-grouped batching enabled (ordinal-friendly)")
+                yield from self._load_grouped_batches(file)
+            elif self.config.training_phase == "self_supervised":
                 yield from self._load_self_supervised_batches(file)
             else:
                 yield from self._stream_batches(file)
@@ -110,7 +123,11 @@ class DataLoader:
         # Reset stats for new loading session
         self.stats = DataLoaderStats()
 
-        yield from self._stream_batches(stream)
+        if self.group_by_resume:
+            logger.info("Resume-grouped batching enabled (ordinal-friendly)")
+            yield from self._load_grouped_batches(stream)
+        else:
+            yield from self._stream_batches(stream)
 
         # Log final statistics
         self._log_loading_stats()
@@ -234,6 +251,156 @@ class DataLoader:
             logger.info(
                 f"  Dataset composition: {augmented_percentage:.1f}% augmented, {100-augmented_percentage:.1f}% original")
 
+    def _load_grouped_batches(self, stream: TextIO) -> Iterator[List[TrainingSample]]:
+        """
+        Emit batches that keep all records of the same resume together.
+
+        Guarantees that graded siblings (the same resume paired with jobs at
+        different fit levels) co-occur in a batch, so the query-anchored ordinal
+        loss can enforce good_fit > potential_fit > no_fit for each query.
+
+        The dataset is materialized in memory (splits are small), grouped by
+        resume_id, then packed greedily into batches. A resume group larger than
+        batch_size is chunked across consecutive batches.
+        """
+        from collections import defaultdict
+
+        # 1) Materialize valid samples (respecting self-supervised filtering).
+        samples: List[TrainingSample] = []
+        line_number = 0
+        self_supervised = self.config.training_phase == "self_supervised"
+
+        for line in stream:
+            line_number += 1
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+                self.stats.total_samples += 1
+                sample = self.create_training_sample(record, line_number)
+                if not sample or not self.validate_sample(sample):
+                    self.stats.invalid_samples += 1
+                    continue
+                if self_supervised:
+                    is_aug = self._is_augmented_sample(sample)
+                    if is_aug:
+                        self.stats.augmented_samples_found += 1
+                    else:
+                        self.stats.original_samples_found += 1
+                    if not self._should_include_in_self_supervised(sample):
+                        self.stats.invalid_samples += 1
+                        continue
+                    if is_aug:
+                        if not self._should_use_augmented_sample(self.stats.augmented_samples_found):
+                            continue
+                        self.stats.augmented_samples_used += 1
+                    else:
+                        if self.config.use_augmentation_labels_only:
+                            continue
+                        self.stats.original_samples_used += 1
+                samples.append(sample)
+                self.stats.valid_samples += 1
+            except json.JSONDecodeError as e:
+                logger.warning(f"Invalid JSON on line {line_number}: {e}")
+                self.stats.skipped_records += 1
+            except Exception as e:
+                logger.warning(f"Error processing line {line_number}: {e}")
+                self.stats.skipped_records += 1
+
+        # 2) Group by resume_id.
+        groups: Dict[str, List[TrainingSample]] = defaultdict(list)
+        for s in samples:
+            rid = s.metadata.get('resume_id') or self._compute_resume_id(s.resume)
+            groups[rid].append(s)
+
+        group_list = list(groups.values())
+        multi = sum(1 for g in group_list if len({m.metadata.get('original_label') for m in g}) > 1)
+
+        # 3) Positive-aware packing: every batch is seeded with a group that
+        #    contains at least one positive (good_fit) anchor, then filled
+        #    toward batch_size. All-negative groups are distributed into
+        #    positive-containing batches, avoiding positive-less batches that
+        #    the trainer would skip.
+        def _has_pos(grp: List[TrainingSample]) -> bool:
+            return any(s.label == 'positive' for s in grp)
+
+        pos_groups = [g for g in group_list if _has_pos(g)]
+        neg_groups = [g for g in group_list if not _has_pos(g)]
+        if self.shuffle:
+            random.shuffle(pos_groups)
+            random.shuffle(neg_groups)
+
+        logger.info(
+            f"Grouped {len(samples)} samples into {len(group_list)} resume groups "
+            f"({multi} with >1 distinct label -> usable ordinal siblings); "
+            f"{len(pos_groups)} positive-bearing, {len(neg_groups)} all-negative")
+
+        batches = self._pack_groups_with_positives(pos_groups, neg_groups)
+        for batch in batches:
+            self.stats.total_batches += 1
+            yield self._prepare_batch(batch)
+
+    def _pack_groups_with_positives(self, pos_groups, neg_groups):
+        """
+        Pack resume groups into batches so that each batch contains at least one
+        positive anchor while keeping graded siblings together and staying near
+        batch_size. Returns a list of batches (lists of TrainingSample).
+        """
+        bs = self.batch_size
+        batches: List[List[TrainingSample]] = []
+        ni = 0  # index into neg_groups
+
+        def _spread_chunks(grp):
+            """Chunk an oversized group so each chunk keeps >=1 positive if the
+            group has any (round-robin positives across chunks)."""
+            n_chunks = (len(grp) + bs - 1) // bs
+            pos = [s for s in grp if s.label == 'positive']
+            neg = [s for s in grp if s.label != 'positive']
+            chunks = [[] for _ in range(n_chunks)]
+            for i, s in enumerate(pos):
+                chunks[i % n_chunks].append(s)
+            for i, s in enumerate(neg):
+                chunks[i % n_chunks].append(s)
+            return [c for c in chunks if c]
+
+        pi = 0
+        while pi < len(pos_groups):
+            grp = pos_groups[pi]; pi += 1
+            if len(grp) > bs:
+                batches.extend(_spread_chunks(grp))
+                continue
+
+            batch = list(grp)
+            # Fill with all-negative groups first (distributes negatives), then
+            # additional positive groups, keeping the batch <= batch_size.
+            progressed = True
+            while progressed:
+                progressed = False
+                if ni < len(neg_groups) and len(batch) + len(neg_groups[ni]) <= bs:
+                    batch.extend(neg_groups[ni]); ni += 1; progressed = True
+                elif (pi < len(pos_groups) and len(pos_groups[pi]) <= bs
+                      and len(batch) + len(pos_groups[pi]) <= bs):
+                    batch.extend(pos_groups[pi]); pi += 1; progressed = True
+            batches.append(batch)
+
+        # Distribute any leftover all-negative groups into existing batches
+        # (which all contain a positive). Prefer the emptiest batch with room.
+        while ni < len(neg_groups):
+            grp = neg_groups[ni]; ni += 1
+            candidates = sorted(batches, key=len)
+            placed = False
+            for b in candidates:
+                if len(b) + len(grp) <= bs:
+                    b.extend(grp); placed = True; break
+            if not placed:
+                if batches:
+                    min(batches, key=len).extend(grp)  # slight overflow ok
+                else:
+                    batches.append(list(grp))  # degenerate: no positives at all
+
+        return batches
+
     def _stream_batches(self, stream: TextIO) -> Iterator[List[TrainingSample]]:
         """
         Stream batches from a text stream with memory-efficient processing.
@@ -291,6 +458,31 @@ class DataLoader:
             self.stats.total_batches += 1
             yield batch
 
+    @staticmethod
+    def _compute_resume_id(resume: Dict[str, Any]) -> str:
+        """
+        Compute a deterministic resume identifier from resume content.
+
+        Groups all (resume, job) records that share the same underlying resume
+        so the ordinal loss can build genuine per-query graded comparisons.
+        Uses role + first experience description + sorted skills, which is
+        stable across records for the same resume.
+        """
+        import hashlib
+        role = str(resume.get('role', ''))
+        exp = resume.get('experience', [])
+        first_desc = ''
+        if isinstance(exp, list) and exp:
+            first = exp[0]
+            if isinstance(first, dict):
+                first_desc = str(first.get('description', ''))[:300]
+            else:
+                first_desc = str(first)[:300]
+        skills = resume.get('skills', [])
+        skills_str = '|'.join(sorted(map(str, skills))) if isinstance(skills, list) else str(skills)
+        basis = f"{role}||{first_desc}||{skills_str}"
+        return hashlib.sha256(basis.encode('utf-8')).hexdigest()[:16]
+
     def create_training_sample(self, record: Dict[str, Any], line_number: int = 0) -> Optional[TrainingSample]:
         """
         Create a TrainingSample from a dictionary record.
@@ -329,6 +521,13 @@ class DataLoader:
                 logger.warning(
                     f"Line {line_number}: Invalid or missing job field")
                 return None
+
+            # Inject a stable resume_id so ordinal loss can group graded jobs
+            # per query. job_applicant_id is null in the v7 data, so we derive a
+            # deterministic id from resume content (role + first experience text).
+            if 'resume_id' not in metadata or not metadata.get('resume_id'):
+                metadata = dict(metadata)  # avoid mutating the shared record dict
+                metadata['resume_id'] = self._compute_resume_id(resume)
 
             # Normalize label format
             normalized_label = self._normalize_label(label, line_number)

@@ -623,7 +623,7 @@ class ContrastiveLossEngine:
         Returns:
             torch.Tensor: Combined ordinal loss
         """
-        # ── L₁: Use existing per-triplet InfoNCE (proven, 7 ontology-selected negatives) ──
+        # ── L₁: per-triplet InfoNCE (proven, ontology-selected negatives) ──
         infonce_losses = []
         for triplet in triplets:
             try:
@@ -642,146 +642,109 @@ class ContrastiveLossEngine:
         epoch_ratio = self.current_epoch / max(1, self.total_epochs)
         is_full_phase = epoch_ratio >= self.ordinal_curriculum_switch
 
-        # ── Collect batch items for ordinal margin computation (L₂, L₃) ──
-        # Include skill_uris so we can compute φ(resume_p, job_α) on the fly
-        batch_items = []
-        for triplet in triplets:
-            job_key = self._get_content_key(triplet.positive)
-            resume_key = self._get_content_key(triplet.anchor)
-            if job_key not in embeddings or resume_key not in embeddings:
-                continue
-
-            label = triplet.view_metadata.get('positive_original_label', 'good_fit')
-            phi = triplet.view_metadata.get('phi')
-            tier = triplet.view_metadata.get('quality_tier', 'F')
-
-            batch_items.append({
-                'job_emb': embeddings[job_key].to(self.device),
-                'resume_emb': embeddings[resume_key].to(self.device),
-                'label': label,
-                'phi': phi if phi is not None else 0.5,
-                'tier': tier,
-                # Skill URIs for on-the-fly φ computation
-                'resume_skill_uris': triplet.anchor.get('skill_uris', []),
-                'job_skill_uris': triplet.positive.get('skill_uris', []),
-                'job_occupation_uri': triplet.positive.get('occupation_uri'),
-            })
-
-            # Also collect negatives with their labels
-            neg_labels = triplet.view_metadata.get('negative_original_labels', [])
-            for i, negative in enumerate(triplet.negatives):
-                neg_key = self._get_content_key(negative)
-                if neg_key not in embeddings:
-                    continue
-                neg_label = neg_labels[i] if i < len(neg_labels) else 'no_fit'
-                batch_items.append({
-                    'job_emb': embeddings[neg_key].to(self.device),
-                    'resume_emb': embeddings[resume_key].to(self.device),
-                    'label': neg_label,
-                    'phi': None,
-                    'tier': tier,
-                    # For negatives: resume is the anchor's resume, job is the negative's job
-                    'resume_skill_uris': triplet.anchor.get('skill_uris', []),
-                    'job_skill_uris': negative.get('skill_uris', []),
-                    'job_occupation_uri': negative.get('occupation_uri'),
-                })
-
-        # ── Group by label for Strategy B tuple selection ──
-        good_fit_items = [it for it in batch_items if it['label'] == 'good_fit']
-        potential_fit_items = [it for it in batch_items if it['label'] == 'potential_fit']
-        no_fit_items = [it for it in batch_items if it['label'] == 'no_fit']
-
-        # If no good_fit items for ordinal margins, return just L₁
-        if not good_fit_items:
-            return l1_mean
-
-        # ── Quality tier weights ──
+        # ─────────────────────────────────────────────────────────────
+        # QUERY-ANCHORED ordinal margins.
+        #
+        # Every comparison is anchored on ONE resume r (the query). We rank the
+        # jobs seen for r by their fit level using the CORRECT similarity
+        # sim(r, job). Jobs and their levels come from two sources:
+        #   Source A (true labels): positive jobs of every triplet that shares
+        #     this resume_id — genuine good_fit / potential_fit supervision.
+        #   Negatives: treated as the no_fit floor (level 0).
+        # This removes the previous cross-query leakage and the degenerate
+        # s_n == s_alpha bug (negatives now enter via sim(r, neg_job)).
+        # ─────────────────────────────────────────────────────────────
+        LEVEL = {'good_fit': 2, 'potential_fit': 1, 'no_fit': 0}
         tier_weights = {'A': 1.0, 'B': 0.9, 'C': 0.75, 'D': 0.6, 'F': 0.5}
 
-        # ── Compute L₂ and L₃ margins (Strategy B: in-batch selection) ──
+        # Group jobs per query resume_id: rid -> {r_emb, tier, phi, jobs:[(emb,level)]}
+        groups: Dict[str, Dict[str, Any]] = {}
+        for triplet in triplets:
+            resume_key = self._get_content_key(triplet.anchor)
+            pos_key = self._get_content_key(triplet.positive)
+            if resume_key not in embeddings or pos_key not in embeddings:
+                continue
+
+            vm = triplet.view_metadata
+            rid = vm.get('resume_id') or resume_key
+            g = groups.get(rid)
+            if g is None:
+                g = {
+                    'r_emb': embeddings[resume_key].to(self.device),
+                    'tier': vm.get('quality_tier', 'F'),
+                    'phi': vm.get('phi') if vm.get('phi') is not None else 0.5,
+                    'jobs': [],
+                }
+                groups[rid] = g
+
+            # Positive job with its TRUE label (describes (r, j⁺)).
+            pos_level = LEVEL.get(vm.get('positive_original_label', 'good_fit'), 2)
+            g['jobs'].append((embeddings[pos_key].to(self.device), pos_level))
+
+            # Negatives: sampled non-matches for r → no_fit floor (level 0).
+            for negative in triplet.negatives:
+                neg_key = self._get_content_key(negative)
+                if neg_key in embeddings:
+                    g['jobs'].append((embeddings[neg_key].to(self.device), 0))
+
+        # ── Compute per-query ordinal margins (vectorized, no .item()) ──
+        effective_lambda1 = self._get_effective_lambda1()
         margin_losses = []
 
-        for gf in good_fit_items:
-            w_q = tier_weights.get(gf['tier'], 0.5)
-            s_alpha = torch.sum(gf['job_emb'] * gf['resume_emb'], dim=-1)
+        for g in groups.values():
+            jobs = g['jobs']
+            if len(jobs) < 2:
+                continue
 
-            # ── Select cₙ: no_fit whose job is LEAST similar to j (clearest negative) ──
-            best_nf = None
-            best_nf_job_sim = float('inf')
-            for nf in no_fit_items:
-                job_sim = torch.sum(gf['job_emb'] * nf['job_emb'], dim=-1).item()
-                if job_sim < best_nf_job_sim:
-                    best_nf_job_sim = job_sim
-                    best_nf = nf
+            levels = torch.tensor([lv for _, lv in jobs],
+                                  dtype=torch.float32, device=self.device)
+            # Need at least two distinct levels to form an ordinal pair.
+            if float(levels.max() - levels.min()) < 0.5:
+                continue
 
-            # ── Select cₚ: potential_fit whose job is MOST similar to j (hardest) ──
-            best_pf = None
-            best_pf_job_sim = float('-inf')
-            if is_full_phase:
-                for pf in potential_fit_items:
-                    job_sim = torch.sum(gf['job_emb'] * pf['job_emb'], dim=-1).item()
-                    if job_sim > best_pf_job_sim:
-                        best_pf_job_sim = job_sim
-                        best_pf = pf
+            J = torch.stack([e for e, _ in jobs]).to(self.device)   # [K, d]
+            r = g['r_emb']                                          # [d]
+            sims = J @ r                                            # [K] = sim(r, job_k)
 
-            # ── L₃ (active in BOTH phases) ──
-            l3_term = torch.tensor(0.0, device=self.device)
-            if best_nf is not None:
-                s_n = torch.sum(gf['job_emb'] * best_nf['resume_emb'], dim=-1)
-                if best_pf is not None and is_full_phase:
-                    s_p = torch.sum(gf['job_emb'] * best_pf['resume_emb'], dim=-1)
-                    l3_term = F.relu(self.ordinal_m2 - (s_p - s_n))
-                else:
-                    l3_term = F.relu(self.ordinal_m2 - (s_alpha - s_n))
+            # Pairwise differences and level ordering (broadcast, single kernel).
+            diff = sims.unsqueeze(1) - sims.unsqueeze(0)           # [K,K]: s_i - s_j
+            li = levels.unsqueeze(1)
+            lj = levels.unsqueeze(0)
 
-            # ── L₂ (only in full phase) ──
-            l2_term = torch.tensor(0.0, device=self.device)
-            if is_full_phase and best_pf is not None:
-                s_p = torch.sum(gf['job_emb'] * best_pf['resume_emb'], dim=-1)
-                if self.ordinal_fixed_m1:
-                    # Ablation: fixed margin (same as m₂), no φ dependency
+            # φ-guided margin for the good(2) > potential(1) step.
+            if self.ordinal_fixed_m1:
+                m1 = self.ordinal_m2
+            else:
+                phi_q = g['phi']
+                if phi_q is None or phi_q >= self.phi_gate_threshold:
                     m1 = self.ordinal_m2
                 else:
-                    # φ-guided margin: m₁ = α·(1 − φ(resume_p, job_α))
-                    # FIXED: compute φ against the ANCHOR's job, not the pf candidate's own job
-                    phi_p = None
-                    if self.skill_matcher:
-                        if self.phi_use_weighted:
-                            # Improvement 1: weighted φ (essential > optional)
-                            job_occ_uri = gf.get('job_occupation_uri')
-                            phi_p = self._compute_phi_weighted(
-                                best_pf['resume_skill_uris'],
-                                gf['job_skill_uris'],
-                                job_occupation_uri=job_occ_uri,
-                            )
-                        else:
-                            phi_p = self._compute_phi_on_the_fly(
-                                best_pf['resume_skill_uris'],
-                                gf['job_skill_uris'],
-                            )
-                    if phi_p is None:
-                        # Fallback to precomputed φ (old behavior, against own job)
-                        phi_p = best_pf['phi'] if best_pf['phi'] is not None else 0.5
+                    m1 = self.ordinal_alpha * (1.0 - phi_q)
 
-                    # Improvement 3: confidence gating — skip φ-derived L₂ when φ is high
-                    if phi_p >= self.phi_gate_threshold:
-                        # φ too high → margin unreliable, fall back to fixed margin
-                        m1 = self.ordinal_m2
-                    else:
-                        m1 = self.ordinal_alpha * (1.0 - phi_p)
-                l2_term = F.relu(m1 - (s_alpha - s_p))
+            w_q = tier_weights.get(g['tier'], 0.5)
+            pair_loss = torch.tensor(0.0, device=self.device)
 
-            # ── Combine margins for this tuple ──
-            # Improvement 2: adaptive margin annealing for λ₁
-            effective_lambda1 = self._get_effective_lambda1()
+            # L₃ (both phases): every higher level above the no_fit floor.
+            mask_vs_nofit = ((li > lj) & (lj == 0)).float()
+            if mask_vs_nofit.sum() > 0:
+                viol = F.relu(self.ordinal_m2 - diff) * mask_vs_nofit
+                pair_loss = pair_loss + self.ordinal_lambda2 * (
+                    viol.sum() / mask_vs_nofit.sum())
+
+            # L₂ (full phase only): good(2) above potential(1).
             if is_full_phase:
-                margin = effective_lambda1 * l2_term + self.ordinal_lambda2 * l3_term
-            else:
-                margin = self.ordinal_lambda2 * l3_term
+                mask_good_pot = ((li == 2) & (lj == 1)).float()
+                if mask_good_pot.sum() > 0:
+                    viol = F.relu(m1 - diff) * mask_good_pot
+                    pair_loss = pair_loss + effective_lambda1 * (
+                        viol.sum() / mask_good_pot.sum())
 
-            margin_losses.append(w_q * margin)
+            margin_losses.append(w_q * pair_loss)
 
-        # ── Final loss: L₁ (InfoNCE) + ordinal margins ──
+        if not margin_losses:
+            # No query had ≥2 ordinal levels this batch → InfoNCE only.
+            return l1_mean
+
         ordinal_margin = torch.stack(margin_losses).mean()
         return l1_mean + ordinal_margin
 

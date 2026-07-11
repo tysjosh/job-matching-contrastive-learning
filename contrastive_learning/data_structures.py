@@ -212,6 +212,12 @@ class TrainingConfig:
     ordinal_fixed_m1: bool = False        # If True, L₂ uses fixed margin (ordinal_m2) instead of φ-guided m₁=α·(1−φ)
     ordinal_curriculum_switch: float = 0.3 # Fraction of epochs before enabling L₂ + L₃ (0.3 = 30%)
 
+    # Resume-grouped batching: keep same-resume records in one batch so the
+    # query-anchored ordinal loss sees graded siblings.
+    #   None  -> auto (enabled when loss_type == "ordinal")
+    #   True  -> force on;  False -> force off (e.g., ordinal ablation)
+    group_by_resume: Optional[bool] = None
+
     # Enhanced φ configuration
     phi_essential_weight: float = 1.0      # Weight for essential skills in φ denominator
     phi_optional_weight: float = 0.5       # Weight for optional skills in φ denominator
@@ -241,12 +247,16 @@ class TrainingConfig:
 
     # Negative selection curriculum control
     negative_curriculum: bool = True       # True = shift hard/medium/easy ratios over epochs; False = fixed ratios
-    negative_hard_ratio: float = 0.33      # Fixed hard ratio when negative_curriculum=False
-    negative_medium_ratio: float = 0.34    # Fixed medium ratio when negative_curriculum=False
-    negative_easy_ratio: float = 0.33      # Fixed easy ratio when negative_curriculum=False
+    negative_scheduler: str = "fixed"      # "fixed" | "linear_easy_to_hard" | "adaptive_val_dgp" | "performance_gated_triplet"
+    negative_hard_ratio: float = 0.33      # Fixed hard ratio when negative_scheduler="fixed"
+    negative_medium_ratio: float = 0.34    # Fixed medium ratio when negative_scheduler="fixed"
+    negative_easy_ratio: float = 0.33      # Fixed easy ratio when negative_scheduler="fixed"
 
     # Phase 2 class imbalance handling
     pos_class_weight: float = 0.0          # 0.0 = disabled, 2.5 = recommended for 28% positive ratio
+
+    # Reproducibility
+    training_seed: int = 42                 # Random seed for reproducibility (overridable via CLI --seed)
 
     # ConFit-inspired improvements
     use_symmetric_loss: bool = False        # If True, compute L_R + L_J (both directions)
@@ -350,71 +360,8 @@ class TrainingConfig:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
-        return {
-            'batch_size': self.batch_size,
-            'learning_rate': self.learning_rate,
-            'num_epochs': self.num_epochs,
-            'temperature': self.temperature,
-            'negative_sampling_ratio': self.negative_sampling_ratio,
-            'pathway_weight': self.pathway_weight,
-            'use_pathway_negatives': self.use_pathway_negatives,
-            'use_view_augmentation': self.use_view_augmentation,
-            'checkpoint_frequency': self.checkpoint_frequency,
-            'log_frequency': self.log_frequency,
-            'shuffle_data': self.shuffle_data,
-            'text_encoder_model': self.text_encoder_model,
-            'text_encoder_device': self.text_encoder_device,
-            'max_resume_views': self.max_resume_views,
-            'max_job_views': self.max_job_views,
-            'fallback_on_augmentation_failure': self.fallback_on_augmentation_failure,
-            'hard_negative_max_distance': self.hard_negative_max_distance,
-            'medium_negative_max_distance': self.medium_negative_max_distance,
-            'esco_graph_path': self.esco_graph_path,
-            'esco_kg_path': self.esco_kg_path,
-            'global_negative_sampling': self.global_negative_sampling,
-            'global_negative_pool_size': self.global_negative_pool_size,
-            'freeze_text_encoder': self.freeze_text_encoder,
-            'projection_dim': self.projection_dim,
-            'projection_dropout': self.projection_dropout,
-            'weight_decay': self.weight_decay,
-            # Structured features configuration
-            'use_structured_features': self.use_structured_features,
-            'structured_feature_dim': self.structured_feature_dim,
-            # NEW: 2-phase training fields
-            'training_phase': self.training_phase,
-            'use_augmentation_labels_only': self.use_augmentation_labels_only,
-            'augmentation_positive_ratio': self.augmentation_positive_ratio,
-            'pretrained_model_path': self.pretrained_model_path,
-            'freeze_contrastive_layers': self.freeze_contrastive_layers,
-            'classification_dropout': self.classification_dropout,
-            # Enhanced augmentation configuration
-            'augmentation_config_path': self.augmentation_config_path,
-            'augmentation_quality_profile': self.augmentation_quality_profile,
-            'enhanced_augmentation_validation': self.enhanced_augmentation_validation,
-            'augmentation_diversity_monitoring': self.augmentation_diversity_monitoring,
-            'augmentation_metadata_sync': self.augmentation_metadata_sync,
-            'augmentation_quality_gates': self.augmentation_quality_gates,
-            'augmentation_similarity_thresholds': self.augmentation_similarity_thresholds,
-            'augmentation_fallback_config': self.augmentation_fallback_config,
-            'validation_path': self.validation_path,
-            'validate_every_n_epochs': self.validate_every_n_epochs,
-            'ontology_weight': self.ontology_weight,
-            'ot_distance_scale': self.ot_distance_scale,
-            'use_ot_distance': self.use_ot_distance,
-            'pos_class_weight': self.pos_class_weight,
-            'loss_type': self.loss_type,
-            'ws2_weight': self.ws2_weight,
-            'ordinal_alpha': self.ordinal_alpha,
-            'ordinal_lambda1': self.ordinal_lambda1,
-            'ordinal_lambda2': self.ordinal_lambda2,
-            'ordinal_m2': self.ordinal_m2,
-            'ordinal_fixed_m1': self.ordinal_fixed_m1,
-            'ordinal_curriculum_switch': self.ordinal_curriculum_switch,
-            'negative_curriculum': self.negative_curriculum,
-            'negative_hard_ratio': self.negative_hard_ratio,
-            'negative_medium_ratio': self.negative_medium_ratio,
-            'negative_easy_ratio': self.negative_easy_ratio,
-        }
+        from dataclasses import asdict
+        return asdict(self)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'TrainingConfig':

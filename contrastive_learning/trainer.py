@@ -172,7 +172,8 @@ class ContrastiveLearningTrainer:
 
         # RESEARCH-GRADE SETUP: Freeze SentenceTransformer to avoid catastrophic forgetting
         weight_decay = getattr(config, 'weight_decay', 0.0)
-        if getattr(config, 'freeze_text_encoder', True):
+        self.freeze_text_encoder = getattr(config, 'freeze_text_encoder', True)
+        if self.freeze_text_encoder:
             for param in self.text_encoder.parameters():
                 param.requires_grad = False
             
@@ -199,7 +200,21 @@ class ContrastiveLearningTrainer:
                 lr=config.learning_rate,
                 weight_decay=weight_decay
             )
-            logger.warning("⚠️ Training both models - risk of catastrophic forgetting!")
+            logger.warning("⚠️ Training both models - encoder will be fine-tuned "
+                           "(gradient-preserving encoding, embedding cache bypassed)")
+            logger.info(f"📊 Trainable parameters: "
+                        f"{sum(p.numel() for p in self.model.parameters() if p.requires_grad) + sum(p.numel() for p in self.text_encoder.parameters() if p.requires_grad):,}")
+
+            # Enable gradient checkpointing to cut activation memory during
+            # encoder fine-tuning (trades extra compute for much lower memory).
+            try:
+                hf_model = self.text_encoder[0].auto_model
+                hf_model.gradient_checkpointing_enable()
+                if hasattr(hf_model, "config"):
+                    hf_model.config.use_cache = False
+                logger.info("📉 Gradient checkpointing enabled on encoder (memory-saving)")
+            except Exception as e:
+                logger.warning(f"Could not enable gradient checkpointing: {e}")
         
         self.model.to(self.device)
 
@@ -310,8 +325,9 @@ class ContrastiveLearningTrainer:
             raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
 
         # Set global seed for reproducibility
-        _set_seed(42)
-        logger.info("Random seed set to 42 for reproducibility")
+        seed = self.config.training_seed if hasattr(self.config, 'training_seed') else 42
+        _set_seed(seed)
+        logger.info(f"Random seed set to {seed} for reproducibility")
 
         # Start training session with comprehensive logging
         session_id = self.structured_logger.start_training_session({
@@ -348,8 +364,9 @@ class ContrastiveLearningTrainer:
                 logger.info("Building rejection index for hard negatives...")
                 self.batch_processor.build_rejection_index(str(dataset_path))
             
-            # Preload embeddings if enabled
-            if self.config.enable_embedding_preload:
+            # Preload embeddings if enabled. Skipped when fine-tuning the encoder:
+            # cached (detached) text embeddings would block gradients to the encoder.
+            if self.config.enable_embedding_preload and self.freeze_text_encoder:
                 logger.info("Preloading embeddings for efficient training...")
                 self.preload_dataset_embeddings(dataset_path)
                 
@@ -382,6 +399,22 @@ class ContrastiveLearningTrainer:
                         f"Epoch {epoch + 1}: train_loss={epoch_loss:.6f}, val_loss={val_loss:.6f}"
                     )
                     
+                    # Feed validation metrics to batch processor for adaptive schedulers
+                    scheduler_metrics = {'val_loss': val_loss}
+                    # Compute d(g,p) proxy from validation loss trend
+                    # Lower val_loss generally means better separation
+                    if len(self.validation_losses) >= 2:
+                        # d(g,p) proxy: inverse of val_loss (higher = better separation)
+                        scheduler_metrics['d_gp'] = 1.0 / max(0.01, val_loss)
+                        # Triplet accuracy proxy: improvement rate
+                        prev_loss = self.validation_losses[-2]
+                        improvement = (prev_loss - val_loss) / max(0.01, prev_loss)
+                        scheduler_metrics['triplet_accuracy'] = min(1.0, max(0.0, 0.5 + improvement * 5.0))
+                    else:
+                        scheduler_metrics['d_gp'] = 1.0 / max(0.01, val_loss)
+                        scheduler_metrics['triplet_accuracy'] = 0.3
+                    self.batch_processor.update_scheduler_metrics(scheduler_metrics)
+
                     # Save best checkpoint based on validation loss
                     if val_loss < self.best_val_loss:
                         self.best_val_loss = val_loss
@@ -866,6 +899,11 @@ class ContrastiveLearningTrainer:
             self.model.to(self.device)
             self.text_encoder.to(self.device)
 
+            # Fine-tuning path: encode WITH gradients (no cache, no torch.no_grad)
+            # so backprop reaches the encoder. Used only when freeze_text_encoder=False.
+            if not self.freeze_text_encoder:
+                return self._generate_embeddings_trainable_encoder(triplets)
+
             # Step 1: Collect unique content and get/cache TEXT embeddings only
             content_key_to_type = {}  # key -> content_type
             ordered_keys = []
@@ -945,6 +983,51 @@ class ContrastiveLearningTrainer:
         except Exception as e:
             logger.error(f"Error generating embeddings with cache: {e}")
             return self._generate_embeddings_fallback(triplets)
+
+    def _generate_embeddings_trainable_encoder(
+            self, triplets: List[ContrastiveTriplet]) -> Dict[str, torch.Tensor]:
+        """
+        Gradient-preserving embedding generation for encoder fine-tuning.
+
+        Unlike the cached path, this runs the SentenceTransformer forward WITH
+        autograd (via tokenize + module forward, no torch.no_grad, no detach) so
+        gradients flow into the encoder. The embedding cache is intentionally
+        bypassed — cached detached tensors would sever the graph. Slower and more
+        memory-hungry, used only when freeze_text_encoder=False.
+        """
+        # Collect unique content across the batch (dedup by content key).
+        content_key_to_type = {}
+        ordered_keys = []
+        for triplet in triplets:
+            for content, ctype in (
+                [(triplet.anchor, 'resume'), (triplet.positive, 'job')]
+                + [(neg, 'job') for neg in triplet.negatives]
+                + [(rn, 'resume') for rn in triplet.view_metadata.get('resume_negatives', [])]
+            ):
+                key = self.embedding_cache.get_content_key(content)
+                if key not in content_key_to_type:
+                    content_key_to_type[key] = (content, ctype)
+                    ordered_keys.append(key)
+
+        # Build texts in the same order.
+        texts = [self.batch_encoder._content_to_text(*content_key_to_type[k])
+                 for k in ordered_keys]
+
+        # Ensure encoder is in train mode so fine-tuning updates BN/dropout properly.
+        self.text_encoder.train()
+        self.model.train()
+
+        # Tokenize + forward THROUGH the SentenceTransformer with gradients.
+        features = self.text_encoder.tokenize(texts)
+        features = {k: (v.to(self.device) if hasattr(v, 'to') else v)
+                    for k, v in features.items()}
+        out = self.text_encoder(features)
+        text_embs = out['sentence_embedding']  # [N, text_dim], requires_grad
+
+        # Project through the trainable head; grad graph now spans encoder + head.
+        final_embeddings = self.model(text_embs)
+
+        return {key: final_embeddings[i] for i, key in enumerate(ordered_keys)}
 
     def _encode_content_to_text_embedding(self, content: Dict[str, Any], content_type: str) -> torch.Tensor:
         """

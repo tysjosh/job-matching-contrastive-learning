@@ -170,3 +170,11 @@ embedding_cache/
 # Large CSV files
 train_with_skills.csv
 test_with_skills.csv
+
+# Experiment run outputs (regenerable; checkpoints already ignored via *.pt)
+# Keeps git status clean. Configs are reproducible via scripts/generators.
+results/
+results_*/
+
+# Root-level training/run logs
+*.log
