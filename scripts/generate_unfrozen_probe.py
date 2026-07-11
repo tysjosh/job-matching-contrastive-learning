@@ -32,14 +32,25 @@ TRAIN = "preprocess/data_splits_v7/train.jsonl"
 TEST = "preprocess/data_splits_v7/test.jsonl"
 
 
+# If the frozen base configs are absent (e.g. results/ was removed from the
+# clone), fall back to the already-generated UF configs, which carry the same
+# loss/negative settings. lr/epochs/batch/seq are overridden anyway.
+_FALLBACK = {"EO-A": "UF-Ordinal", "E4-InfoNCE": "UF-InfoNCE"}
+
+
 def load_base(variant_dir_prefix, seed):
-    """Load an existing frozen config to derive from."""
-    p = RUNS / f"{variant_dir_prefix}__cnamuangtoun__s{seed}" / "training_config.json"
-    if not p.exists():
-        raise FileNotFoundError(f"Base config not found: {p}. "
-                                f"Generate frozen configs first.")
-    with open(p) as f:
-        return json.load(f)
+    """Load a base config to derive from (frozen preferred, UF as fallback)."""
+    candidates = [variant_dir_prefix]
+    if variant_dir_prefix in _FALLBACK:
+        candidates.append(_FALLBACK[variant_dir_prefix])
+    for prefix in candidates:
+        p = RUNS / f"{prefix}__cnamuangtoun__s{seed}" / "training_config.json"
+        if p.exists():
+            with open(p) as f:
+                return json.load(f)
+    raise FileNotFoundError(
+        f"No base config found for seed {seed}. Tried: "
+        + ", ".join(f"{c}__cnamuangtoun__s{seed}" for c in candidates))
 
 
 def main():
