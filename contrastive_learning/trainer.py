@@ -215,6 +215,19 @@ class ContrastiveLearningTrainer:
                 logger.info("📉 Gradient checkpointing enabled on encoder (memory-saving)")
             except Exception as e:
                 logger.warning(f"Could not enable gradient checkpointing: {e}")
+
+            # Cap encoder sequence length when fine-tuning. Attention activations
+            # scale with seq_len^2 and must be retained for backprop, so long
+            # resume texts blow up GPU memory. Capping is the biggest lever.
+            unfrozen_max_seq = getattr(config, 'unfrozen_max_seq_length', 256)
+            if unfrozen_max_seq:
+                try:
+                    prev = self.text_encoder.max_seq_length
+                    self.text_encoder.max_seq_length = int(unfrozen_max_seq)
+                    logger.info(f"📏 Encoder max_seq_length capped {prev} -> "
+                                f"{unfrozen_max_seq} for fine-tuning (memory).")
+                except Exception as e:
+                    logger.warning(f"Could not set max_seq_length: {e}")
         
         self.model.to(self.device)
 
@@ -895,14 +908,18 @@ class ContrastiveLearningTrainer:
         Returns:
             Dictionary mapping content keys to final model embeddings (with grad)
         """
+        # Fine-tuning path: encode WITH gradients (no cache, no torch.no_grad)
+        # so backprop reaches the encoder. Used only when freeze_text_encoder=False.
+        # NOT wrapped in the cached-fallback below: on error we must NOT silently
+        # fall back to detached embeddings (that would train only the head).
+        if not self.freeze_text_encoder:
+            self.model.to(self.device)
+            self.text_encoder.to(self.device)
+            return self._generate_embeddings_trainable_encoder(triplets)
+
         try:
             self.model.to(self.device)
             self.text_encoder.to(self.device)
-
-            # Fine-tuning path: encode WITH gradients (no cache, no torch.no_grad)
-            # so backprop reaches the encoder. Used only when freeze_text_encoder=False.
-            if not self.freeze_text_encoder:
-                return self._generate_embeddings_trainable_encoder(triplets)
 
             # Step 1: Collect unique content and get/cache TEXT embeddings only
             content_key_to_type = {}  # key -> content_type
