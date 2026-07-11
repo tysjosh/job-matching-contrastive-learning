@@ -46,9 +46,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--epochs", type=int, default=6)
     ap.add_argument("--lr", type=float, default=2e-5)
-    ap.add_argument("--batch-size", type=int, default=16,
-                    help="Smaller batch reduces autograd-graph memory when the "
-                         "encoder is unfrozen (default 16 to avoid OOM).")
+    ap.add_argument("--batch-size", type=int, default=64,
+                    help="Batch size. Default 64 to match the frozen EO/E4 runs "
+                         "(use smaller, e.g. 16, only on memory-constrained CPUs).")
     ap.add_argument("--seeds", type=int, nargs="+", default=[13, 42])
     ap.add_argument("--execute-list", default="run_unfrozen_probe.sh")
     args = ap.parse_args()
