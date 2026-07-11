@@ -1,0 +1,37 @@
+run_id: "E5-INT8__cnamuangtou_sparse_v6__s123"
+experiment_id: "E5-INT8"
+dataset: "cnamuangtou_sparse_v6"
+seed: 123
+model:
+  encoder: "all-mpnet-base-v2"
+  freeze_encoder: true
+  projection_dims:
+    - 768
+    - 256
+    - 128
+  dropout: 0.3
+training:
+  batch_size: 64
+  lr: 8.5e-05
+  epochs: 15
+  temperature: 0.07
+  max_negatives: 7
+  loss: "InfoNCE"
+evaluation:
+  metrics:
+    - "auc"
+    - "dgp"
+    - "triplet_acc"
+    - "ndcg10"
+    - "mrr10"
+    - "recall10"
+    - "recall50"
+    - "recall100"
+  track_latency: true
+family: "efficiency"
+index:
+  type: "hnsw"
+  emb_quant: "int8"
+output:
+  root: "results/research_runs"
+  artifact_dir: "results/research_runs/E5-INT8__cnamuangtou_sparse_v6__s123"

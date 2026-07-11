@@ -1,0 +1,2522 @@
+[
+  {
+    "run_id": "E1-A__cnamuangtoun__s13",
+    "experiment_id": "E1-A",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E1-A__cnamuangtoun__s21",
+    "experiment_id": "E1-A",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E1-A__cnamuangtoun__s42",
+    "experiment_id": "E1-A",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E1-A__cnamuangtoun__s87",
+    "experiment_id": "E1-A",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E1-A__cnamuangtoun__s123",
+    "experiment_id": "E1-A",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E1-A__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E1-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E1-A__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E1-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E1-A__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E1-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E1-A__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E1-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E1-A__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E1-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E1-A__indian__s13",
+    "experiment_id": "E1-A",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__indian__s13.yaml"
+  },
+  {
+    "run_id": "E1-A__indian__s21",
+    "experiment_id": "E1-A",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__indian__s21.yaml"
+  },
+  {
+    "run_id": "E1-A__indian__s42",
+    "experiment_id": "E1-A",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__indian__s42.yaml"
+  },
+  {
+    "run_id": "E1-A__indian__s87",
+    "experiment_id": "E1-A",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__indian__s87.yaml"
+  },
+  {
+    "run_id": "E1-A__indian__s123",
+    "experiment_id": "E1-A",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-A__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-A__indian__s123.yaml"
+  },
+  {
+    "run_id": "E1-B__cnamuangtoun__s13",
+    "experiment_id": "E1-B",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E1-B__cnamuangtoun__s21",
+    "experiment_id": "E1-B",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E1-B__cnamuangtoun__s42",
+    "experiment_id": "E1-B",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E1-B__cnamuangtoun__s87",
+    "experiment_id": "E1-B",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E1-B__cnamuangtoun__s123",
+    "experiment_id": "E1-B",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E1-B__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E1-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E1-B__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E1-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E1-B__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E1-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E1-B__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E1-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E1-B__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E1-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E1-B__indian__s13",
+    "experiment_id": "E1-B",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__indian__s13.yaml"
+  },
+  {
+    "run_id": "E1-B__indian__s21",
+    "experiment_id": "E1-B",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__indian__s21.yaml"
+  },
+  {
+    "run_id": "E1-B__indian__s42",
+    "experiment_id": "E1-B",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__indian__s42.yaml"
+  },
+  {
+    "run_id": "E1-B__indian__s87",
+    "experiment_id": "E1-B",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__indian__s87.yaml"
+  },
+  {
+    "run_id": "E1-B__indian__s123",
+    "experiment_id": "E1-B",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-B__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-B__indian__s123.yaml"
+  },
+  {
+    "run_id": "E1-C__cnamuangtoun__s13",
+    "experiment_id": "E1-C",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E1-C__cnamuangtoun__s21",
+    "experiment_id": "E1-C",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E1-C__cnamuangtoun__s42",
+    "experiment_id": "E1-C",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E1-C__cnamuangtoun__s87",
+    "experiment_id": "E1-C",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E1-C__cnamuangtoun__s123",
+    "experiment_id": "E1-C",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E1-C__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E1-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E1-C__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E1-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E1-C__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E1-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E1-C__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E1-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E1-C__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E1-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E1-C__indian__s13",
+    "experiment_id": "E1-C",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__indian__s13.yaml"
+  },
+  {
+    "run_id": "E1-C__indian__s21",
+    "experiment_id": "E1-C",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__indian__s21.yaml"
+  },
+  {
+    "run_id": "E1-C__indian__s42",
+    "experiment_id": "E1-C",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__indian__s42.yaml"
+  },
+  {
+    "run_id": "E1-C__indian__s87",
+    "experiment_id": "E1-C",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__indian__s87.yaml"
+  },
+  {
+    "run_id": "E1-C__indian__s123",
+    "experiment_id": "E1-C",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-C__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-C__indian__s123.yaml"
+  },
+  {
+    "run_id": "E1-D__cnamuangtoun__s13",
+    "experiment_id": "E1-D",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E1-D__cnamuangtoun__s21",
+    "experiment_id": "E1-D",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E1-D__cnamuangtoun__s42",
+    "experiment_id": "E1-D",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E1-D__cnamuangtoun__s87",
+    "experiment_id": "E1-D",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E1-D__cnamuangtoun__s123",
+    "experiment_id": "E1-D",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E1-D__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E1-D",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E1-D__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E1-D",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E1-D__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E1-D",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E1-D__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E1-D",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E1-D__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E1-D",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E1-D__indian__s13",
+    "experiment_id": "E1-D",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__indian__s13.yaml"
+  },
+  {
+    "run_id": "E1-D__indian__s21",
+    "experiment_id": "E1-D",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__indian__s21.yaml"
+  },
+  {
+    "run_id": "E1-D__indian__s42",
+    "experiment_id": "E1-D",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__indian__s42.yaml"
+  },
+  {
+    "run_id": "E1-D__indian__s87",
+    "experiment_id": "E1-D",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__indian__s87.yaml"
+  },
+  {
+    "run_id": "E1-D__indian__s123",
+    "experiment_id": "E1-D",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E1-D__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E1-D__indian__s123.yaml"
+  },
+  {
+    "run_id": "E2-A__cnamuangtoun__s13",
+    "experiment_id": "E2-A",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E2-A__cnamuangtoun__s21",
+    "experiment_id": "E2-A",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E2-A__cnamuangtoun__s42",
+    "experiment_id": "E2-A",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E2-A__cnamuangtoun__s87",
+    "experiment_id": "E2-A",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E2-A__cnamuangtoun__s123",
+    "experiment_id": "E2-A",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E2-A__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E2-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E2-A__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E2-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E2-A__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E2-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E2-A__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E2-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E2-A__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E2-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E2-A__indian__s13",
+    "experiment_id": "E2-A",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__indian__s13.yaml"
+  },
+  {
+    "run_id": "E2-A__indian__s21",
+    "experiment_id": "E2-A",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__indian__s21.yaml"
+  },
+  {
+    "run_id": "E2-A__indian__s42",
+    "experiment_id": "E2-A",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__indian__s42.yaml"
+  },
+  {
+    "run_id": "E2-A__indian__s87",
+    "experiment_id": "E2-A",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__indian__s87.yaml"
+  },
+  {
+    "run_id": "E2-A__indian__s123",
+    "experiment_id": "E2-A",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-A__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-A__indian__s123.yaml"
+  },
+  {
+    "run_id": "E2-B__cnamuangtoun__s13",
+    "experiment_id": "E2-B",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E2-B__cnamuangtoun__s21",
+    "experiment_id": "E2-B",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E2-B__cnamuangtoun__s42",
+    "experiment_id": "E2-B",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E2-B__cnamuangtoun__s87",
+    "experiment_id": "E2-B",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E2-B__cnamuangtoun__s123",
+    "experiment_id": "E2-B",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E2-B__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E2-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E2-B__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E2-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E2-B__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E2-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E2-B__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E2-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E2-B__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E2-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E2-B__indian__s13",
+    "experiment_id": "E2-B",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__indian__s13.yaml"
+  },
+  {
+    "run_id": "E2-B__indian__s21",
+    "experiment_id": "E2-B",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__indian__s21.yaml"
+  },
+  {
+    "run_id": "E2-B__indian__s42",
+    "experiment_id": "E2-B",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__indian__s42.yaml"
+  },
+  {
+    "run_id": "E2-B__indian__s87",
+    "experiment_id": "E2-B",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__indian__s87.yaml"
+  },
+  {
+    "run_id": "E2-B__indian__s123",
+    "experiment_id": "E2-B",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-B__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-B__indian__s123.yaml"
+  },
+  {
+    "run_id": "E2-C__cnamuangtoun__s13",
+    "experiment_id": "E2-C",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E2-C__cnamuangtoun__s21",
+    "experiment_id": "E2-C",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E2-C__cnamuangtoun__s42",
+    "experiment_id": "E2-C",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E2-C__cnamuangtoun__s87",
+    "experiment_id": "E2-C",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E2-C__cnamuangtoun__s123",
+    "experiment_id": "E2-C",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E2-C__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E2-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E2-C__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E2-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E2-C__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E2-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E2-C__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E2-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E2-C__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E2-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E2-C__indian__s13",
+    "experiment_id": "E2-C",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__indian__s13.yaml"
+  },
+  {
+    "run_id": "E2-C__indian__s21",
+    "experiment_id": "E2-C",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__indian__s21.yaml"
+  },
+  {
+    "run_id": "E2-C__indian__s42",
+    "experiment_id": "E2-C",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__indian__s42.yaml"
+  },
+  {
+    "run_id": "E2-C__indian__s87",
+    "experiment_id": "E2-C",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__indian__s87.yaml"
+  },
+  {
+    "run_id": "E2-C__indian__s123",
+    "experiment_id": "E2-C",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E2-C__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E2-C__indian__s123.yaml"
+  },
+  {
+    "run_id": "E3-A__cnamuangtoun__s13",
+    "experiment_id": "E3-A",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E3-A__cnamuangtoun__s21",
+    "experiment_id": "E3-A",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E3-A__cnamuangtoun__s42",
+    "experiment_id": "E3-A",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E3-A__cnamuangtoun__s87",
+    "experiment_id": "E3-A",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E3-A__cnamuangtoun__s123",
+    "experiment_id": "E3-A",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E3-A__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E3-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E3-A__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E3-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E3-A__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E3-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E3-A__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E3-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E3-A__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E3-A",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E3-A__indian__s13",
+    "experiment_id": "E3-A",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__indian__s13.yaml"
+  },
+  {
+    "run_id": "E3-A__indian__s21",
+    "experiment_id": "E3-A",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__indian__s21.yaml"
+  },
+  {
+    "run_id": "E3-A__indian__s42",
+    "experiment_id": "E3-A",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__indian__s42.yaml"
+  },
+  {
+    "run_id": "E3-A__indian__s87",
+    "experiment_id": "E3-A",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__indian__s87.yaml"
+  },
+  {
+    "run_id": "E3-A__indian__s123",
+    "experiment_id": "E3-A",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-A__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-A__indian__s123.yaml"
+  },
+  {
+    "run_id": "E3-B__cnamuangtoun__s13",
+    "experiment_id": "E3-B",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E3-B__cnamuangtoun__s21",
+    "experiment_id": "E3-B",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E3-B__cnamuangtoun__s42",
+    "experiment_id": "E3-B",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E3-B__cnamuangtoun__s87",
+    "experiment_id": "E3-B",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E3-B__cnamuangtoun__s123",
+    "experiment_id": "E3-B",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E3-B__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E3-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E3-B__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E3-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E3-B__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E3-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E3-B__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E3-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E3-B__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E3-B",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E3-B__indian__s13",
+    "experiment_id": "E3-B",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__indian__s13.yaml"
+  },
+  {
+    "run_id": "E3-B__indian__s21",
+    "experiment_id": "E3-B",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__indian__s21.yaml"
+  },
+  {
+    "run_id": "E3-B__indian__s42",
+    "experiment_id": "E3-B",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__indian__s42.yaml"
+  },
+  {
+    "run_id": "E3-B__indian__s87",
+    "experiment_id": "E3-B",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__indian__s87.yaml"
+  },
+  {
+    "run_id": "E3-B__indian__s123",
+    "experiment_id": "E3-B",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-B__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-B__indian__s123.yaml"
+  },
+  {
+    "run_id": "E3-C__cnamuangtoun__s13",
+    "experiment_id": "E3-C",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E3-C__cnamuangtoun__s21",
+    "experiment_id": "E3-C",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E3-C__cnamuangtoun__s42",
+    "experiment_id": "E3-C",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E3-C__cnamuangtoun__s87",
+    "experiment_id": "E3-C",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E3-C__cnamuangtoun__s123",
+    "experiment_id": "E3-C",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E3-C__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E3-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E3-C__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E3-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E3-C__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E3-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E3-C__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E3-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E3-C__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E3-C",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E3-C__indian__s13",
+    "experiment_id": "E3-C",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__indian__s13.yaml"
+  },
+  {
+    "run_id": "E3-C__indian__s21",
+    "experiment_id": "E3-C",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__indian__s21.yaml"
+  },
+  {
+    "run_id": "E3-C__indian__s42",
+    "experiment_id": "E3-C",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__indian__s42.yaml"
+  },
+  {
+    "run_id": "E3-C__indian__s87",
+    "experiment_id": "E3-C",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__indian__s87.yaml"
+  },
+  {
+    "run_id": "E3-C__indian__s123",
+    "experiment_id": "E3-C",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-C__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-C__indian__s123.yaml"
+  },
+  {
+    "run_id": "E3-D__cnamuangtoun__s13",
+    "experiment_id": "E3-D",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E3-D__cnamuangtoun__s21",
+    "experiment_id": "E3-D",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E3-D__cnamuangtoun__s42",
+    "experiment_id": "E3-D",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E3-D__cnamuangtoun__s87",
+    "experiment_id": "E3-D",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E3-D__cnamuangtoun__s123",
+    "experiment_id": "E3-D",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E3-D__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E3-D",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E3-D__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E3-D",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E3-D__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E3-D",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E3-D__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E3-D",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E3-D__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E3-D",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E3-D__indian__s13",
+    "experiment_id": "E3-D",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__indian__s13.yaml"
+  },
+  {
+    "run_id": "E3-D__indian__s21",
+    "experiment_id": "E3-D",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__indian__s21.yaml"
+  },
+  {
+    "run_id": "E3-D__indian__s42",
+    "experiment_id": "E3-D",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__indian__s42.yaml"
+  },
+  {
+    "run_id": "E3-D__indian__s87",
+    "experiment_id": "E3-D",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__indian__s87.yaml"
+  },
+  {
+    "run_id": "E3-D__indian__s123",
+    "experiment_id": "E3-D",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E3-D__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E3-D__indian__s123.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__cnamuangtoun__s13",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__cnamuangtoun__s21",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__cnamuangtoun__s42",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__cnamuangtoun__s87",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__cnamuangtoun__s123",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__indian__s13",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__indian__s13.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__indian__s21",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__indian__s21.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__indian__s42",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__indian__s42.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__indian__s87",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__indian__s87.yaml"
+  },
+  {
+    "run_id": "E4-InfoNCE__indian__s123",
+    "experiment_id": "E4-InfoNCE",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-InfoNCE__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-InfoNCE__indian__s123.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__cnamuangtoun__s13",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__cnamuangtoun__s21",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__cnamuangtoun__s42",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__cnamuangtoun__s87",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__cnamuangtoun__s123",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__indian__s13",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__indian__s13.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__indian__s21",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__indian__s21.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__indian__s42",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__indian__s42.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__indian__s87",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__indian__s87.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Skill__indian__s123",
+    "experiment_id": "E4-OSCAR-Skill",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Skill__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Skill__indian__s123.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__cnamuangtoun__s13",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__cnamuangtoun__s21",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__cnamuangtoun__s42",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__cnamuangtoun__s87",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__cnamuangtoun__s123",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__indian__s13",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__indian__s13.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__indian__s21",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__indian__s21.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__indian__s42",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__indian__s42.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__indian__s87",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__indian__s87.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-Hybrid__indian__s123",
+    "experiment_id": "E4-OSCAR-Hybrid",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-Hybrid__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-Hybrid__indian__s123.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__cnamuangtoun__s13",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__cnamuangtoun__s21",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__cnamuangtoun__s42",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__cnamuangtoun__s87",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__cnamuangtoun__s123",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__indian__s13",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__indian__s13.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__indian__s21",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__indian__s21.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__indian__s42",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__indian__s42.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__indian__s87",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__indian__s87.yaml"
+  },
+  {
+    "run_id": "E4-OSCAR-ISCO__indian__s123",
+    "experiment_id": "E4-OSCAR-ISCO",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E4-OSCAR-ISCO__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E4-OSCAR-ISCO__indian__s123.yaml"
+  },
+  {
+    "run_id": "E5-D64__cnamuangtoun__s13",
+    "experiment_id": "E5-D64",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E5-D64__cnamuangtoun__s21",
+    "experiment_id": "E5-D64",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E5-D64__cnamuangtoun__s42",
+    "experiment_id": "E5-D64",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E5-D64__cnamuangtoun__s87",
+    "experiment_id": "E5-D64",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E5-D64__cnamuangtoun__s123",
+    "experiment_id": "E5-D64",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E5-D64__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E5-D64",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E5-D64__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E5-D64",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E5-D64__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E5-D64",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E5-D64__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E5-D64",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E5-D64__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E5-D64",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E5-D64__indian__s13",
+    "experiment_id": "E5-D64",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__indian__s13.yaml"
+  },
+  {
+    "run_id": "E5-D64__indian__s21",
+    "experiment_id": "E5-D64",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__indian__s21.yaml"
+  },
+  {
+    "run_id": "E5-D64__indian__s42",
+    "experiment_id": "E5-D64",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__indian__s42.yaml"
+  },
+  {
+    "run_id": "E5-D64__indian__s87",
+    "experiment_id": "E5-D64",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__indian__s87.yaml"
+  },
+  {
+    "run_id": "E5-D64__indian__s123",
+    "experiment_id": "E5-D64",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D64__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D64__indian__s123.yaml"
+  },
+  {
+    "run_id": "E5-D96__cnamuangtoun__s13",
+    "experiment_id": "E5-D96",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E5-D96__cnamuangtoun__s21",
+    "experiment_id": "E5-D96",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E5-D96__cnamuangtoun__s42",
+    "experiment_id": "E5-D96",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E5-D96__cnamuangtoun__s87",
+    "experiment_id": "E5-D96",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E5-D96__cnamuangtoun__s123",
+    "experiment_id": "E5-D96",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E5-D96__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E5-D96",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E5-D96__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E5-D96",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E5-D96__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E5-D96",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E5-D96__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E5-D96",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E5-D96__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E5-D96",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E5-D96__indian__s13",
+    "experiment_id": "E5-D96",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__indian__s13.yaml"
+  },
+  {
+    "run_id": "E5-D96__indian__s21",
+    "experiment_id": "E5-D96",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__indian__s21.yaml"
+  },
+  {
+    "run_id": "E5-D96__indian__s42",
+    "experiment_id": "E5-D96",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__indian__s42.yaml"
+  },
+  {
+    "run_id": "E5-D96__indian__s87",
+    "experiment_id": "E5-D96",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__indian__s87.yaml"
+  },
+  {
+    "run_id": "E5-D96__indian__s123",
+    "experiment_id": "E5-D96",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D96__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D96__indian__s123.yaml"
+  },
+  {
+    "run_id": "E5-D128__cnamuangtoun__s13",
+    "experiment_id": "E5-D128",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E5-D128__cnamuangtoun__s21",
+    "experiment_id": "E5-D128",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E5-D128__cnamuangtoun__s42",
+    "experiment_id": "E5-D128",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E5-D128__cnamuangtoun__s87",
+    "experiment_id": "E5-D128",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E5-D128__cnamuangtoun__s123",
+    "experiment_id": "E5-D128",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E5-D128__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E5-D128",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E5-D128__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E5-D128",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E5-D128__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E5-D128",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E5-D128__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E5-D128",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E5-D128__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E5-D128",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E5-D128__indian__s13",
+    "experiment_id": "E5-D128",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__indian__s13.yaml"
+  },
+  {
+    "run_id": "E5-D128__indian__s21",
+    "experiment_id": "E5-D128",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__indian__s21.yaml"
+  },
+  {
+    "run_id": "E5-D128__indian__s42",
+    "experiment_id": "E5-D128",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__indian__s42.yaml"
+  },
+  {
+    "run_id": "E5-D128__indian__s87",
+    "experiment_id": "E5-D128",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__indian__s87.yaml"
+  },
+  {
+    "run_id": "E5-D128__indian__s123",
+    "experiment_id": "E5-D128",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D128__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D128__indian__s123.yaml"
+  },
+  {
+    "run_id": "E5-D192__cnamuangtoun__s13",
+    "experiment_id": "E5-D192",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E5-D192__cnamuangtoun__s21",
+    "experiment_id": "E5-D192",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E5-D192__cnamuangtoun__s42",
+    "experiment_id": "E5-D192",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E5-D192__cnamuangtoun__s87",
+    "experiment_id": "E5-D192",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E5-D192__cnamuangtoun__s123",
+    "experiment_id": "E5-D192",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E5-D192__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E5-D192",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E5-D192__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E5-D192",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E5-D192__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E5-D192",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E5-D192__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E5-D192",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E5-D192__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E5-D192",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E5-D192__indian__s13",
+    "experiment_id": "E5-D192",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__indian__s13.yaml"
+  },
+  {
+    "run_id": "E5-D192__indian__s21",
+    "experiment_id": "E5-D192",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__indian__s21.yaml"
+  },
+  {
+    "run_id": "E5-D192__indian__s42",
+    "experiment_id": "E5-D192",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__indian__s42.yaml"
+  },
+  {
+    "run_id": "E5-D192__indian__s87",
+    "experiment_id": "E5-D192",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__indian__s87.yaml"
+  },
+  {
+    "run_id": "E5-D192__indian__s123",
+    "experiment_id": "E5-D192",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-D192__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-D192__indian__s123.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__cnamuangtoun__s13",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__cnamuangtoun__s21",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__cnamuangtoun__s42",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__cnamuangtoun__s87",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__cnamuangtoun__s123",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__indian__s13",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__indian__s13.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__indian__s21",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__indian__s21.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__indian__s42",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__indian__s42.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__indian__s87",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__indian__s87.yaml"
+  },
+  {
+    "run_id": "E5-IVFPQ__indian__s123",
+    "experiment_id": "E5-IVFPQ",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-IVFPQ__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-IVFPQ__indian__s123.yaml"
+  },
+  {
+    "run_id": "E5-INT8__cnamuangtoun__s13",
+    "experiment_id": "E5-INT8",
+    "dataset": "cnamuangtoun",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__cnamuangtoun__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__cnamuangtoun__s13.yaml"
+  },
+  {
+    "run_id": "E5-INT8__cnamuangtoun__s21",
+    "experiment_id": "E5-INT8",
+    "dataset": "cnamuangtoun",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__cnamuangtoun__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__cnamuangtoun__s21.yaml"
+  },
+  {
+    "run_id": "E5-INT8__cnamuangtoun__s42",
+    "experiment_id": "E5-INT8",
+    "dataset": "cnamuangtoun",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__cnamuangtoun__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__cnamuangtoun__s42.yaml"
+  },
+  {
+    "run_id": "E5-INT8__cnamuangtoun__s87",
+    "experiment_id": "E5-INT8",
+    "dataset": "cnamuangtoun",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__cnamuangtoun__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__cnamuangtoun__s87.yaml"
+  },
+  {
+    "run_id": "E5-INT8__cnamuangtoun__s123",
+    "experiment_id": "E5-INT8",
+    "dataset": "cnamuangtoun",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__cnamuangtoun__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__cnamuangtoun__s123.yaml"
+  },
+  {
+    "run_id": "E5-INT8__cnamuangtou_sparse_v6__s13",
+    "experiment_id": "E5-INT8",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__cnamuangtou_sparse_v6__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__cnamuangtou_sparse_v6__s13.yaml"
+  },
+  {
+    "run_id": "E5-INT8__cnamuangtou_sparse_v6__s21",
+    "experiment_id": "E5-INT8",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__cnamuangtou_sparse_v6__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__cnamuangtou_sparse_v6__s21.yaml"
+  },
+  {
+    "run_id": "E5-INT8__cnamuangtou_sparse_v6__s42",
+    "experiment_id": "E5-INT8",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__cnamuangtou_sparse_v6__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__cnamuangtou_sparse_v6__s42.yaml"
+  },
+  {
+    "run_id": "E5-INT8__cnamuangtou_sparse_v6__s87",
+    "experiment_id": "E5-INT8",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__cnamuangtou_sparse_v6__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__cnamuangtou_sparse_v6__s87.yaml"
+  },
+  {
+    "run_id": "E5-INT8__cnamuangtou_sparse_v6__s123",
+    "experiment_id": "E5-INT8",
+    "dataset": "cnamuangtou_sparse_v6",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__cnamuangtou_sparse_v6__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__cnamuangtou_sparse_v6__s123.yaml"
+  },
+  {
+    "run_id": "E5-INT8__indian__s13",
+    "experiment_id": "E5-INT8",
+    "dataset": "indian",
+    "seed": 13,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__indian__s13.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__indian__s13.yaml"
+  },
+  {
+    "run_id": "E5-INT8__indian__s21",
+    "experiment_id": "E5-INT8",
+    "dataset": "indian",
+    "seed": 21,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__indian__s21.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__indian__s21.yaml"
+  },
+  {
+    "run_id": "E5-INT8__indian__s42",
+    "experiment_id": "E5-INT8",
+    "dataset": "indian",
+    "seed": 42,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__indian__s42.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__indian__s42.yaml"
+  },
+  {
+    "run_id": "E5-INT8__indian__s87",
+    "experiment_id": "E5-INT8",
+    "dataset": "indian",
+    "seed": 87,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__indian__s87.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__indian__s87.yaml"
+  },
+  {
+    "run_id": "E5-INT8__indian__s123",
+    "experiment_id": "E5-INT8",
+    "dataset": "indian",
+    "seed": 123,
+    "json": "/Users/olukotunjosh/Downloads/run_manifests/json/E5-INT8__indian__s123.json",
+    "yaml": "/Users/olukotunjosh/Downloads/run_manifests/yaml/E5-INT8__indian__s123.yaml"
+  }
+]
