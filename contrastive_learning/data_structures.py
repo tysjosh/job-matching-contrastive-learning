@@ -316,6 +316,10 @@ class TrainingConfig:
     # ABLATION, since that overlap is the same signal that selected the positive
     # (self-referential), so it is off by default.
     cve_ontology_overlap_weighting: bool = False
+    # CVE Stage 2 classification heads: weight the losses by class frequency
+    # (inverse-freq CE for priority_band, pos_weight BCE for in_kev/ransomware)
+    # to counter majority-class collapse. On by default; set False to ablate.
+    cve_class_balanced_heads: bool = True
 
     def __post_init__(self):
         """Validate configuration parameters."""
