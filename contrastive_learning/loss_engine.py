@@ -1132,10 +1132,15 @@ class ContrastiveLossEngine:
         # Create a copy and remove metadata that doesn't affect embeddings
         normalized = {}
         
-        # Essential fields that affect text encoding
+        # Essential fields that affect text encoding. `encoder_view` / `cve`
+        # (CVE domain, spec cve-vulnerability-ranking) are additive: career
+        # records never carry these keys, so their normalized hash is byte-for-byte
+        # unchanged, while CVE slots {cve, encoder_view} hash distinctly instead of
+        # collapsing to a single empty-normalized key.
         essential_fields = {
             'experience', 'role', 'experience_level', 'skills', 'keywords',
-            'title', 'jobtitle', 'description', 'jobdescription'
+            'title', 'jobtitle', 'description', 'jobdescription',
+            'encoder_view', 'cve'
         }
         
         for key, value in content.items():

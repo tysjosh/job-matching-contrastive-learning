@@ -1,0 +1,15 @@
+{
+  "per_tier_selected_counts": {
+    "hard": 2635,
+    "medium": 4408,
+    "easy": 277
+  },
+  "per_tier_fallback_usage": {
+    "hard": 953,
+    "medium": 640
+  },
+  "random_fallback_anchor_count": 782,
+  "skipped_missing_id_count": 128913,
+  "deficit_anchor_count": 0,
+  "anchors_processed": 1600
+}

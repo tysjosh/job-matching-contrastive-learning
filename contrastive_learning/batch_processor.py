@@ -14,6 +14,10 @@ from .data_structures import TrainingSample, ContrastiveTriplet, TrainingConfig
 
 if TYPE_CHECKING:
     from .career_graph import CareerGraph
+    # CVE-domain tiered negative selector. Imported only for typing so the core
+    # never takes a hard runtime dependency on the cve_domain package (the seam
+    # is reached through injection / the Ontology_Adapter interface).
+    from cve_domain.negative_selector import CVENegativeSelector
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +33,10 @@ class BatchProcessor:
     """
 
     def __init__(self, config: TrainingConfig, career_graph: Optional['CareerGraph'] = None,
-                 esco_graph_path: Optional[str] = None):
+                 esco_graph_path: Optional[str] = None,
+                 cve_negative_selector: Optional['CVENegativeSelector'] = None,
+                 cve_view_lookup: Optional[Dict[str, Dict[str, Any]]] = None,
+                 cve_present_ids: Optional[set] = None):
         """
         Initialize the BatchProcessor with training configuration.
 
@@ -37,6 +44,20 @@ class BatchProcessor:
             config: TrainingConfig containing negative sampling parameters
             career_graph: Optional CareerGraph for pathway-aware negative sampling
             esco_graph_path: Path to ESCO graph file (required if career_graph is None and use_pathway_negatives=True)
+            cve_negative_selector: Optional CVE-domain tiered negative selector
+                (``cve_domain.negative_selector.CVENegativeSelector``). When
+                provided, the negative-selection point routes through it to supply
+                ontology-tiered CVE negatives. When ``None`` (the default), the
+                career negative-selection path is used unchanged. This is the
+                Ontology_Adapter seam for the CVE domain (Req 5.3) and is purely
+                additive — the loss engine is not touched.
+            cve_view_lookup: Optional mapping of ``cve`` id -> its
+                ``CVE_View_Record`` (carrying ``encoder_view``), used to materialize
+                the selected negative cve ids into negative "job" slots the loss
+                engine already consumes.
+            cve_present_ids: Optional set of cve ids present among the converted
+                records (the validity universe for pooled negatives). Defaults to
+                the keys of ``cve_view_lookup`` when omitted.
         """
         self.config = config
         self.negative_sampling_ratio = config.negative_sampling_ratio
@@ -124,6 +145,53 @@ class BatchProcessor:
         self.use_rejection_hard_negatives = getattr(config, 'use_rejection_hard_negatives', False)
         self.rejection_hard_neg_count = getattr(config, 'rejection_hard_neg_count', 4)
         self.rejection_index = {}  # job_id -> list of rejected resume dicts
+
+        # ── CVE-domain tiered negative selection (additive; Req 5.3) ──
+        # When a CVENegativeSelector is injected (career default: None), the
+        # negative-selection point routes through it instead of the career logic.
+        # This keeps the career path byte-identical whenever no selector is set.
+        self.cve_negative_selector = cve_negative_selector
+        self.cve_view_lookup: Dict[str, Dict[str, Any]] = dict(cve_view_lookup or {})
+        self._cve_split_ids: List[str] = list(self.cve_view_lookup.keys())
+        self._cve_present_ids: set = (
+            set(cve_present_ids) if cve_present_ids is not None
+            else set(self._cve_split_ids)
+        )
+        if self.cve_negative_selector is not None:
+            logger.info(
+                "BatchProcessor: CVE tiered negative selector enabled "
+                "(%d view records indexed)", len(self.cve_view_lookup))
+
+    def set_cve_negative_selector(
+        self,
+        selector: 'CVENegativeSelector',
+        view_lookup: Dict[str, Dict[str, Any]],
+        present_ids: Optional[set] = None,
+    ) -> None:
+        """Inject the CVE tiered negative selector and its view-record lookup.
+
+        This is the setter counterpart to the constructor params, letting callers
+        wire the CVE Ontology_Adapter seam after construction. Purely additive:
+        the career path is unaffected until a selector is set.
+
+        Args:
+            selector: The ``CVENegativeSelector`` supplying tiered CVE negatives.
+            view_lookup: Mapping of ``cve`` id -> its ``CVE_View_Record`` (carrying
+                ``encoder_view``), used to materialize selected negative ids into
+                negative "job" slots.
+            present_ids: Optional validity universe for pooled negatives; defaults
+                to the keys of ``view_lookup``.
+        """
+        self.cve_negative_selector = selector
+        self.cve_view_lookup = dict(view_lookup or {})
+        self._cve_split_ids = list(self.cve_view_lookup.keys())
+        self._cve_present_ids = (
+            set(present_ids) if present_ids is not None
+            else set(self._cve_split_ids)
+        )
+        logger.info(
+            "BatchProcessor: CVE tiered negative selector set "
+            "(%d view records indexed)", len(self.cve_view_lookup))
 
     def build_rejection_index(self, dataset_path: str) -> None:
         """Build index of rejected resumes per job from the training data.
@@ -281,6 +349,64 @@ class BatchProcessor:
         basis = f"{role}||{first_desc}||{skills_str}"
         return hashlib.sha256(basis.encode('utf-8')).hexdigest()[:16]
 
+    def _select_cve_negatives(
+        self, anchor_sample: TrainingSample
+    ) -> tuple[List[Dict[str, Any]], List[float]]:
+        """Select tiered CVE negatives via the injected CVENegativeSelector (Req 5.3).
+
+        The CVE domain packs the anchor CVE into the sample's first view slot
+        (``resume``) and the ontology-related positive CVE into the second
+        (``job``); ``metadata['resume_id']`` is the anchor cve id. This method
+        asks the ``CVENegativeSelector`` for tiered negative cve ids for the
+        anchor, then materializes each id into a negative "job" slot
+        (``{cve, encoder_view}``) — the same shape as the positive job slot the
+        loss engine already consumes. The loss math is untouched: this only
+        chooses *which* CVE records become negatives.
+
+        Args:
+            anchor_sample: The positive (anchor+positive) CVE TrainingSample.
+
+        Returns:
+            Tuple of (negative_job_slots, career_distances). ``career_distances``
+            are zeros (tier structure lives in the selector, not the loss).
+        """
+        # Anchor cve id: prefer the injected group id, fall back to the anchor
+        # view slot's cve.
+        anchor_cve = anchor_sample.metadata.get('resume_id')
+        if not anchor_cve:
+            anchor_cve = anchor_sample.resume.get('cve', '')
+        anchor_cve = str(anchor_cve).strip()
+
+        neg_ids = self.cve_negative_selector.select_negatives(
+            anchor_cve, self._cve_split_ids, self._cve_present_ids)
+
+        negatives: List[Dict[str, Any]] = []
+        for cid in neg_ids:
+            record = self.cve_view_lookup.get(cid)
+            if record is None:
+                # Selector already filters against present_ids, but guard anyway.
+                continue
+            negatives.append({
+                'cve': cid,
+                'encoder_view': record.get('encoder_view', ''),
+            })
+
+        if not negatives:
+            logger.warning(
+                "No CVE negatives selected for anchor %s; using dummy negative",
+                anchor_cve or anchor_sample.sample_id)
+            dummy_negative = {
+                'cve': 'dummy_negative',
+                'encoder_view': 'No Match Available',
+            }
+            return [dummy_negative], [self.config.medium_negative_max_distance]
+
+        career_distances = [0.0] * len(negatives)
+        logger.debug(
+            "Selected %d CVE tiered negatives for anchor %s",
+            len(negatives), anchor_cve)
+        return negatives, career_distances
+
     def _select_negatives(self, anchor_sample: TrainingSample, batch: List[TrainingSample], global_job_pool: Optional[List[Dict[str, Any]]] = None) -> tuple[List[Dict[str, Any]], List[float]]:
         """
         Select negative jobs using either global pool or batch-based sampling.
@@ -301,6 +427,13 @@ class BatchProcessor:
         Returns:
             Tuple of (negative_jobs, career_distances)
         """
+        # ── CVE domain: tiered ontology negatives (Req 5.3) ──
+        # When a CVENegativeSelector is injected, route negative selection through
+        # it. This branch is skipped entirely for the career default (selector is
+        # None), so the career negative-selection behavior below is unchanged.
+        if self.cve_negative_selector is not None:
+            return self._select_cve_negatives(anchor_sample)
+
         # Choose negative candidate source
         if self.use_in_batch_negatives:
             # ConFit-style: use other jobs in the batch as negatives

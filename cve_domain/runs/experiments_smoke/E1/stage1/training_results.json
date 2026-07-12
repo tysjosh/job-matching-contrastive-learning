@@ -1,0 +1,22 @@
+{
+  "final_loss": 2.6448596286773682,
+  "epoch_losses": [
+    2.6448596286773682
+  ],
+  "validation_losses": [
+    2.474029541015625
+  ],
+  "training_time": 160.03335881233215,
+  "total_batches": 25,
+  "total_samples": 1552,
+  "checkpoint_paths": [
+    "cve_domain/runs/experiments_smoke/E1/stage1/checkpoint_epoch_0.pt"
+  ],
+  "metrics": {
+    "total_samples_processed": 1552,
+    "total_triplets_created": 1552,
+    "checkpoint_saves": 1,
+    "training_start_time": 1783817472.382841,
+    "training_end_time": 1783817632.4162
+  }
+}

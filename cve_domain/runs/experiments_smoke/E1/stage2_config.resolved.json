@@ -1,0 +1,52 @@
+{
+  "domain_adapter": "cve",
+  "split_strategy": "stratified",
+  "split_seed": 42,
+  "split_proportions": {
+    "train": 80,
+    "validation": 10,
+    "test": 10
+  },
+  "max_negatives_per_anchor": 7,
+  "negative_tier_ratios": {
+    "hard": 0.34,
+    "medium": 0.33,
+    "easy": 0.33
+  },
+  "freeze_text_encoder": true,
+  "cve_csv_path": "cybersecurity-vulnerability-ranking/data/processed/vulnerability_priority_ranking_nvd_all.csv",
+  "cve_profiles_path": "cybersecurity-vulnerability-ranking/data/ontology/cve_ontology_profiles.jsonl",
+  "cve_denominator_pools_path": "cybersecurity-vulnerability-ranking/data/ontology/cve_denominator_pools.jsonl",
+  "cyber_kg_path": "cybersecurity-vulnerability-ranking/data/ontology/cyber_kg.gexf",
+  "training_phase": "fine_tuning",
+  "batch_size": 32,
+  "learning_rate": 0.0005,
+  "num_epochs": 10,
+  "temperature": 0.2,
+  "use_view_augmentation": false,
+  "checkpoint_frequency": 500,
+  "log_frequency": 10,
+  "shuffle_data": true,
+  "text_encoder_model": "sentence-transformers/all-mpnet-base-v2",
+  "text_encoder_device": null,
+  "embedding_cache_size": 10000,
+  "enable_embedding_preload": false,
+  "embedding_cache_path": "cve_domain/runs/stage2_supervised/embedding_cache/text_embeddings.pt",
+  "clear_cache_between_epochs": true,
+  "projection_dim": 128,
+  "projection_dropout": 0.3,
+  "weight_decay": 0.001,
+  "freeze_contrastive_layers": true,
+  "classification_dropout": 0.3,
+  "validate_every_n_epochs": 1,
+  "pretrained_model_path": "cve_domain/runs/stage1_contrastive/best_checkpoint.pt",
+  "supervised_targets": [
+    "priority_score",
+    "priority_band",
+    "in_kev",
+    "ransomware"
+  ],
+  "output_dir": "cve_domain/runs/stage2_supervised",
+  "checkpoint_path": "cve_domain/runs/stage2_supervised/best_checkpoint.pt",
+  "validation_path": "cve_domain/runs/stage2_supervised/data_splits/validation.jsonl"
+}

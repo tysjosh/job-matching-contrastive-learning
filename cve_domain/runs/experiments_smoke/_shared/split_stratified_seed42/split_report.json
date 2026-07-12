@@ -1,0 +1,35 @@
+{
+  "strategy": "stratified",
+  "seed": 42,
+  "proportions": {
+    "train": 80.0,
+    "validation": 10.0,
+    "test": 10.0
+  },
+  "per_split_counts": {
+    "train": 1600,
+    "validation": 200,
+    "test": 200
+  },
+  "per_split_band_distribution": {
+    "train": {
+      "critical": 618,
+      "high": 372,
+      "medium": 610
+    },
+    "validation": {
+      "critical": 77,
+      "high": 46,
+      "medium": 77
+    },
+    "test": {
+      "critical": 77,
+      "high": 47,
+      "medium": 76
+    }
+  },
+  "temporal_missing_date_reassigned_count": 0,
+  "unbanded_count": 0,
+  "status": "ok",
+  "reason": null
+}

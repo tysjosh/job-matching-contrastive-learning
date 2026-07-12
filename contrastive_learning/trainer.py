@@ -216,20 +216,29 @@ class ContrastiveLearningTrainer:
             except Exception as e:
                 logger.warning(f"Could not enable gradient checkpointing: {e}")
 
-            # Cap encoder sequence length when fine-tuning. Attention activations
-            # scale with seq_len^2 and must be retained for backprop, so long
-            # resume texts blow up GPU memory. Capping is the biggest lever.
-            unfrozen_max_seq = getattr(config, 'unfrozen_max_seq_length', 256)
-            if unfrozen_max_seq:
-                try:
-                    prev = self.text_encoder.max_seq_length
-                    self.text_encoder.max_seq_length = int(unfrozen_max_seq)
-                    logger.info(f"📏 Encoder max_seq_length capped {prev} -> "
-                                f"{unfrozen_max_seq} for fine-tuning (memory).")
-                except Exception as e:
-                    logger.warning(f"Could not set max_seq_length: {e}")
-        
         self.model.to(self.device)
+
+        # Unified encoder sequence-length cap. Applies in BOTH frozen and
+        # unfrozen modes so the seq-length confound can be controlled
+        # independently of the freeze setting.
+        #   - encoder_max_seq_length (if set) takes precedence and applies in
+        #     either mode. Used for the frozen-256 control experiment that
+        #     isolates input truncation from encoder unfreezing.
+        #   - otherwise, when fine-tuning, fall back to unfrozen_max_seq_length
+        #     (attention activations scale with seq_len^2 and are retained for
+        #     backprop, so long resume texts blow up GPU memory).
+        eff_cap = getattr(config, 'encoder_max_seq_length', None)
+        if eff_cap is None and not self.freeze_text_encoder:
+            eff_cap = getattr(config, 'unfrozen_max_seq_length', 256)
+        if eff_cap:
+            try:
+                prev = self.text_encoder.max_seq_length
+                self.text_encoder.max_seq_length = int(eff_cap)
+                mode = "frozen" if self.freeze_text_encoder else "fine-tuning"
+                logger.info(f"📏 Encoder max_seq_length capped {prev} -> "
+                            f"{eff_cap} ({mode}).")
+            except Exception as e:
+                logger.warning(f"Could not set max_seq_length: {e}")
 
         # Initialize efficient embedding cache
         cache_size = getattr(config, 'embedding_cache_size', 10000)  # Default 10k embeddings
@@ -1060,7 +1069,16 @@ class ContrastiveLearningTrainer:
         Returns:
             SentenceTransformer embedding tensor (from frozen encoder)
         """
-        if content_type == 'resume':
+        # Domain_Adapter_Seam (CVE domain, spec cve-vulnerability-ranking):
+        # a content slot carrying a pre-serialized ``encoder_view`` (the CVE
+        # Profile_Text_View) is embedded verbatim. Additive and guarded on the
+        # key's presence, so career records take the resume/job path below
+        # byte-for-byte unchanged.
+        cve_view = content.get('encoder_view') if isinstance(content, dict) else None
+        if isinstance(cve_view, str) and cve_view.strip():
+            full_text = cve_view
+
+        elif content_type == 'resume':
             text_parts = []
 
             # 1. Role and experience level FIRST (most discriminative metadata)
@@ -1376,8 +1394,12 @@ class ContrastiveLearningTrainer:
         """
         logger.info(f"Preloading embeddings for dataset: {dataset_path}")
         
-        # Try loading from disk cache first
-        cache_path = "embedding_cache/text_embeddings.pt"
+        # Try loading from disk cache first. The path is configurable so each
+        # dataset/domain persists its own cache (default preserves the historical
+        # shared career location); CVE runs point this under their isolated run dir.
+        cache_path = getattr(
+            self.config, "embedding_cache_path", "embedding_cache/text_embeddings.pt"
+        )
         if self.embedding_cache.load_from_disk(cache_path):
             logger.info("Skipped preloading — loaded embeddings from disk cache")
             return

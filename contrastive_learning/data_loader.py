@@ -10,6 +10,7 @@ from typing import Dict, List, Any, Iterator, Union, Optional, TextIO
 from dataclasses import dataclass
 
 from .data_structures import TrainingSample, TrainingConfig
+from .domain_adapters import get_domain_adapter
 
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,17 @@ class DataLoader:
         self.shuffle = config.shuffle_data
         self.stats = DataLoaderStats()
 
+        # Domain_Adapter_Seam: obtain the encoder view, label, and grouping id
+        # for each raw record from a configured adapter instead of reading
+        # domain-specific record keys directly. Defaults to "career" when the
+        # field is absent so existing career configs behave byte-for-byte
+        # identically (Req 7.1, 7.3, 7.7, 12.2, 12.5).
+        self._adapter = get_domain_adapter(
+            getattr(config, "domain_adapter", "career"), config)
+        # Share the loader's DataLoaderStats object with the adapter so its
+        # label-conversion counters land on the same object the loader reports.
+        self._adapter.stats = self.stats
+
         # Resume-grouped batching keeps all records of the same resume in the
         # same batch so the query-anchored ordinal loss can see graded siblings
         # (good_fit / potential_fit / no_fit for one resume).
@@ -94,6 +106,7 @@ class DataLoader:
 
         # Reset stats for new loading session
         self.stats = DataLoaderStats()
+        self._adapter.stats = self.stats
 
         with open(path, 'r', encoding='utf-8') as file:
             if self.group_by_resume:
@@ -122,6 +135,7 @@ class DataLoader:
 
         # Reset stats for new loading session
         self.stats = DataLoaderStats()
+        self._adapter.stats = self.stats
 
         if self.group_by_resume:
             logger.info("Resume-grouped batching enabled (ordinal-friendly)")
@@ -487,10 +501,10 @@ class DataLoader:
         """
         Create a TrainingSample from a dictionary record.
 
-        Supports flexible label formats:
-        - String: 'positive'/'negative', 'pos'/'neg', 'match'/'no_match', 'yes'/'no', 'y'/'n'
-        - Numeric: 1/0 (1=positive, 0=negative)
-        - Boolean: true/false (true=positive, false=negative)
+        Thin delegation to the configured Domain_Adapter (Domain_Adapter_Seam).
+        For the default career adapter this reproduces the original resume/job/
+        label handling, deterministic ``resume_id`` injection, and label
+        normalization byte-for-byte (Req 7.1, 7.3, 7.7, 12.2).
 
         Args:
             record: Dictionary containing sample data
@@ -499,58 +513,15 @@ class DataLoader:
         Returns:
             TrainingSample if valid, None if invalid
         """
-        try:
-            # Extract required fields
-            resume = record.get('resume')
-            job = record.get('job')
-            label = record.get('label')
-
-            # Generate sample_id if not provided
-            sample_id = record.get('sample_id', f"sample_{line_number}")
-
-            # Extract optional metadata
-            metadata = record.get('metadata', {})
-
-            # Basic field validation
-            if not resume or not isinstance(resume, dict):
-                logger.warning(
-                    f"Line {line_number}: Invalid or missing resume field")
-                return None
-
-            if not job or not isinstance(job, dict):
-                logger.warning(
-                    f"Line {line_number}: Invalid or missing job field")
-                return None
-
-            # Inject a stable resume_id so ordinal loss can group graded jobs
-            # per query. job_applicant_id is null in the v7 data, so we derive a
-            # deterministic id from resume content (role + first experience text).
-            if 'resume_id' not in metadata or not metadata.get('resume_id'):
-                metadata = dict(metadata)  # avoid mutating the shared record dict
-                metadata['resume_id'] = self._compute_resume_id(resume)
-
-            # Normalize label format
-            normalized_label = self._normalize_label(label, line_number)
-            if normalized_label is None:
-                return None
-            label = normalized_label
-
-            return TrainingSample(
-                resume=resume,
-                job=job,
-                label=label,
-                sample_id=sample_id,
-                metadata=metadata
-            )
-
-        except Exception as e:
-            logger.warning(
-                f"Line {line_number}: Error creating training sample: {e}")
-            return None
+        return self._adapter.build_sample(record, line_number, self.config)
 
     def validate_sample(self, sample: TrainingSample) -> bool:
         """
         Validate a training sample for completeness and correctness.
+
+        Thin delegation to the configured Domain_Adapter's ``validate`` hook
+        (Domain_Adapter_Seam). The default career adapter runs the original
+        resume/job validation unchanged (Req 7.1, 7.3, 7.7).
 
         Args:
             sample: TrainingSample to validate
@@ -558,22 +529,7 @@ class DataLoader:
         Returns:
             bool: True if sample is valid, False otherwise
         """
-        try:
-            # Check if resume has required fields
-            if not self._validate_resume(sample.resume):
-                return False
-
-            # Check if job has required fields
-            if not self._validate_job(sample.job):
-                return False
-
-            # Additional validation passed in __post_init__ of TrainingSample
-            return True
-
-        except Exception as e:
-            logger.warning(
-                f"Sample validation error for {sample.sample_id}: {e}")
-            return False
+        return self._adapter.validate(sample)
 
     def _validate_resume(self, resume: Dict[str, Any]) -> bool:
         """

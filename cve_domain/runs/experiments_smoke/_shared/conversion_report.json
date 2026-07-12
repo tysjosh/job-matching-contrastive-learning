@@ -1,0 +1,13 @@
+{
+  "input_rows": 347144,
+  "emitted_records": 347144,
+  "missing_or_empty_field_count": 0,
+  "missing_profile_count": 0,
+  "duplicate_cve_count": 0,
+  "skipped_row_count": 0,
+  "validation_failure_count": 0,
+  "truncation_count": 0,
+  "priority_score_omitted_count": 0,
+  "priority_band_omitted_count": 0,
+  "defaulted_label_count": 0
+}

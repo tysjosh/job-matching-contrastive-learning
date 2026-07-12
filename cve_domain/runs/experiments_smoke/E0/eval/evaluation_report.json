@@ -1,0 +1,64 @@
+{
+  "status": "ok",
+  "num_test_records": 200,
+  "ranking": {
+    "skipped": false,
+    "num_ranked": 200,
+    "num_missing_prediction": 0,
+    "ndcg": 0.9466923067172991,
+    "ndcg_at_k": {
+      "5": 0.7023067572703542,
+      "10": 0.7058448844116577
+    },
+    "map": 0.3866028321559964,
+    "map_relevance_threshold": 77.68,
+    "num_relevant": 100
+  },
+  "classification": {
+    "in_kev": {
+      "skipped": false,
+      "num_evaluated": 200,
+      "num_missing_prediction": 0,
+      "accuracy": 0.8,
+      "macro_f1": 0.7258771929824561
+    },
+    "priority_band": {
+      "skipped": false,
+      "num_evaluated": 200,
+      "num_missing_prediction": 0,
+      "accuracy": 0.44,
+      "macro_f1": 0.33279290392692457
+    }
+  },
+  "embedding_separation": {
+    "skipped": false,
+    "num_bands": 3,
+    "num_missing_embedding": 0,
+    "per_band": {
+      "critical": {
+        "count": 77,
+        "mean_intra_class_distance": 0.6617228305395582
+      },
+      "high": {
+        "count": 47,
+        "mean_intra_class_distance": 0.6607569821348183
+      },
+      "medium": {
+        "count": 76,
+        "mean_intra_class_distance": 0.5437586644098309
+      }
+    },
+    "inter_centroid_distances": {
+      "critical|high": 0.19530989479576027,
+      "critical|medium": 0.3668228272137121,
+      "high|medium": 0.36550987310980043
+    },
+    "mean_intra_class_distance": 0.6166694730351479,
+    "mean_inter_centroid_distance": 0.30921419837309094,
+    "separation_ratio": 0.5014261478700874
+  },
+  "skipped_metrics": {},
+  "notes": {
+    "no_circular_evaluation": "All metrics are computed against ground-truth supervised labels (priority_score, priority_band, in_kev, ransomware) only. No metric scores the model against the Positive_Selector's ontology-derived positive pairs (Req 10.8)."
+  }
+}

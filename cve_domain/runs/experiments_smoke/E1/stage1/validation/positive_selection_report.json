@@ -1,0 +1,9 @@
+{
+  "resolved_by_cascade_level": {
+    "cwe_and_cpe_or_vendor": 54,
+    "cwe": 96,
+    "vendor_or_product": 38
+  },
+  "excluded_anchor_count": 12,
+  "anchors_processed": 200
+}
