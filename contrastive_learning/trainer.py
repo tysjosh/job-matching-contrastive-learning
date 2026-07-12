@@ -1069,7 +1069,16 @@ class ContrastiveLearningTrainer:
         Returns:
             SentenceTransformer embedding tensor (from frozen encoder)
         """
-        if content_type == 'resume':
+        # Domain_Adapter_Seam (CVE domain, spec cve-vulnerability-ranking):
+        # a content slot carrying a pre-serialized ``encoder_view`` (the CVE
+        # Profile_Text_View) is embedded verbatim. Additive and guarded on the
+        # key's presence, so career records take the resume/job path below
+        # byte-for-byte unchanged.
+        cve_view = content.get('encoder_view') if isinstance(content, dict) else None
+        if isinstance(cve_view, str) and cve_view.strip():
+            full_text = cve_view
+
+        elif content_type == 'resume':
             text_parts = []
 
             # 1. Role and experience level FIRST (most discriminative metadata)
@@ -1385,8 +1394,12 @@ class ContrastiveLearningTrainer:
         """
         logger.info(f"Preloading embeddings for dataset: {dataset_path}")
         
-        # Try loading from disk cache first
-        cache_path = "embedding_cache/text_embeddings.pt"
+        # Try loading from disk cache first. The path is configurable so each
+        # dataset/domain persists its own cache (default preserves the historical
+        # shared career location); CVE runs point this under their isolated run dir.
+        cache_path = getattr(
+            self.config, "embedding_cache_path", "embedding_cache/text_embeddings.pt"
+        )
         if self.embedding_cache.load_from_disk(cache_path):
             logger.info("Skipped preloading — loaded embeddings from disk cache")
             return

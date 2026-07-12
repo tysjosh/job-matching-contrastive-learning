@@ -1,0 +1,18 @@
+{
+  "stage1_checkpoint_path": null,
+  "best_checkpoint_path": "cve_domain/runs/experiments_smoke/E0/stage2/stage2_best_checkpoint.pt",
+  "best_val_loss": 5917.687709263393,
+  "epochs_trained": 1,
+  "enabled_heads": [
+    "priority_score",
+    "priority_band",
+    "in_kev",
+    "ransomware"
+  ],
+  "skipped_heads": {},
+  "band_vocabulary": [
+    "critical",
+    "high",
+    "medium"
+  ]
+}

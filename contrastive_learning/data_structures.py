@@ -134,6 +134,11 @@ class TrainingConfig:
     embedding_cache_size: int = 10000  # Maximum number of embeddings to cache
     enable_embedding_preload: bool = True  # Whether to preload embeddings before training
     clear_cache_between_epochs: bool = True  # Clear cache between epochs to prevent memory leaks
+    # On-disk location of the preloaded text-embedding cache. Defaults to the
+    # historical shared path so career behavior is unchanged; per-dataset runs
+    # (e.g. the CVE domain) point this under their own isolated output dir so
+    # datasets never share a cache file (domain isolation).
+    embedding_cache_path: str = "embedding_cache/text_embeddings.pt"
     
     # View augmentation specific settings
     max_resume_views: int = 5  # Maximum number of resume views to generate
@@ -275,6 +280,42 @@ class TrainingConfig:
     rejection_hard_neg_count: int = 4       # Number of rejection-based hard negatives per anchor
     positive_only_batches: bool = False     # If True, only load positive samples into batches (ConFit-style)
     global_resume_pool_size: int = 1000     # Max resumes to keep in memory for symmetric loss reverse direction
+
+    # ------------------------------------------------------------------
+    # CVE domain / multi-domain support (additive — defaults preserve the
+    # existing career-domain behavior byte-for-byte). See spec
+    # cve-vulnerability-ranking. `max_negatives_per_anchor` and
+    # `freeze_text_encoder` already exist above with career-safe defaults and
+    # are reused for the CVE Run_Config.
+    # ------------------------------------------------------------------
+    # Active Domain_Adapter selected via the Domain_Adapter_Seam. "career"
+    # reproduces today's resume/job/label handling exactly.
+    domain_adapter: str = "career"
+    # Data split strategy for the CVE Data_Splitter: "stratified" (default,
+    # matches data_splits_v7), "temporal", or "random".
+    split_strategy: str = "stratified"
+    # Seed for reproducible splits and seeded negative/positive selection.
+    split_seed: int = 42
+    # Train/validation/test split proportions (percent, sum ~100). Default
+    # 80/10/10 mirrors the existing career pipeline.
+    split_proportions: Dict[str, float] = field(
+        default_factory=lambda: {"train": 80, "validation": 10, "test": 10})
+    # Per-tier negative ratios for the CVE Negative_Selector; normalized to
+    # sum to 1 at selection time.
+    negative_tier_ratios: Dict[str, float] = field(
+        default_factory=lambda: {"hard": 0.34, "medium": 0.33, "easy": 0.33})
+    # CVE data source paths (None keeps the career domain unaffected).
+    cve_csv_path: Optional[str] = None
+    cve_profiles_path: Optional[str] = None
+    cve_denominator_pools_path: Optional[str] = None
+    cyber_kg_path: Optional[str] = None
+    # CVE sample-level loss weighting (only active when ontology_weight > 0):
+    # by default the per-sample weight uses ONLY the label-completeness quality
+    # tier (an independent data-quality signal). Setting this True additionally
+    # modulates the weight by the anchor↔positive ontology overlap — an opt-in
+    # ABLATION, since that overlap is the same signal that selected the positive
+    # (self-referential), so it is off by default.
+    cve_ontology_overlap_weighting: bool = False
 
     def __post_init__(self):
         """Validate configuration parameters."""

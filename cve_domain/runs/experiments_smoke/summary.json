@@ -1,0 +1,15 @@
+[
+  {
+    "id": "E1",
+    "name": "baseline contrastive",
+    "status": "ok",
+    "ndcg": 0.9642976326323076,
+    "map": 0.4822870209112412,
+    "in_kev_acc": 0.66,
+    "in_kev_macro_f1": 0.39759036144578314,
+    "band_acc": 0.345,
+    "band_macro_f1": 0.28562658276417774,
+    "band_separation_ratio": 0.4549890947209343,
+    "skipped_metrics": []
+  }
+]

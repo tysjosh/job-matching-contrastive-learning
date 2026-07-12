@@ -100,10 +100,15 @@ class EmbeddingCache:
         # Create a copy and remove metadata that doesn't affect embeddings
         normalized = {}
 
-        # Essential fields that affect text encoding
+        # Essential fields that affect text encoding. `encoder_view` / `cve`
+        # (CVE domain, spec cve-vulnerability-ranking) are additive: career
+        # records never carry these keys, so their normalized hash is byte-for-byte
+        # unchanged, while CVE slots {cve, encoder_view} hash distinctly instead of
+        # collapsing to a single empty-normalized key.
         essential_fields = {
             'experience', 'role', 'experience_level', 'skills', 'keywords',
-            'title', 'jobtitle', 'description', 'jobdescription'
+            'title', 'jobtitle', 'description', 'jobdescription',
+            'encoder_view', 'cve'
         }
 
         for key, value in content.items():
@@ -495,6 +500,17 @@ class BatchEfficientEncoder:
         the SentenceTransformer's token window. Skills come before experience
         to guarantee they are always encoded.
         """
+        # Domain_Adapter_Seam (CVE domain, spec cve-vulnerability-ranking):
+        # a content slot carrying a pre-serialized ``encoder_view`` (the CVE
+        # Profile_Text_View) is embedded verbatim. This is additive and guarded
+        # on the key's presence, so career records (which never carry
+        # ``encoder_view``) take the resume/job path below byte-for-byte
+        # unchanged.
+        if isinstance(content, dict):
+            encoder_view = content.get('encoder_view')
+            if isinstance(encoder_view, str) and encoder_view.strip():
+                return encoder_view
+
         text_parts = []
 
         if content_type == 'resume':
