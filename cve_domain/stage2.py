@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
@@ -670,6 +671,11 @@ class CVEStage2Trainer:
         Weights are computed on the training split only and live on ``self.device``.
         """
         weights: Dict[str, "torch.Tensor"] = {}
+        # Cap for the binary pos_weight. Raw neg/pos can reach ~1000x on the full
+        # data (e.g. ransomware: 254 pos / 277k neg), which makes the minority
+        # loss dominate and destabilizes training (observed val_loss blow-up).
+        # Capping keeps the up-weighting useful without wrecking optimization.
+        pos_weight_cap = float(getattr(self.config, "cve_pos_weight_cap", 10.0))
 
         if head_config.enabled.get(PRIORITY_BAND_HEAD):
             idx_map = head_config.band_to_index
@@ -682,10 +688,14 @@ class CVEStage2Trainer:
             total = sum(counts)
             k = len(counts)
             if total > 0 and k > 0:
-                # inverse frequency, normalized to mean 1 (empty classes -> weight 1)
-                w = [(total / (k * c)) if c > 0 else 1.0 for c in counts]
+                # SQRT of inverse-frequency (softer than raw inverse-freq), then
+                # normalize to mean 1. This breaks majority-collapse without the
+                # extreme ~180x weights raw inverse-freq produces on skewed bands.
+                raw = [math.sqrt(total / (k * c)) if c > 0 else 1.0 for c in counts]
+                mean_w = sum(raw) / len(raw)
+                w = [x / mean_w for x in raw]
                 weights["band"] = torch.tensor(w, dtype=torch.float32, device=self.device)
-                logger.info("Stage 2 band class weights (inverse-freq): %s (counts=%s)",
+                logger.info("Stage 2 band class weights (sqrt-inv-freq, mean-norm): %s (counts=%s)",
                             [round(x, 3) for x in w], counts)
 
         for head in (IN_KEV_HEAD, RANSOMWARE_HEAD):
@@ -698,9 +708,11 @@ class CVEStage2Trainer:
                     elif val is False:
                         neg += 1
                 if pos > 0 and neg > 0:
-                    weights[head] = torch.tensor(neg / pos, dtype=torch.float32, device=self.device)
-                    logger.info("Stage 2 %s pos_weight=%.3f (pos=%d, neg=%d)",
-                                head, neg / pos, pos, neg)
+                    raw_pw = neg / pos
+                    pw = min(raw_pw, pos_weight_cap)
+                    weights[head] = torch.tensor(pw, dtype=torch.float32, device=self.device)
+                    logger.info("Stage 2 %s pos_weight=%.3f (capped from raw %.1f; pos=%d, neg=%d)",
+                                head, pw, raw_pw, pos, neg)
         return weights
 
     def _compute_loss(
