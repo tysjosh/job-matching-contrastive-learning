@@ -69,6 +69,13 @@ logger = logging.getLogger(__name__)
 #: The four supervised heads, in a fixed order for deterministic reporting.
 ALL_HEADS = (PRIORITY_SCORE_HEAD, PRIORITY_BAND_HEAD, IN_KEV_HEAD, RANSOMWARE_HEAD)
 
+#: Batch size used for the one-time frozen-encoder embedding pass. This is pure
+#: inference (no gradients), so it can be far larger than the training batch size
+#: for a big speedup on GPU/MPS; the actual batch is max(training batch_size, this).
+EMBED_INFERENCE_BATCH_SIZE = 256
+#: Log embedding progress every N inference batches (visibility on large splits).
+EMBED_LOG_EVERY_N_BATCHES = 20
+
 #: priority_score is a 0–100 label. The regression head is trained on the
 #: normalized [0, 1] target so its MSE lives on the same scale as the
 #: cross-entropy / BCE classification heads (otherwise the raw 0–100 MSE — squared
@@ -527,11 +534,20 @@ class CVEStage2Trainer:
         ]
         if not valid:
             return [], None
-        batch_size = max(1, int(self.config.batch_size))
+        # Embedding is pure frozen-encoder inference (no gradients), so it can use a
+        # much larger batch than the training ``batch_size`` (which is sized for the
+        # head optimizer step). A bigger inference batch is markedly faster on
+        # GPU/MPS with identical results.
+        embed_batch = max(int(self.config.batch_size), EMBED_INFERENCE_BATCH_SIZE)
+        total = len(valid)
         chunks: List["torch.Tensor"] = []
-        for start in range(0, len(valid), batch_size):
-            views = [r["encoder_view"] for r in valid[start:start + batch_size]]
+        logger.info("Embedding %d records once (frozen encoder, batch=%d)...", total, embed_batch)
+        for start in range(0, total, embed_batch):
+            views = [r["encoder_view"] for r in valid[start:start + embed_batch]]
             chunks.append(self._embed_views(views).detach().to("cpu"))
+            done = min(start + embed_batch, total)
+            if done == total or (start // embed_batch) % EMBED_LOG_EVERY_N_BATCHES == 0:
+                logger.info("  embedded %d/%d records (%.0f%%)", done, total, 100.0 * done / total)
         return valid, torch.cat(chunks, dim=0)
 
     # ------------------------------------------------------------------ #
