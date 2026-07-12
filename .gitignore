@@ -178,3 +178,8 @@ results_*/
 
 # Root-level training/run logs
 *.log
+
+# Large CVE source data files (exceed GitHub's 100MB limit; keep local only)
+cybersecurity-vulnerability-ranking/data/ontology/cyber_edges.csv
+cybersecurity-vulnerability-ranking/data/ontology/cyber_kg.gexf
+cybersecurity-vulnerability-ranking/data/processed/vulnerability_priority_ranking_nvd_all.csv
