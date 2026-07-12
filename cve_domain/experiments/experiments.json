@@ -1,0 +1,68 @@
+{
+  "_description": "CVE vulnerability-ranking experiment matrix (feature: cve-vulnerability-ranking). Each experiment resolves as base config + overrides; the runner (run_experiments.py) executes convert -> split -> Stage 1 -> Stage 2 -> predict -> evaluate and aggregates a cross-experiment summary. All experiments share split_seed for comparability; experiments with the same 'split' reuse one materialized split.",
+  "base": {
+    "stage1_config": "cve_domain/configs/stage1_contrastive.json",
+    "stage2_config": "cve_domain/configs/stage2_supervised.json"
+  },
+  "experiments": [
+    {
+      "id": "E0",
+      "name": "no-stage1 baseline",
+      "description": "Honest reference: Stage 2 supervised heads over the FROZEN base sentence-transformer embeddings, with NO contrastive pretraining (no Stage 1). Any gain of E1..E5 over E0 is the value of ontology-supervised Stage 1.",
+      "split": "stratified",
+      "base_embeddings": true,
+      "stage2_overrides": {}
+    },
+    {
+      "id": "E1",
+      "name": "baseline contrastive",
+      "description": "Stage 1 with ontology-tiered negatives (hard/medium/easy pools) and NO sample weighting (ontology_weight=0). The default CVE pipeline.",
+      "split": "stratified",
+      "stage1_overrides": {
+        "ontology_weight": 0.0,
+        "cve_ontology_overlap_weighting": false,
+        "negative_tier_ratios": {"hard": 0.34, "medium": 0.33, "easy": 0.33}
+      }
+    },
+    {
+      "id": "E2",
+      "name": "label-completeness weighting",
+      "description": "E1 + principled, ontology-INDEPENDENT sample weighting by label-completeness quality tier (ontology_weight=0.3, overlap off).",
+      "split": "stratified",
+      "stage1_overrides": {
+        "ontology_weight": 0.3,
+        "cve_ontology_overlap_weighting": false
+      }
+    },
+    {
+      "id": "E3",
+      "name": "ontology-overlap weighting (ablation)",
+      "description": "E2 + the self-referential ontology-overlap sample weight (ontology_weight=0.3, overlap on). Tests whether re-using the pairing signal as a weight helps or hurts vs E2.",
+      "split": "stratified",
+      "stage1_overrides": {
+        "ontology_weight": 0.3,
+        "cve_ontology_overlap_weighting": true
+      }
+    },
+    {
+      "id": "E4",
+      "name": "hard-negative emphasis",
+      "description": "E1 with a harder negative mix (tiers 0.7/0.2/0.1) to test whether emphasizing ontology-hard negatives sharpens the embedding.",
+      "split": "stratified",
+      "stage1_overrides": {
+        "ontology_weight": 0.0,
+        "negative_tier_ratios": {"hard": 0.7, "medium": 0.2, "easy": 0.1}
+      }
+    },
+    {
+      "id": "E5",
+      "name": "temporal split",
+      "description": "E1 configuration but a TEMPORAL split (train on older CVEs, test on newer) to measure generalization to future vulnerabilities rather than a random/stratified holdout.",
+      "split": "temporal",
+      "stage1_overrides": {
+        "ontology_weight": 0.0,
+        "negative_tier_ratios": {"hard": 0.34, "medium": 0.33, "easy": 0.33}
+      }
+    }
+  ]
+}

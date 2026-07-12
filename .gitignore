@@ -90,6 +90,13 @@ experiments/
 wandb/
 mlruns/
 
+# The bare "experiments/" above also matches cve_domain/experiments/, which is
+# SOURCE CODE (the CVE experiment harness), not a results dir. Re-include it.
+# (Run outputs live under cve_domain/runs/, which stays ignored below.)
+!cve_domain/experiments/
+!cve_domain/experiments/**
+cve_domain/runs/
+
 # Compressed files
 *.zip
 *.tar.gz
