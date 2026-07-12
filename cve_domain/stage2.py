@@ -405,6 +405,9 @@ class CVEStage2Trainer:
         self._base_embedding_dim: Optional[int] = None
         self.heads = None
         self.head_config: Optional[HeadConfiguration] = None
+        # Per-head class-imbalance weights (band CE weight vector + binary
+        # pos_weights), populated in train() when cve_class_balanced_heads is on.
+        self._class_weights: Dict[str, "torch.Tensor"] = {}
 
     # ------------------------------------------------------------------ #
     # Encoder + projection loading (torch-heavy; deferred)
@@ -650,6 +653,56 @@ class CVEStage2Trainer:
     # ------------------------------------------------------------------ #
     # Loss
     # ------------------------------------------------------------------ #
+    def _compute_class_weights(
+        self, records: Sequence[Mapping[str, Any]], head_config: HeadConfiguration
+    ) -> Dict[str, "torch.Tensor"]:
+        """Derive class-imbalance weights from the training label distribution.
+
+        The classification heads otherwise minimize their loss by predicting the
+        majority class (observed collapse: constant band / constant in_kev). We
+        counter this with:
+
+        * ``priority_band`` (CrossEntropy): inverse-frequency class weights,
+          normalized so the mean weight is ~1, aligned to ``band_to_index``.
+        * ``in_kev`` / ``ransomware`` (BCEWithLogits): ``pos_weight = n_neg/n_pos``
+          so the positive (minority) class is up-weighted.
+
+        Weights are computed on the training split only and live on ``self.device``.
+        """
+        weights: Dict[str, "torch.Tensor"] = {}
+
+        if head_config.enabled.get(PRIORITY_BAND_HEAD):
+            idx_map = head_config.band_to_index
+            counts = [0] * len(idx_map)
+            for rec in records:
+                band = _band_value(_record_labels(rec).get(PRIORITY_BAND_HEAD))
+                idx = idx_map.get(band) if band is not None else None
+                if idx is not None:
+                    counts[idx] += 1
+            total = sum(counts)
+            k = len(counts)
+            if total > 0 and k > 0:
+                # inverse frequency, normalized to mean 1 (empty classes -> weight 1)
+                w = [(total / (k * c)) if c > 0 else 1.0 for c in counts]
+                weights["band"] = torch.tensor(w, dtype=torch.float32, device=self.device)
+                logger.info("Stage 2 band class weights (inverse-freq): %s (counts=%s)",
+                            [round(x, 3) for x in w], counts)
+
+        for head in (IN_KEV_HEAD, RANSOMWARE_HEAD):
+            if head_config.enabled.get(head):
+                pos = neg = 0
+                for rec in records:
+                    val = _bool_label(_record_labels(rec).get(head))
+                    if val is True:
+                        pos += 1
+                    elif val is False:
+                        neg += 1
+                if pos > 0 and neg > 0:
+                    weights[head] = torch.tensor(neg / pos, dtype=torch.float32, device=self.device)
+                    logger.info("Stage 2 %s pos_weight=%.3f (pos=%d, neg=%d)",
+                                head, neg / pos, pos, neg)
+        return weights
+
     def _compute_loss(
         self,
         outputs: Mapping[str, "torch.Tensor"],
@@ -660,9 +713,12 @@ class CVEStage2Trainer:
         MSE for priority_score, CrossEntropy for priority_band, BCEWithLogits for
         the binary heads. Each head's loss is averaged over only the masked
         (label-present) rows; heads with no valid row in the batch contribute 0.
+        When class-balanced heads are enabled, the band CE uses inverse-frequency
+        class weights and the binary heads use a positive-class ``pos_weight``
+        (see :meth:`_compute_class_weights`).
         """
         mse = nn.MSELoss(reduction="mean")
-        ce = nn.CrossEntropyLoss(reduction="mean")
+        ce = nn.CrossEntropyLoss(reduction="mean", weight=self._class_weights.get("band"))
         bce = nn.BCEWithLogitsLoss(reduction="mean")
 
         total = torch.zeros((), dtype=torch.float32, device=self.device)
@@ -683,7 +739,12 @@ class CVEStage2Trainer:
             if head in outputs:
                 mask, tgt = targets[head]
                 if mask.any():
-                    total = total + bce(outputs[head][mask], tgt[mask])
+                    head_bce = (
+                        nn.BCEWithLogitsLoss(reduction="mean", pos_weight=self._class_weights[head])
+                        if head in self._class_weights
+                        else bce
+                    )
+                    total = total + head_bce(outputs[head][mask], tgt[mask])
 
         return total
 
@@ -749,6 +810,13 @@ class CVEStage2Trainer:
 
         self._load_encoder_and_projection()
         heads = self.build_heads(head_config)
+
+        # Class-imbalance weighting for the classification heads (counters the
+        # majority-class collapse). Gated by config; on by default.
+        if getattr(self.config, "cve_class_balanced_heads", True):
+            self._class_weights = self._compute_class_weights(train_records, head_config)
+        else:
+            self._class_weights = {}
 
         weight_decay = getattr(self.config, "weight_decay", 0.0)
         optimizer = optim.Adam(
