@@ -149,6 +149,7 @@ class CVENegativeSelector:
         max_negatives_per_anchor: int,
         tier_ratios: Optional[Mapping[str, float]] = None,
         seed: int = 42,
+        cache_selections: bool = True,
     ) -> None:
         if int(max_negatives_per_anchor) < 1:
             raise ValueError(
@@ -162,6 +163,20 @@ class CVENegativeSelector:
 
         # Report accumulated across select_negatives calls; reset per split run.
         self.report = NegativeSelectionReport()
+
+        # Per-anchor memoization. select_negatives is deterministic for a given
+        # anchor within a run (seed + fixed ontology pools + fixed split), so the
+        # result is identical on every epoch. Training re-selects per anchor on
+        # every batch of every epoch, which repeats the expensive tier filtering
+        # / shuffling / random fallback. Caching by anchor id turns epochs 2..N
+        # into O(1) lookups. Anchor ids are disjoint across train/val/test splits,
+        # so keying by anchor id alone is safe. Call reset_cache() to clear.
+        self.cache_selections = bool(cache_selections)
+        self._selection_cache: Dict[str, List[str]] = {}
+
+    def reset_cache(self) -> None:
+        """Clear the per-anchor selection memo (e.g. when reusing across splits)."""
+        self._selection_cache.clear()
 
     # ------------------------------------------------------------------ #
     # Construction helpers
@@ -218,6 +233,13 @@ class CVENegativeSelector:
             ``max_negatives_per_anchor`` (Req 5.2, 5.4, 6.6, 6.8).
         """
         anchor_cve = str(anchor_cve).strip()
+
+        # Memoized fast path: identical result for this anchor within the run.
+        if self.cache_selections:
+            cached = self._selection_cache.get(anchor_cve)
+            if cached is not None:
+                return list(cached)
+
         if present_ids is None:
             present_ids = set(str(c) for c in split_cve_ids)
 
@@ -301,6 +323,9 @@ class CVENegativeSelector:
             self.report.deficit_anchor_count += 1
 
         self.report.anchors_processed += 1
+
+        if self.cache_selections:
+            self._selection_cache[anchor_cve] = list(selected)
         return selected
 
     # ------------------------------------------------------------------ #

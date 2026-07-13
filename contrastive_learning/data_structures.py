@@ -317,9 +317,12 @@ class TrainingConfig:
     # (self-referential), so it is off by default.
     cve_ontology_overlap_weighting: bool = False
     # CVE Stage 2 classification heads: weight the losses by class frequency
-    # (inverse-freq CE for priority_band, pos_weight BCE for in_kev/ransomware)
-    # to counter majority-class collapse. On by default; set False to ablate.
+    # (sqrt-inverse-freq CE for priority_band, capped pos_weight BCE for
+    # in_kev/ransomware) to counter majority-class collapse. On by default.
     cve_class_balanced_heads: bool = True
+    # Upper bound on the binary pos_weight. Raw neg/pos reaches ~1000x on the
+    # full data and destabilizes training; capping keeps up-weighting useful.
+    cve_pos_weight_cap: float = 10.0
 
     def __post_init__(self):
         """Validate configuration parameters."""

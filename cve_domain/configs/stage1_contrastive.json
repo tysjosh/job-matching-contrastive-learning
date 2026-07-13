@@ -27,7 +27,7 @@
   "loss_type": "infonce",
   "batch_size": 64,
   "learning_rate": 0.000085,
-  "num_epochs": 15,
+  "num_epochs": 10,
   "temperature": 0.07,
   "use_view_augmentation": false,
   "ontology_weight": 0.0,
