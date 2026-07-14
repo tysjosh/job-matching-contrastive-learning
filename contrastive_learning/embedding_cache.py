@@ -10,7 +10,7 @@ import logging
 import hashlib
 import json
 from typing import Dict, List, Any, Tuple, Optional, Set
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import time
 
 logger = logging.getLogger(__name__)
@@ -56,8 +56,11 @@ class EmbeddingCache:
             'memory_usage_mb': 0.0
         }
 
-        # Access tracking for LRU eviction
-        self.access_order: List[str] = []
+        # Access tracking for LRU eviction. An OrderedDict gives O(1) move-to-end
+        # and O(1) pop-oldest; a plain list made every cache hit O(N) (a
+        # `key in list` + `list.remove`), which is catastrophic once the cache
+        # holds the full dataset (~340k) — the dominant per-batch cost.
+        self.access_order: "OrderedDict[str, None]" = OrderedDict()
         self.access_count: Dict[str, int] = defaultdict(int)
 
         logger.info(
@@ -241,8 +244,8 @@ class EmbeddingCache:
             'access_count': 1
         }
 
-        # Update access tracking
-        self.access_order.append(content_key)
+        # Update access tracking (O(1) append-to-end).
+        self.access_order[content_key] = None
         self.access_count[content_key] = 1
 
         # Update memory usage stats
@@ -254,10 +257,13 @@ class EmbeddingCache:
         if self.enable_stats:
             if hit:
                 self.stats['cache_hits'] += 1
-                # Update access tracking for LRU
+                # O(1) move-to-end marks the key most-recently-used. Guard for
+                # keys that entered the cache without an access_order entry
+                # (e.g. loaded from a saved cache file).
                 if content_key in self.access_order:
-                    self.access_order.remove(content_key)
-                self.access_order.append(content_key)
+                    self.access_order.move_to_end(content_key, last=True)
+                else:
+                    self.access_order[content_key] = None
                 self.access_count[content_key] += 1
             else:
                 self.stats['cache_misses'] += 1
@@ -266,22 +272,29 @@ class EmbeddingCache:
         """Evict least recently used items from cache."""
         for _ in range(min(num_items, len(self.cache))):
             if self.access_order:
-                lru_key = self.access_order.pop(0)
+                # O(1) pop of the oldest (least-recently-used) key.
+                lru_key, _ = self.access_order.popitem(last=False)
                 if lru_key in self.cache:
                     del self.cache[lru_key]
                     del self.content_metadata[lru_key]
                     del self.access_count[lru_key]
 
     def _update_memory_stats(self):
-        """Update memory usage statistics."""
+        """Update memory usage statistics.
+
+        O(1): embeddings are uniform width, so total memory = count x per-embedding
+        bytes (estimated from any one cached tensor). The previous version summed
+        over the whole cache on every add, which is O(N^2) while populating a
+        full-dataset cache (~340k) and dominated epoch-1 time.
+        """
         if not self.enable_stats:
             return
-
-        total_memory = 0
-        for embedding in self.cache.values():
-            # Estimate memory: num_elements * bytes_per_float
-            total_memory += embedding.numel() * 4  # 4 bytes per float32
-
+        if not self.cache:
+            self.stats['memory_usage_mb'] = 0.0
+            return
+        sample = next(iter(self.cache.values()))
+        per_embedding_bytes = sample.numel() * 4  # float32
+        total_memory = per_embedding_bytes * len(self.cache)
         self.stats['memory_usage_mb'] = total_memory / (1024 * 1024)
 
     def get_cache_stats(self) -> Dict[str, Any]:
