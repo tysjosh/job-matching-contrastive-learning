@@ -323,6 +323,13 @@ class TrainingConfig:
     # Upper bound on the binary pos_weight. Raw neg/pos reaches ~1000x on the
     # full data and destabilizes training; capping keeps up-weighting useful.
     cve_pos_weight_cap: float = 10.0
+    # CVE Stage 2 classification heads: use focal loss (imbalance-robust) instead
+    # of weighted CE / pos_weight BCE. Focal down-weights easy majority examples
+    # by (1-p_t)^gamma, which fixes the majority-class collapse at the extreme
+    # full-data skews (band 91.6%, in_kev ~1:212, ransomware ~1:1092) without the
+    # training instability of huge pos_weights. On by default; set False to ablate.
+    cve_focal_loss: bool = True
+    cve_focal_gamma: float = 2.0
 
     def __post_init__(self):
         """Validate configuration parameters."""

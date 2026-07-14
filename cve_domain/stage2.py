@@ -58,6 +58,7 @@ from .supervised_heads import (
 try:  # torch is a hard runtime dependency for the actual training path.
     import torch
     import torch.nn as nn
+    import torch.nn.functional as F
     import torch.optim as optim
     from sentence_transformers import SentenceTransformer
 
@@ -715,6 +716,36 @@ class CVEStage2Trainer:
                                 head, pw, raw_pw, pos, neg)
         return weights
 
+    def _binary_focal_loss(
+        self, logits: "torch.Tensor", targets: "torch.Tensor", gamma: float
+    ) -> "torch.Tensor":
+        """Sigmoid focal loss for a binary head.
+
+        Focal loss down-weights easy (confident, usually majority) examples by
+        ``(1 - p_t)**gamma`` so the rare positive class dominates the gradient
+        without the training-destabilizing magnitude of a huge ``pos_weight``.
+        This is the imbalance-robust replacement for BCE at the extreme skews in
+        the full CVE data (in_kev ~1:212, ransomware ~1:1092).
+        """
+        ce = F.binary_cross_entropy_with_logits(logits, targets, reduction="none")
+        p = torch.sigmoid(logits)
+        p_t = p * targets + (1.0 - p) * (1.0 - targets)
+        loss = ce * (1.0 - p_t).pow(gamma)
+        return loss.mean()
+
+    def _multiclass_focal_loss(
+        self, logits: "torch.Tensor", targets: "torch.Tensor", gamma: float,
+        weight: Optional["torch.Tensor"],
+    ) -> "torch.Tensor":
+        """Class-weighted multiclass focal loss for the priority_band head."""
+        logp = F.log_softmax(logits, dim=-1)
+        logp_t = logp.gather(1, targets.view(-1, 1)).squeeze(1)
+        p_t = logp_t.exp()
+        loss = -(1.0 - p_t).pow(gamma) * logp_t
+        if weight is not None:
+            loss = loss * weight[targets]
+        return loss.mean()
+
     def _compute_loss(
         self,
         outputs: Mapping[str, "torch.Tensor"],
@@ -722,13 +753,15 @@ class CVEStage2Trainer:
     ) -> "torch.Tensor":
         """Sum the per-head masked losses (Req 8.5).
 
-        MSE for priority_score, CrossEntropy for priority_band, BCEWithLogits for
-        the binary heads. Each head's loss is averaged over only the masked
-        (label-present) rows; heads with no valid row in the batch contribute 0.
-        When class-balanced heads are enabled, the band CE uses inverse-frequency
-        class weights and the binary heads use a positive-class ``pos_weight``
-        (see :meth:`_compute_class_weights`).
+        MSE for priority_score; the classification heads use **focal loss** when
+        ``cve_focal_loss`` is enabled (the imbalance-robust default) — class-weighted
+        focal CE for priority_band and sigmoid focal loss for the binary heads —
+        otherwise weighted CrossEntropy / pos_weight BCE (see
+        :meth:`_compute_class_weights`). Each head's loss is averaged over only the
+        masked (label-present) rows; heads with no valid row contribute 0.
         """
+        use_focal = bool(getattr(self.config, "cve_focal_loss", True))
+        gamma = float(getattr(self.config, "cve_focal_gamma", 2.0))
         mse = nn.MSELoss(reduction="mean")
         ce = nn.CrossEntropyLoss(reduction="mean", weight=self._class_weights.get("band"))
         bce = nn.BCEWithLogitsLoss(reduction="mean")
@@ -745,18 +778,26 @@ class CVEStage2Trainer:
             mask, tgt = targets[PRIORITY_BAND_HEAD]
             if mask.any():
                 logits = outputs[PRIORITY_BAND_HEAD][mask]
-                total = total + ce(logits, tgt[mask])
+                if use_focal:
+                    total = total + self._multiclass_focal_loss(
+                        logits, tgt[mask], gamma, self._class_weights.get("band"))
+                else:
+                    total = total + ce(logits, tgt[mask])
 
         for head in (IN_KEV_HEAD, RANSOMWARE_HEAD):
             if head in outputs:
                 mask, tgt = targets[head]
                 if mask.any():
-                    head_bce = (
-                        nn.BCEWithLogitsLoss(reduction="mean", pos_weight=self._class_weights[head])
-                        if head in self._class_weights
-                        else bce
-                    )
-                    total = total + head_bce(outputs[head][mask], tgt[mask])
+                    if use_focal:
+                        total = total + self._binary_focal_loss(
+                            outputs[head][mask], tgt[mask], gamma)
+                    else:
+                        head_bce = (
+                            nn.BCEWithLogitsLoss(reduction="mean", pos_weight=self._class_weights[head])
+                            if head in self._class_weights
+                            else bce
+                        )
+                        total = total + head_bce(outputs[head][mask], tgt[mask])
 
         return total
 
