@@ -39,7 +39,7 @@
   "text_encoder_model": "sentence-transformers/all-mpnet-base-v2",
   "text_encoder_device": null,
   "encoder_max_seq_length": 512,
-  "embedding_cache_size": 10000,
+  "embedding_cache_size": 400000,
   "enable_embedding_preload": true,
   "embedding_cache_path": "cve_domain/runs/stage1_contrastive/embedding_cache/text_embeddings.pt",
   "clear_cache_between_epochs": false,
