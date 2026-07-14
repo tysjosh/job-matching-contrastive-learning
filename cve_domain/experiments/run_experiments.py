@@ -164,9 +164,19 @@ def run_stage1(config_dict: Dict[str, Any], exp_dir: Path, split: Dict[str, Path
 
     stage1_dir = exp_dir / "stage1"
     ckpt = stage1_dir / "best_checkpoint.pt"
-    if ckpt.exists() and not force:
-        logger.info("[%s] Reusing Stage 1 checkpoint: %s", exp_dir.name, ckpt)
+    marker = stage1_dir / ".stage1_complete"
+    # A checkpoint alone is NOT proof of completion: the trainer writes
+    # best_checkpoint.pt every time validation improves, so an interrupted run
+    # (e.g. killed at epoch 4/10) also leaves one. Only the completion marker,
+    # written after all epochs finish, means "done". Checkpoint-but-no-marker =
+    # a partial run, which we retrain from scratch rather than silently proceed on.
+    if ckpt.exists() and marker.exists() and not force:
+        logger.info("[%s] Reusing completed Stage 1 checkpoint: %s", exp_dir.name, ckpt)
         return ckpt
+    if ckpt.exists() and not marker.exists() and not force:
+        logger.warning(
+            "[%s] Found a Stage 1 checkpoint with no completion marker (partial/"
+            "interrupted run) — retraining Stage 1 from scratch.", exp_dir.name)
 
     cfg = dict(config_dict)
     if epochs is not None:
@@ -189,6 +199,7 @@ def run_stage1(config_dict: Dict[str, Any], exp_dir: Path, split: Dict[str, Path
     )
     if not ckpt.exists():
         raise RuntimeError(f"[{exp_dir.name}] Stage 1 did not produce {ckpt}")
+    marker.write_text("ok\n", encoding="utf-8")  # mark Stage 1 fully complete
     return ckpt
 
 
@@ -215,11 +226,20 @@ def run_stage2(config_dict: Dict[str, Any], exp_dir: Path, split: Dict[str, Path
     )
 
     ckpt = stage2_dir / STAGE2_BEST_CHECKPOINT
-    if ckpt.exists() and not force:
-        logger.info("[%s] Reusing Stage 2 checkpoint; loading heads for inference.", exp_dir.name)
+    marker = stage2_dir / ".stage2_complete"
+    # Same completion-marker logic as Stage 1: a checkpoint without the marker is
+    # a partial/interrupted run, so retrain rather than resume on it.
+    if ckpt.exists() and marker.exists() and not force:
+        logger.info("[%s] Reusing completed Stage 2 checkpoint; loading heads for inference.",
+                    exp_dir.name)
         trainer.load_heads_from_checkpoint(ckpt)
     else:
+        if ckpt.exists() and not marker.exists() and not force:
+            logger.warning(
+                "[%s] Found a Stage 2 checkpoint with no completion marker (partial/"
+                "interrupted run) — retraining Stage 2 from scratch.", exp_dir.name)
         trainer.train(train_path=str(split["train"]), validation_path=str(split["validation"]))
+        marker.write_text("ok\n", encoding="utf-8")  # mark Stage 2 fully complete
     return trainer
 
 
@@ -345,6 +365,15 @@ def main() -> None:
         split = splits[e["split"]]
         base_emb = bool(e.get("base_embeddings"))
         logger.info("=== Experiment %s (%s) ===", exp_id, e.get("name"))
+
+        # Fully-completed experiment: reuse its evaluation report and skip all
+        # compute, so a resumed run jumps straight to the first unfinished one.
+        eval_report_path = exp_dir / "eval" / "evaluation_report.json"
+        if eval_report_path.exists() and not args.force:
+            logger.info("[%s] Reusing existing evaluation report (experiment complete).", exp_id)
+            report = _load_json(eval_report_path)
+            summary_rows.append(_summary_row(exp_id, e.get("name", ""), report))
+            continue
 
         try:
             stage1_ckpt: Optional[Path] = None
