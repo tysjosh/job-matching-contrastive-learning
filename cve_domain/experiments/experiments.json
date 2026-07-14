@@ -63,6 +63,28 @@
         "ontology_weight": 0.0,
         "negative_tier_ratios": {"hard": 0.34, "medium": 0.33, "easy": 0.33}
       }
+    },
+    {
+      "id": "E6",
+      "name": "priority-aligned contrastive",
+      "description": "Realigned Stage 1: positives are same-priority_band siblings (supervised-contrastive / SupCon) instead of ontology-overlap pairs. Tests whether clustering the embedding by the DOWNSTREAM priority target (rather than the task-orthogonal ontology signal) reverses the separation/ranking degradation seen in E1-E5 vs the E0 baseline.",
+      "split": "stratified",
+      "stage1_overrides": {
+        "ontology_weight": 0.0,
+        "cve_positive_signal": "priority_band",
+        "negative_tier_ratios": {"hard": 0.34, "medium": 0.33, "easy": 0.33}
+      }
+    },
+    {
+      "id": "E7",
+      "name": "priority-aligned + ontology positives",
+      "description": "E6 variant: positives must share the anchor's priority_band AND (preferably) an ontology token, falling back to same-band-only. Tests whether adding topical relatedness on top of the priority alignment helps or hurts vs the pure same-band signal in E6.",
+      "split": "stratified",
+      "stage1_overrides": {
+        "ontology_weight": 0.0,
+        "cve_positive_signal": "priority_band_and_ontology",
+        "negative_tier_ratios": {"hard": 0.34, "medium": 0.33, "easy": 0.33}
+      }
     }
   ]
 }

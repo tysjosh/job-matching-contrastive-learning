@@ -34,6 +34,10 @@ from .positive_selector import (
     CVEPositiveSelector,
     PositiveSelectionReport,
     CASCADE_LEVELS,
+    POSITIVE_SIGNALS,
+    POSITIVE_SIGNAL_ONTOLOGY,
+    POSITIVE_SIGNAL_PRIORITY_BAND,
+    POSITIVE_SIGNAL_PRIORITY_BAND_AND_ONTOLOGY,
 )
 # Importing record_adapter registers the "cve" domain adapter as a side effect.
 from .record_adapter import (
@@ -101,6 +105,10 @@ __all__ = [
     "CVEPositiveSelector",
     "PositiveSelectionReport",
     "CASCADE_LEVELS",
+    "POSITIVE_SIGNALS",
+    "POSITIVE_SIGNAL_ONTOLOGY",
+    "POSITIVE_SIGNAL_PRIORITY_BAND",
+    "POSITIVE_SIGNAL_PRIORITY_BAND_AND_ONTOLOGY",
     "CVERecordAdapter",
     "ontology_overlap_signal",
     "DEFAULT_ONTOLOGY_SIGNAL_WEIGHTS",
