@@ -330,6 +330,31 @@ class TrainingConfig:
     # training instability of huge pos_weights. On by default; set False to ablate.
     cve_focal_loss: bool = True
     cve_focal_gamma: float = 2.0
+    # CVE Stage 1 positive-pair signal (which CVEs are pulled together by the
+    # contrastive objective). The default "ontology" pairs anchors that share a
+    # CWE/CPE/vendor — a signal that is roughly orthogonal to priority, so it
+    # degrades priority-band separation vs. the frozen baseline (observed:
+    # separation_ratio 0.62 -> 0.35). "priority_band" pairs anchors that share
+    # the same priority_band label (supervised-contrastive / SupCon style),
+    # realigning Stage 1 with the downstream ranking/classification target.
+    # "priority_band_and_ontology" prefers a same-band positive that also shares
+    # an ontology token, falling back to same-band-only, then excluding.
+    cve_positive_signal: str = "ontology"
+    # CVE Stage 1 negatives: bias selection toward CVEs whose priority_band
+    # differs from the anchor's (within each ontology tier and the random
+    # fallback). Mirrors supervised-contrastive practice (negatives should be
+    # other classes) and complements cve_positive_signal="priority_band". Off by
+    # default (unchanged ontology-tiered behavior). Requires the Stage 1 driver's
+    # band lookup; a no-op otherwise.
+    cve_negative_cross_band: bool = False
+    # CVE Stage 2 decision calibration: after training, fit the classification
+    # decision rules on the VALIDATION split instead of using fixed rules that
+    # collapse under class imbalance (binary heads thresholded at 0.5; band by
+    # plain argmax). Binary heads get the probability threshold that maximizes
+    # validation macro-F1; the band head gets a -log(prior) logit adjustment with
+    # a strength chosen on validation. Applied at predict time on the test split
+    # (no leakage). Off by default (unchanged 0.5 / argmax behavior).
+    cve_calibrate_thresholds: bool = False
 
     def __post_init__(self):
         """Validate configuration parameters."""

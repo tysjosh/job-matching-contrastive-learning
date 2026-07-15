@@ -54,6 +54,8 @@
     "ransomware"
   ],
 
+  "cve_calibrate_thresholds": true,
+
   "output_dir": "cve_domain/runs/stage2_supervised",
   "checkpoint_path": "cve_domain/runs/stage2_supervised/best_checkpoint.pt",
   "validation_path": "cve_domain/runs/stage2_supervised/data_splits/validation.jsonl"

@@ -287,6 +287,16 @@ class Stage1ContrastivePretrainer:
         self.negative_selector = CVENegativeSelector.from_config(
             self.ontology_adapter, self.config
         )
+        # Cross-band negative biasing (config-gated) needs a cve -> priority_band
+        # map covering the negative universe. Build it once from the view lookup;
+        # a no-op inside the selector when cve_negative_cross_band is off.
+        band_by_id = {
+            cve: str(rec.get("cve_labels", {}).get("priority_band", "")).strip()
+            for cve, rec in self._view_lookup.items()
+            if isinstance(rec, Mapping)
+            and str(rec.get("cve_labels", {}).get("priority_band", "")).strip()
+        }
+        self.negative_selector.set_band_lookup(band_by_id)
 
         # --- Train split: negatives -> positives (exclude negatives) -> pair. ---
         train_report, paired_train_path = self._prepare_split(
