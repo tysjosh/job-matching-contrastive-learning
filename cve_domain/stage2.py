@@ -89,6 +89,10 @@ PRIORITY_SCORE_SCALE = 100.0
 STAGE2_BEST_CHECKPOINT = "stage2_best_checkpoint.pt"
 #: Stage 2 report filename (enabled/skipped heads + reasons + metrics).
 STAGE2_REPORT_FILENAME = "stage2_report.json"
+#: Decision-calibration report filename (thresholds, band logit offsets, and the
+#: validation prob/logit spread that distinguishes a threshold miscalibration
+#: from a flat-logit / embedding-ceiling collapse).
+STAGE2_CALIBRATION_REPORT_FILENAME = "calibration_report.json"
 
 #: Recognized truthy / falsy tokens for the boolean labels (mirrors the converter).
 _TRUTHY = {"true", "t", "yes", "y", "1", "1.0"}
@@ -410,6 +414,11 @@ class CVEStage2Trainer:
         # Per-head class-imbalance weights (band CE weight vector + binary
         # pos_weights), populated in train() when cve_class_balanced_heads is on.
         self._class_weights: Dict[str, "torch.Tensor"] = {}
+        # Validation-fitted decision calibration (populated by train() when
+        # cve_calibrate_thresholds is on, or loaded from a checkpoint). Maps a
+        # head name to its decision params: binary heads -> {"threshold": t};
+        # band -> {"logit_offset": [...], "strength": s}. Empty = fixed rules.
+        self._calibration: Dict[str, Any] = {}
 
     # ------------------------------------------------------------------ #
     # Encoder + projection loading (torch-heavy; deferred)
@@ -932,6 +941,24 @@ class CVEStage2Trainer:
         else:
             result.best_val_loss = best_val_loss if best_val_loss != float("inf") else None
 
+        # Decision calibration on the validation split (counters the imbalance
+        # collapse of the fixed 0.5 / argmax rules). Fit on the BEST checkpoint's
+        # heads, persist into that checkpoint, and write the diagnostic report.
+        if (getattr(self.config, "cve_calibrate_thresholds", False)
+                and val_valid and result.best_checkpoint_path):
+            best_ckpt = torch.load(
+                result.best_checkpoint_path, map_location=self.device, weights_only=False
+            )
+            heads.load_state_dict(best_ckpt["heads_state_dict"])
+            calibration, diagnostic = self._calibrate_heads(
+                heads, val_valid, val_emb, head_config
+            )
+            best_ckpt["calibration"] = calibration
+            torch.save(best_ckpt, result.best_checkpoint_path)
+            self._calibration = calibration
+            self._write_calibration_report(calibration, diagnostic)
+            logger.info("Stage 2 calibration fitted on validation: %s", calibration)
+
         result.report_path = self._write_report(result)
         return result
 
@@ -977,6 +1004,172 @@ class CVEStage2Trainer:
         return sum(losses) / len(losses) if losses else float("inf")
 
     # ------------------------------------------------------------------ #
+    # Decision calibration (validation-fitted; counters imbalance collapse)
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _macro_f1(y_true: Sequence[int], y_pred: Sequence[int], num_classes: int) -> float:
+        """Unweighted mean per-class F1 (matches CVEEvaluationReporter's macro-F1)."""
+        f1s: List[float] = []
+        for c in range(num_classes):
+            tp = sum(1 for t, p in zip(y_true, y_pred) if t == c and p == c)
+            fp = sum(1 for t, p in zip(y_true, y_pred) if t != c and p == c)
+            fn = sum(1 for t, p in zip(y_true, y_pred) if t == c and p != c)
+            prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1s.append(2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0)
+        return sum(f1s) / len(f1s) if f1s else 0.0
+
+    @staticmethod
+    def _label_bool(value: Any) -> Optional[bool]:
+        """Coerce an in_kev/ransomware label to bool (None when absent)."""
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return float(value) >= 0.5
+        return None
+
+    @classmethod
+    def _best_binary_threshold(
+        cls, probs: Sequence[float], ys: Sequence[int]
+    ) -> Tuple[float, float, float]:
+        """Threshold in (0,1) maximizing macro-F1; ties keep the lower threshold.
+
+        Returns ``(best_threshold, macro_f1_at_0.5, macro_f1_at_best)``. Pure /
+        torch-free so it is unit-testable independently of the heads.
+        """
+        best_t, best_f1 = 0.5, -1.0
+        for k in range(1, 100):
+            t = k / 100.0
+            preds = [1 if p >= t else 0 for p in probs]
+            f1 = cls._macro_f1(ys, preds, 2)
+            if f1 > best_f1:
+                best_f1, best_t = f1, t
+        f1_half = cls._macro_f1(ys, [1 if p >= 0.5 else 0 for p in probs], 2)
+        return best_t, f1_half, best_f1
+
+    def _calibrate_heads(
+        self,
+        heads: Any,
+        records: Sequence[Mapping[str, Any]],
+        embeddings: "torch.Tensor",
+        head_config: HeadConfiguration,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Fit decision rules on the validation split; return (calibration, diagnostic).
+
+        Binary heads (in_kev/ransomware): pick the probability threshold that
+        maximizes validation macro-F1. Band head: additive ``-log(prior)`` logit
+        adjustment with a strength chosen to maximize validation macro-F1. The
+        diagnostic records the predicted-score spread (prob/logit std) so a flat-
+        logit collapse (embedding ceiling — calibration can't help) is
+        distinguishable from a mere threshold miscalibration (calibration fixes it).
+        """
+        band_to_index = head_config.band_to_index
+        band_logits: List["torch.Tensor"] = []
+        band_true: List[int] = []
+        bin_probs: Dict[str, List[float]] = {IN_KEV_HEAD: [], RANSOMWARE_HEAD: []}
+        bin_true: Dict[str, List[int]] = {IN_KEV_HEAD: [], RANSOMWARE_HEAD: []}
+
+        heads.eval()
+        batch_size = max(1, int(self.config.batch_size))
+        with torch.no_grad():
+            for start in range(0, len(records), batch_size):
+                batch = records[start:start + batch_size]
+                emb = embeddings[start:start + batch_size].to(self.device)
+                outputs = heads(emb)
+                for i, rec in enumerate(batch):
+                    labels = rec.get("cve_labels", {}) or {}
+                    if (PRIORITY_BAND_HEAD in outputs
+                            and head_config.enabled.get(PRIORITY_BAND_HEAD)):
+                        band = str(labels.get("priority_band", "")).strip()
+                        if band in band_to_index:
+                            band_logits.append(outputs[PRIORITY_BAND_HEAD][i].detach().cpu())
+                            band_true.append(band_to_index[band])
+                    for head in (IN_KEV_HEAD, RANSOMWARE_HEAD):
+                        if head in outputs and head_config.enabled.get(head):
+                            b = self._label_bool(labels.get(head))
+                            if b is not None:
+                                bin_probs[head].append(
+                                    float(torch.sigmoid(outputs[head][i]).item())
+                                )
+                                bin_true[head].append(1 if b else 0)
+
+        calibration: Dict[str, Any] = {}
+        diagnostic: Dict[str, Any] = {}
+
+        # --- Binary heads: threshold search over [0.01, 0.99]. ---
+        for head in (IN_KEV_HEAD, RANSOMWARE_HEAD):
+            probs = bin_probs[head]
+            ys = bin_true[head]
+            if not probs:
+                continue
+            best_t, f1_half, best_f1 = self._best_binary_threshold(probs, ys)
+            mean = sum(probs) / len(probs)
+            std = (sum((p - mean) ** 2 for p in probs) / len(probs)) ** 0.5
+            calibration[head] = {"threshold": best_t}
+            diagnostic[head] = {
+                "n": len(probs),
+                "pos_rate": sum(ys) / len(ys),
+                "prob_min": min(probs),
+                "prob_max": max(probs),
+                "prob_mean": mean,
+                "prob_std": std,
+                "macro_f1_at_0.5": f1_half,
+                "macro_f1_calibrated": best_f1,
+                "chosen_threshold": best_t,
+                "flat_logits": std < 1e-3,
+            }
+
+        # --- Band head: -log(prior) logit adjustment, strength chosen on val. ---
+        if band_logits and head_config.enabled.get(PRIORITY_BAND_HEAD):
+            num_bands = len(head_config.band_vocabulary)
+            counts = [0] * num_bands
+            for idx in band_true:
+                counts[idx] += 1
+            total = sum(counts) or 1
+            # Laplace-smoothed prior so an empty band doesn't blow up the log.
+            offset = [
+                -math.log((counts[c] + 1.0) / (total + num_bands)) for c in range(num_bands)
+            ]
+            logits_stacked = torch.stack(band_logits)  # [N, num_bands]
+            offset_t = torch.tensor(offset, dtype=logits_stacked.dtype)
+
+            def macro_f1_at(strength: float) -> float:
+                adj = logits_stacked + strength * offset_t
+                preds = torch.argmax(adj, dim=1).tolist()
+                return self._macro_f1(band_true, preds, num_bands)
+
+            best_s, best_f1 = 0.0, -1.0
+            for s in (0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0):
+                f1 = macro_f1_at(s)
+                if f1 > best_f1:
+                    best_f1, best_s = f1, s
+            calibration[PRIORITY_BAND_HEAD] = {"logit_offset": offset, "strength": best_s}
+            diagnostic[PRIORITY_BAND_HEAD] = {
+                "n": len(band_true),
+                "class_counts": counts,
+                "band_vocabulary": list(head_config.band_vocabulary),
+                "macro_f1_plain_argmax": macro_f1_at(0.0),
+                "macro_f1_calibrated": best_f1,
+                "chosen_strength": best_s,
+                "logit_std": float(logits_stacked.std().item()),
+                "flat_logits": float(logits_stacked.std().item()) < 1e-3,
+            }
+
+        return calibration, diagnostic
+
+    def _write_calibration_report(
+        self, calibration: Dict[str, Any], diagnostic: Dict[str, Any]
+    ) -> str:
+        path = self.output_dir / STAGE2_CALIBRATION_REPORT_FILENAME
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({"calibration": calibration, "diagnostic": diagnostic},
+                      handle, indent=2, ensure_ascii=False)
+        logger.info("Wrote Stage 2 calibration report -> %s", path)
+        return str(path)
+
+    # ------------------------------------------------------------------ #
     # Inference (predictions for the Evaluation_Reporter)
     # ------------------------------------------------------------------ #
     def load_heads_from_checkpoint(self, checkpoint_path: str | Path) -> "HeadConfiguration":
@@ -1000,6 +1193,9 @@ class CVEStage2Trainer:
         heads.eval()
         self.heads = heads
         self.head_config = head_config
+        # Restore validation-fitted decision calibration when present so a resumed
+        # (checkpoint-only) run predicts with the same thresholds it was fit with.
+        self._calibration = checkpoint.get("calibration", {}) or {}
         return head_config
 
     def predict_records(
@@ -1011,9 +1207,14 @@ class CVEStage2Trainer:
 
         - ``ranking_score``: the ``priority_score`` regression head output (the
           model's ranking signal, scored against ground-truth ``priority_score``).
-        - ``in_kev``: probability from the ``in_kev`` binary head (sigmoid).
-        - ``priority_band``: the argmax class from the multiclass head, mapped back
-          through the training band vocabulary.
+        - ``in_kev``: the ``in_kev`` binary head output. When decision calibration
+          is active (``cve_calibrate_thresholds``), this is the calibrated boolean
+          decision (probability vs the validation-fitted threshold) and the raw
+          probability is also emitted under ``in_kev_prob``; otherwise it is the
+          raw sigmoid probability (the reporter thresholds a float at 0.5).
+        - ``priority_band``: the argmax class from the multiclass head (after the
+          validation-fitted ``-log(prior)`` logit adjustment when calibrated),
+          mapped back through the training band vocabulary.
         - ``embedding``: the frozen embedding the heads operate over (for the
           band-separation diagnostics).
 
@@ -1028,6 +1229,7 @@ class CVEStage2Trainer:
             )
 
         band_vocab = self.head_config.band_vocabulary
+        calibration = getattr(self, "_calibration", {}) or {}
         predictions: Dict[str, Dict[str, Any]] = {}
 
         self.heads.eval()
@@ -1048,9 +1250,26 @@ class CVEStage2Trainer:
                             float(outputs[PRIORITY_SCORE_HEAD][i].item()) * PRIORITY_SCORE_SCALE
                         )
                     if IN_KEV_HEAD in outputs:
-                        pred["in_kev"] = float(torch.sigmoid(outputs[IN_KEV_HEAD][i]).item())
+                        prob = float(torch.sigmoid(outputs[IN_KEV_HEAD][i]).item())
+                        kev_cal = calibration.get(IN_KEV_HEAD)
+                        if kev_cal and "threshold" in kev_cal:
+                            # Emit the calibrated decision; the reporter passes a
+                            # bool straight through (fixed 0.5 only applies to floats).
+                            pred["in_kev"] = bool(prob >= float(kev_cal["threshold"]))
+                            pred["in_kev_prob"] = prob
+                        else:
+                            pred["in_kev"] = prob
                     if PRIORITY_BAND_HEAD in outputs and band_vocab:
-                        idx = int(torch.argmax(outputs[PRIORITY_BAND_HEAD][i]).item())
+                        logits = outputs[PRIORITY_BAND_HEAD][i]
+                        band_cal = calibration.get(PRIORITY_BAND_HEAD)
+                        if band_cal and band_cal.get("logit_offset"):
+                            offset = torch.tensor(
+                                band_cal["logit_offset"],
+                                device=logits.device,
+                                dtype=logits.dtype,
+                            )
+                            logits = logits + float(band_cal.get("strength", 1.0)) * offset
+                        idx = int(torch.argmax(logits).item())
                         if 0 <= idx < len(band_vocab):
                             pred["priority_band"] = band_vocab[idx]
                     predictions[cve] = pred
