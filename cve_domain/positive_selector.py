@@ -189,6 +189,12 @@ class CVEPositiveSelector:
         # per-anchor band label. Empty in the default ontology mode's hot path.
         self._band_index: Dict[str, Set[str]] = {}
         self._anchor_band: Dict[str, str] = {}
+        # Per-band sorted id list, built once in build_index. Bands can hold
+        # >250K members (the majority "watch" band), so materializing
+        # ``band_set - excluded`` and sorting it *per anchor* would be O(N^2 logN)
+        # over the split. Instead we sort each band once and pick via seeded
+        # rejection sampling (excluded is ~8 ids, so O(1) expected per anchor).
+        self._band_sorted: Dict[str, List[str]] = {}
 
         # Ordered list of anchor ids in the current split (index build order).
         self._anchor_ids: List[str] = []
@@ -247,6 +253,7 @@ class CVEPositiveSelector:
         self._anchor_ontology = {}
         self._band_index = {}
         self._anchor_band = {}
+        self._band_sorted = {}
         self._anchor_ids = []
 
         # Only the priority-aware modes need the band index; skip building it in
@@ -285,6 +292,13 @@ class CVEPositiveSelector:
                 if band:
                     self._anchor_band[cve] = band
                     self._band_index.setdefault(band, set()).add(cve)
+
+        # Sort each band's members once (O(N logN) total) so per-anchor picks are
+        # cheap seeded rejection samples rather than a per-anchor copy + sort.
+        if index_bands:
+            self._band_sorted = {
+                band: sorted(members) for band, members in self._band_index.items()
+            }
 
     # ------------------------------------------------------------------ #
     # Candidate lookup helpers
@@ -412,11 +426,16 @@ class CVEPositiveSelector:
             return None
 
         excluded = self._build_exclusions(anchor_cve, excluded_negatives)
-        band_candidates = self._band_index.get(anchor_band, set()) - excluded
+        band_members = self._band_index.get(anchor_band)
+        if not band_members:
+            self.report.excluded_anchor_count += 1
+            return None
 
         if self.positive_signal == POSITIVE_SIGNAL_PRIORITY_BAND_AND_ONTOLOGY:
             # Prefer a same-band candidate that also shares an ontology token, so
-            # the pair is both priority-aligned and topically related.
+            # the pair is both priority-aligned and topically related. The
+            # ontology match set is small, so we test membership against the band
+            # set (cheap) rather than copying the (possibly huge) band set.
             anchor_ontology = self._anchor_ontology.get(anchor_cve)
             if anchor_ontology is not None:
                 anchor_cwes, anchor_cpes, anchor_vendors = anchor_ontology
@@ -425,19 +444,51 @@ class CVEPositiveSelector:
                     | self._union(self._cpe_index, anchor_cpes)
                     | self._union(self._vendor_index, anchor_vendors)
                 )
-                band_and_onto = band_candidates & (onto_matches - excluded)
+                band_and_onto = {
+                    c for c in onto_matches if c in band_members and c not in excluded
+                }
                 if band_and_onto:
                     self.report.resolved_by_band_and_ontology += 1
                     return self._pick(anchor_cve, band_and_onto)
             # Fall through to same-band-only.
 
-        if band_candidates:
+        # Same-band pick via seeded rejection sampling over the precomputed sorted
+        # band list — avoids the per-anchor O(|band|) copy + sort that made large
+        # bands (e.g. "watch" with >250K members) quadratic over the split.
+        picked = self._pick_from_band(anchor_cve, anchor_band, excluded)
+        if picked is not None:
             self.report.resolved_by_priority_band += 1
-            return self._pick(anchor_cve, band_candidates)
+            return picked
 
         # Band has no other in-split member -> exclude, no fabrication (Req 13.5).
         self.report.excluded_anchor_count += 1
         return None
+
+    def _pick_from_band(
+        self, anchor_cve: str, band: str, excluded: Set[str]
+    ) -> Optional[str]:
+        """Seeded, reproducible pick of a same-band id not in ``excluded``.
+
+        Uses the per-band sorted list and a per-anchor RNG. Since ``excluded`` is
+        tiny (the anchor + its ~7 negatives) relative to a band, bounded rejection
+        sampling returns in O(1) expected time; a deterministic filtered fallback
+        covers the pathological case of a band that is almost entirely excluded.
+        """
+        members = self._band_sorted.get(band)
+        if not members:
+            return None
+        rng = random.Random(f"{self.seed}:{anchor_cve}")
+        n = len(members)
+        for _ in range(min(64, n)):
+            cand = members[rng.randrange(n)]
+            if cand not in excluded:
+                return cand
+        # Fallback (rare): every sampled id was excluded — scan for a survivor,
+        # picking deterministically among them via the same seeded RNG.
+        remaining = [c for c in members if c not in excluded]
+        if not remaining:
+            return None
+        return remaining[rng.randrange(len(remaining))]
 
     # ------------------------------------------------------------------ #
     # Split-level driver + reporting (Req 13.6)
