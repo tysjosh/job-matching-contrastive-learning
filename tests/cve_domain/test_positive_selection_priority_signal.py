@@ -263,6 +263,47 @@ def test_priority_band_pairs_across_ontology_boundaries():
     assert "CVE-3" not in selections
 
 
+def test_large_band_selection_is_fast_and_valid():
+    """A large majority band must resolve in near-linear time, not O(N^2 logN).
+
+    Regression guard: an earlier implementation copied ``band_set - excluded`` and
+    sorted it *per anchor*, which made the ~250K-member "watch" band quadratic and
+    hung the run. With one big band of 6000 members this completes in well under a
+    second; a quadratic implementation would be dramatically slower. We also check
+    validity + reproducibility.
+    """
+    import time
+
+    n = 6000
+    records = [
+        {
+            "cve": f"CVE-B{i}",
+            "ontology": {"cwes": [], "cpes": [], "vendors": []},
+            "cve_labels": {"priority_band": "watch"},
+        }
+        for i in range(n)
+    ]
+
+    selector = CVEPositiveSelector(
+        seed=42, positive_signal=POSITIVE_SIGNAL_PRIORITY_BAND
+    )
+    start = time.perf_counter()
+    selections = selector.select_for_split(records)
+    elapsed = time.perf_counter() - start
+
+    assert elapsed < 5.0, f"large-band selection too slow ({elapsed:.1f}s) — quadratic regression?"
+    # Every anchor has 5999 same-band siblings, so all resolve.
+    assert len(selections) == n
+    ids = {r["cve"] for r in records}
+    for anchor, positive in selections.items():
+        assert positive != anchor
+        assert positive in ids
+
+    # Reproducible under a fixed seed.
+    again = CVEPositiveSelector(seed=42, positive_signal=POSITIVE_SIGNAL_PRIORITY_BAND)
+    assert selections == again.select_for_split(records)
+
+
 def test_invalid_positive_signal_rejected():
     with pytest.raises(ValueError):
         CVEPositiveSelector(seed=42, positive_signal="not-a-signal")
