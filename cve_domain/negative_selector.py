@@ -99,6 +99,11 @@ class NegativeSelectionReport:
     skipped_missing_id_count: int = 0
     deficit_anchor_count: int = 0
     anchors_processed: int = 0
+    # Cross-band biasing (only non-zero when cve_negative_cross_band is on):
+    # negatives whose priority_band differs from the anchor's (the preferred,
+    # SupCon-consistent case) vs same-band negatives kept only as fill.
+    cross_band_selected_count: int = 0
+    same_band_selected_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -108,6 +113,8 @@ class NegativeSelectionReport:
             "skipped_missing_id_count": self.skipped_missing_id_count,
             "deficit_anchor_count": self.deficit_anchor_count,
             "anchors_processed": self.anchors_processed,
+            "cross_band_selected_count": self.cross_band_selected_count,
+            "same_band_selected_count": self.same_band_selected_count,
         }
 
 
@@ -150,6 +157,7 @@ class CVENegativeSelector:
         tier_ratios: Optional[Mapping[str, float]] = None,
         seed: int = 42,
         cache_selections: bool = True,
+        cross_band_negatives: bool = False,
     ) -> None:
         if int(max_negatives_per_anchor) < 1:
             raise ValueError(
@@ -160,6 +168,15 @@ class CVENegativeSelector:
         self.max_negatives_per_anchor = int(max_negatives_per_anchor)
         self.tier_ratios = _normalize_ratios(tier_ratios or DEFAULT_TIER_RATIOS)
         self.seed = int(seed)
+
+        # Cross-band biasing: when on, negatives whose priority_band differs from
+        # the anchor's are preferred within every tier (and in the random
+        # fallback), with same-band candidates kept only as fill so pools never
+        # run dry. This mirrors supervised-contrastive practice (negatives should
+        # be other classes) and complements the priority_band positive signal.
+        # Requires a band lookup (set_band_lookup); a no-op without one.
+        self.cross_band_negatives = bool(cross_band_negatives)
+        self._band_by_id: Dict[str, str] = {}
 
         # Report accumulated across select_negatives calls; reset per split run.
         self.report = NegativeSelectionReport()
@@ -178,6 +195,40 @@ class CVENegativeSelector:
         """Clear the per-anchor selection memo (e.g. when reusing across splits)."""
         self._selection_cache.clear()
 
+    def set_band_lookup(self, band_by_id: Mapping[str, str]) -> None:
+        """Provide the ``cve`` -> ``priority_band`` map used by cross-band biasing.
+
+        Called once (e.g. by the Stage 1 driver) with a map covering every split
+        the selector will see. Ids without a band are treated as "no band" and
+        never counted as a different-band negative. Clears the memo since it
+        changes selection ordering.
+        """
+        self._band_by_id = {
+            str(k).strip(): str(v).strip()
+            for k, v in dict(band_by_id).items()
+            if str(k).strip() and str(v).strip()
+        }
+        self._selection_cache.clear()
+
+    def _order_by_band(self, candidates: Sequence[str], anchor_band: Optional[str]) -> List[str]:
+        """Stable-partition candidates so different-band ids come first.
+
+        Preserves the (already seeded-shuffled) relative order within the
+        different-band and same-band groups, so the result stays deterministic.
+        A no-op when biasing is off or the anchor's band is unknown.
+        """
+        if not self.cross_band_negatives or not anchor_band:
+            return list(candidates)
+        different: List[str] = []
+        same: List[str] = []
+        for cid in candidates:
+            band = self._band_by_id.get(cid)
+            if band is not None and band != anchor_band:
+                different.append(cid)
+            else:
+                same.append(cid)
+        return different + same
+
     # ------------------------------------------------------------------ #
     # Construction helpers
     # ------------------------------------------------------------------ #
@@ -195,6 +246,7 @@ class CVENegativeSelector:
             max_negatives_per_anchor=getattr(config, "max_negatives_per_anchor", 20),
             tier_ratios=getattr(config, "negative_tier_ratios", None),
             seed=getattr(config, "split_seed", 42),
+            cross_band_negatives=getattr(config, "cve_negative_cross_band", False),
         )
 
     # ------------------------------------------------------------------ #
@@ -246,6 +298,11 @@ class CVENegativeSelector:
         rng = random.Random(f"{self.seed}:{anchor_cve}")
         max_n = self.max_negatives_per_anchor
 
+        # Anchor's own band, used to bias negatives toward *other* bands.
+        anchor_band = (
+            self._band_by_id.get(anchor_cve) if self.cross_band_negatives else None
+        )
+
         selected: List[str] = []
         selected_set: Set[str] = set()
 
@@ -269,6 +326,12 @@ class CVENegativeSelector:
                 added += 1
                 if tier is not None:
                     self.report.per_tier_selected_counts[tier] += 1
+                if anchor_band is not None:
+                    cand_band = self._band_by_id.get(cid)
+                    if cand_band is not None and cand_band != anchor_band:
+                        self.report.cross_band_selected_count += 1
+                    else:
+                        self.report.same_band_selected_count += 1
             return added
 
         # --- Read pools and build filtered, seeded-shuffled per-tier candidates.
@@ -278,7 +341,10 @@ class CVENegativeSelector:
             raw = self._tier_list(pool, tier)
             filtered = self._filter_tier(raw, anchor_cve, present_ids)
             rng.shuffle(filtered)  # seeded random selection within the tier (Req 5.2)
-            tier_candidates[tier] = filtered
+            # Cross-band biasing: prefer different-band negatives within the tier,
+            # keeping same-band ones as fill (no-op when biasing is off). The
+            # seeded shuffle above is preserved within each band group.
+            tier_candidates[tier] = self._order_by_band(filtered, anchor_band)
 
         targets = self._tier_targets()
 
@@ -314,6 +380,8 @@ class CVENegativeSelector:
                 if cid != anchor_cve and cid not in selected_set
             ]
             rng.shuffle(random_candidates)
+            # Also bias the random fallback toward different-band candidates.
+            random_candidates = self._order_by_band(random_candidates, anchor_band)
             random_added = add(random_candidates, None, None)
             if random_added > 0:
                 self.report.random_fallback_anchor_count += 1

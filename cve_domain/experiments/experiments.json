@@ -85,6 +85,30 @@
         "cve_positive_signal": "priority_band_and_ontology",
         "negative_tier_ratios": {"hard": 0.34, "medium": 0.33, "easy": 0.33}
       }
+    },
+    {
+      "id": "E8",
+      "name": "full priority realignment (SupCon)",
+      "description": "The career-faithful recipe: priority_band positives (same-band pulled together) AND cross-band negatives (ontology-tiered negatives biased toward OTHER priority bands). Mirrors the resume-job design where positives are the downstream target and the ontology shapes negative difficulty. The expected best of the priority-aligned family.",
+      "split": "stratified",
+      "stage1_overrides": {
+        "ontology_weight": 0.0,
+        "cve_positive_signal": "priority_band",
+        "cve_negative_cross_band": true,
+        "negative_tier_ratios": {"hard": 0.34, "medium": 0.33, "easy": 0.33}
+      }
+    },
+    {
+      "id": "E9",
+      "name": "full realignment + ontology positives",
+      "description": "E8 with priority_band_and_ontology positives (same-band, preferably sharing an ontology token) plus cross-band negatives. Keeps the ontology contributing to BOTH the positive refinement and the negative difficulty, on top of the priority alignment — the most ontology-retaining priority-aligned variant.",
+      "split": "stratified",
+      "stage1_overrides": {
+        "ontology_weight": 0.0,
+        "cve_positive_signal": "priority_band_and_ontology",
+        "cve_negative_cross_band": true,
+        "negative_tier_ratios": {"hard": 0.34, "medium": 0.33, "easy": 0.33}
+      }
     }
   ]
 }
