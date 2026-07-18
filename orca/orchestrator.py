@@ -169,6 +169,16 @@ class OrcaPhaseOrchestrator:
         """
         self.seed_everything()
 
+        # Warm the embedding cache once, up front, so every phase/epoch reuses a
+        # single disk-backed encode pass instead of encoding each batch cold.
+        # ORCA drives ``trainer.train_epoch`` directly and therefore skips the
+        # preload that ``trainer.train()`` normally performs; without this the
+        # Phase-2 warmup epochs re-encode every batch from scratch (the dominant
+        # per-batch cost on GPU). ``preload_dataset_embeddings`` is idempotent —
+        # it no-ops when a disk cache already exists — so this is safe and
+        # additive (it never changes model parameters or the warmup snapshot).
+        self._warm_embedding_cache(dataset_path)
+
         self.phase1_preprocess(dataset_path)
         self.phase2_warmup(dataset_path)
         self.phase3_reliability_pretraining(dataset_path)
@@ -616,6 +626,28 @@ class OrcaPhaseOrchestrator:
         setter = getattr(batch_processor, "set_epoch", None)
         if callable(setter):
             setter(epoch)
+
+    def _warm_embedding_cache(self, dataset_path: Union[str, Path]) -> None:
+        """Encode every unique training text once, up front, before any phase.
+
+        ORCA runs each phase through ``trainer.train_epoch`` directly, which
+        (unlike ``trainer.train()``) does not perform the one-shot dataset
+        preload. Warming the cache here means the frozen text embeddings are
+        encoded a single time and reused across all four phases and every epoch
+        instead of being re-encoded per batch — the dominant per-batch cost we
+        observed on GPU. Delegates to ``trainer.preload_dataset_embeddings``,
+        which loads from (and saves to) the disk cache and is a no-op when a
+        cache is already present, so this is idempotent and additive. Any failure
+        is non-fatal: the run simply falls back to on-demand encoding.
+        """
+        preload = getattr(self.trainer, "preload_dataset_embeddings", None)
+        if not callable(preload):
+            logger.debug("Trainer exposes no preload_dataset_embeddings; "
+                         "skipping ORCA cache warm-up.")
+            return
+        logger.info("ORCA: warming embedding cache once before Phase 1 "
+                    "(dataset=%s).", dataset_path)
+        preload(dataset_path)
 
     def _ensure_embeddings_cached(self, dataset_path: Union[str, Path]) -> None:
         """Populate the embedding cache over every training-set item.
