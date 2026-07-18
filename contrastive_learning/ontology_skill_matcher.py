@@ -33,6 +33,7 @@ class OntologySkillMatcher:
         cache_size: int = 500_000,
         esco_skills_path: str = None,
         reuse_weights: dict = None,
+        set_sim_cache_size: int = 4_000_000,
     ):
         logger.info(f"Loading ESCO graph from {esco_graph_path} for skill matching...")
         if esco_graph_path.endswith('.gpickle'):
@@ -61,6 +62,17 @@ class OntologySkillMatcher:
         # Transversal skill mask (curated list, overrides reuse level)
         self.transversal_skills = set()
         self.transversal_weight = 0.3  # default weight for transversal skills
+
+        # In-memory memo of set-level similarity keyed by the two skill-URI sets.
+        # ``ontology_set_similarity`` is a pure, deterministic, symmetric function
+        # of its two input sets (given the fixed graph + weights), so caching its
+        # result is numerically identical to recomputing it. Negative selection
+        # scores every resume against the full candidate pool on every batch,
+        # every epoch, and in every phase, so the same O(|A|*|B|) set similarity
+        # is otherwise recomputed hundreds of millions of times per batch. The
+        # cache is bounded so it cannot grow without limit on very large pools.
+        self._set_sim_cache: Dict[Tuple[Any, Any], float] = {}
+        self._set_sim_cache_max = set_sim_cache_size
 
         # Build the cached distance function bound to this graph
         @lru_cache(maxsize=cache_size)
@@ -162,12 +174,33 @@ class OntologySkillMatcher:
 
     def ontology_set_similarity(self, A: List[str], B: List[str]) -> float:
         """Symmetric best-match average similarity between two skill URI sets.
-        When reuse weights are configured, downweights transversal skills."""
-        A = list(set(A))
-        B = list(set(B))
-        if not A or not B:
+
+        When reuse weights are configured, downweights transversal skills. The
+        result is memoized by set contents: because the function is a pure,
+        symmetric function of ``A`` and ``B`` (given the fixed graph/weights),
+        the cached value is bit-for-bit identical to recomputing it. This turns
+        the repeated per-batch scoring of the same (resume, job) skill sets into
+        an O(1) lookup after the first evaluation.
+        """
+        fa = frozenset(A)
+        fb = frozenset(B)
+        if not fa or not fb:
             return 0.0
 
+        # Order-independent cache key (the similarity is symmetric in A, B).
+        ha, hb = hash(fa), hash(fb)
+        key = (fa, fb) if ha <= hb else (fb, fa)
+        cached = self._set_sim_cache.get(key)
+        if cached is not None:
+            return cached
+
+        val = self._compute_set_similarity(fa, fb)
+        if len(self._set_sim_cache) < self._set_sim_cache_max:
+            self._set_sim_cache[key] = val
+        return val
+
+    def _compute_set_similarity(self, A, B) -> float:
+        """Uncached symmetric best-match average similarity between two skill sets."""
         def skill_weight(uri: str) -> float:
             # Transversal mask takes priority (curated list)
             if self.transversal_skills and uri in self.transversal_skills:
