@@ -266,14 +266,51 @@ def main() -> int:
         logger.error("ORCA configuration/phase error: %s", exc)
         return 1
 
+    # Save an evaluable checkpoint. The orchestrator drives the 4-phase schedule
+    # through trainer.train_epoch (which does not checkpoint), so the runner owns
+    # persisting the final projection head — exactly what the shared Phase-1
+    # embedding evaluation loads (checkpoint['model_state_dict']).
+    ckpt_path = _save_orca_checkpoint(trainer, args.output_dir, config, orchestrator)
+
     logger.info("=" * 60)
     logger.info("ORCA COMPLETE")
     logger.info("  completed phase: %s", orchestrator.current_phase.name)
     if warmup_store is not None:
         logger.info("  warmup snapshot: %d embeddings", len(warmup_store))
+    logger.info("  checkpoint:      %s", ckpt_path)
     logger.info("  outputs in:      %s", args.output_dir)
     logger.info("=" * 60)
     return 0
+
+
+def _save_orca_checkpoint(trainer, output_dir: str, config, orchestrator) -> str:
+    """Persist the trained ORCA projection head as ``best_checkpoint.pt``.
+
+    Writes the same ``model_state_dict`` key the Phase-1 embedding evaluation
+    loads, so an ORCA run is evaluated by the identical script/metrics as the
+    OSCAR / InfoNCE baselines. Also stores the ReliabilityMLP weights and the
+    completed phase for provenance.
+    """
+    import torch
+    from dataclasses import asdict
+
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    ckpt_path = out / "best_checkpoint.pt"
+
+    reliability_model = getattr(orchestrator, "reliability_model", None)
+    payload = {
+        "model_state_dict": trainer.model.state_dict(),
+        "reliability_model_state_dict": (
+            reliability_model.state_dict() if reliability_model is not None else None
+        ),
+        "config": asdict(config) if hasattr(config, "__dataclass_fields__") else {},
+        "orca_variant": getattr(config, "orca_variant", "denominator"),
+        "completed_phase": orchestrator.current_phase.name,
+        "training_seed": getattr(config, "training_seed", None),
+    }
+    torch.save(payload, ckpt_path)
+    return str(ckpt_path)
 
 
 if __name__ == "__main__":
