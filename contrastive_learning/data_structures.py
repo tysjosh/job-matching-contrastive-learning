@@ -356,6 +356,47 @@ class TrainingConfig:
     # (no leakage). Off by default (unchanged 0.5 / argmax behavior).
     cve_calibrate_thresholds: bool = False
 
+    # ------------------------------------------------------------------
+    # ORCA training mode (additive — every field defaults to the OFF /
+    # OSCAR-equivalent value so the existing career InfoNCE/ordinal path
+    # stays byte-identical). ORCA activates only when ``orca_enabled`` is
+    # True; all ORCA code lives under the top-level ``orca/`` package and is
+    # gated through the loss-engine factory. See spec ``orca`` design B.9.
+    # ------------------------------------------------------------------
+    orca_enabled: bool = False              # master gate; False => byte-identical career path
+    orca_variant: str = "denominator"       # one of the six variant switches (see design B.9)
+    orca_r_min: float = 0.05                # reliability floor in the denominator
+    orca_omega: float = 0.5                 # ISCO vs ESCO mix in d_ont
+    orca_beta: float = 1.0                  # ontology distance sharpness (r_ont)
+    orca_gamma_enc: float = 5.0             # encoder similarity sharpness (r_enc)
+    orca_lambda_ont: float = 0.5            # weak-target weights (renormalized if a signal missing)
+    orca_lambda_enc: float = 0.5
+    orca_lambda_hist: float = 0.0
+    orca_use_history: bool = False          # True only for temporal/repeated-interaction data
+    orca_eta_rel: float = 1.0               # weight on reliability BCE loss
+    orca_use_alignment: bool = False        # ORCA-Full only
+    orca_lambda_align: float = 0.1
+    # d_esco,d_isco,d_ot,s_esco,s_isco (=5) plus the coverage-feature width; the
+    # scalar-only layout uses 5. Callers with coverage features set this to
+    # ``5 + coverage_dim``.
+    orca_feature_dim: int = 5
+    orca_use_ontology_features: bool = True  # False => ORCA-NoOntology feature layout
+    orca_adaptive_sampling: bool = True      # False => ORCA-Denominator (OSCAR bucket sampling)
+    orca_sampling_epsilon: float = 0.1
+    orca_gamma_s: float = 0.5               # curriculum: 0.5 early -> 1.0/2.0 later
+    orca_random_mix: float = 0.5            # curriculum: high early -> low later
+    orca_warmup_epochs: int = 3
+    orca_reliability_epochs: int = 3
+    orca_joint_epochs: int = 10
+    # Fall back to live cached embeddings if the warmup snapshot is unavailable
+    # in Phase 3/4; otherwise a missing snapshot raises a configuration error.
+    orca_allow_live_warmup_fallback: bool = False
+    # When True, ORCA per-negative ontology-feature capture also computes the
+    # (expensive Sinkhorn) optimal-transport distance ``d_ot`` for each negative.
+    # Default False keeps negative processing cheap; ``d_ot`` is then left at a
+    # neutral 0.0 in the captured feature vector.
+    orca_capture_ot_distance: bool = False
+
     def __post_init__(self):
         """Validate configuration parameters."""
         if self.batch_size <= 0:

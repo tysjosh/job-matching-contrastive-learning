@@ -269,6 +269,18 @@ class ContrastiveLearningTrainer:
         self.global_job_pool = None
         self.global_resume_pool = None
 
+        # ── ORCA integration seams (additive; no-op unless explicitly injected) ──
+        # These optional hooks let an external phase orchestrator (living in the
+        # isolated top-level ``orca/`` package) inject an alternative negative
+        # selector and/or a replacement loss engine WITHOUT this module importing
+        # or referencing ``orca`` (Isolation constraint, Requirement 7.6). Both
+        # default to ``None`` and only take effect when ORCA is enabled AND
+        # something has been injected, so the pre-ORCA career path stays
+        # byte-identical (Requirement 7.5). See ``active_loss_engine``.
+        self._orca_enabled = getattr(config, 'orca_enabled', False)
+        self.negative_selector = None
+        self._injected_loss_engine = None
+
         # Metrics tracking
         self.epoch_losses = []
         self.validation_losses = []  # Track validation loss per epoch
@@ -327,6 +339,56 @@ class ContrastiveLearningTrainer:
         self.structured_logger.log_memory_usage("initialization",
                                                 memory_info["system_memory_mb"] or 0,
                                                 memory_info["gpu_memory_mb"])
+
+    # ------------------------------------------------------------------ ORCA seams
+    # Purely additive dependency-inverted injection points. This module never
+    # imports the ``orca`` package; an external orchestrator passes duck-typed
+    # objects in. When ORCA is disabled or nothing is injected these are no-ops
+    # and every training/validation call site behaves byte-identically to the
+    # pre-ORCA career path (Requirements 7.5, 7.6).
+
+    def set_negative_selector(self, selector) -> None:
+        """Inject an alternative per-batch negative selector (ORCA seam).
+
+        No-op unless ``orca_enabled`` is true: when ORCA is off the injected
+        selector is ignored so the career negative-selection path stays
+        byte-identical. The selector is duck-typed and forwarded to the batch
+        processor only if it exposes a compatible ``set_negative_selector``
+        seam; otherwise it is simply held for callers to consult.
+
+        Passing ``None`` clears any previously injected selector.
+        """
+        if not self._orca_enabled:
+            return
+        self.negative_selector = selector
+        forward = getattr(self.batch_processor, 'set_negative_selector', None)
+        if callable(forward):
+            forward(selector)
+
+    def set_loss_engine(self, engine) -> None:
+        """Inject a replacement loss engine (ORCA seam).
+
+        No-op unless ``orca_enabled`` is true. When set (and ORCA is enabled),
+        :meth:`active_loss_engine` returns this engine so the training and
+        validation loops use it in place of the unchanged
+        ``ContrastiveLossEngine``. Passing ``None`` restores the original engine.
+        """
+        if not self._orca_enabled:
+            return
+        self._injected_loss_engine = engine
+
+    @property
+    def active_loss_engine(self):
+        """The loss engine currently in effect.
+
+        Returns the injected ORCA engine when one has been set and ORCA is
+        enabled; otherwise returns the unchanged ``ContrastiveLossEngine``. With
+        ORCA disabled (the default) this is always ``self.loss_engine``, keeping
+        the career path byte-identical.
+        """
+        if self._orca_enabled and self._injected_loss_engine is not None:
+            return self._injected_loss_engine
+        return self.loss_engine
 
     def train(self, dataset_path: Union[str, Path]) -> TrainingResults:
         """
@@ -759,8 +821,9 @@ class ContrastiveLearningTrainer:
                         if not embeddings:
                             continue
 
-                        # Compute loss (no backward pass)
-                        loss = self.loss_engine.compute_loss(triplets, embeddings)
+                        # Compute loss (no backward pass). Uses the injected ORCA
+                        # engine when active, else the unchanged engine.
+                        loss = self.active_loss_engine.compute_loss(triplets, embeddings)
 
                         if not torch.isnan(loss) and not torch.isinf(loss):
                             validation_losses.append(loss.item())
@@ -822,8 +885,10 @@ class ContrastiveLearningTrainer:
                 logger.warning("No embeddings generated for batch")
                 return None, batch_stats
 
-            # Compute loss
-            loss = self.loss_engine.compute_loss(triplets, embeddings)
+            # Compute loss. ``active_loss_engine`` is the unchanged
+            # ContrastiveLossEngine unless an ORCA engine has been injected via
+            # the seam (byte-identical career path when ORCA is off).
+            loss = self.active_loss_engine.compute_loss(triplets, embeddings)
 
             if torch.isnan(loss) or torch.isinf(loss):
                 logger.warning(f"Invalid loss detected: {loss.item()}, skipping batch")

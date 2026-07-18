@@ -162,6 +162,17 @@ class BatchProcessor:
                 "BatchProcessor: CVE tiered negative selector enabled "
                 "(%d view records indexed)", len(self.cve_view_lookup))
 
+        # ── ORCA negative-selector injection seam (additive; no-op default) ──
+        # An external ORCA phase orchestrator (living in the isolated top-level
+        # ``orca/`` package) may inject a duck-typed negative selector during
+        # ORCA Phase 4 via ``set_negative_selector``. This module never imports
+        # ``orca`` (Isolation constraint, Requirement 7.6); the selector arrives
+        # by injection. When ``None`` (the default, and the only state on the
+        # career / ORCA-Denominator paths) the negative-selection point is
+        # byte-identical to the pre-ORCA OSCAR bucket logic (Requirements 5.7,
+        # 7.5).
+        self.negative_selector = None
+
     def set_cve_negative_selector(
         self,
         selector: 'CVENegativeSelector',
@@ -192,6 +203,31 @@ class BatchProcessor:
         logger.info(
             "BatchProcessor: CVE tiered negative selector set "
             "(%d view records indexed)", len(self.cve_view_lookup))
+
+    def set_negative_selector(self, selector) -> None:
+        """Inject (or clear) a duck-typed ORCA negative selector (ORCA seam).
+
+        This is the batch-processor end of the ORCA negative-selector injection
+        point (design integration seams). The trainer's ``set_negative_selector``
+        forwards a duck-typed selector here during ORCA Phase 4; passing ``None``
+        clears it and restores the OSCAR bucket selection path.
+
+        Purely additive: while ``selector`` is ``None`` (the default, and the
+        only state on the career and ORCA-Denominator MVP paths) negative
+        selection is byte-identical to the pre-ORCA OSCAR bucket logic
+        (Requirements 5.7, 7.5). This module never imports ``orca`` — the
+        selector is duck-typed and consulted only when set (Requirement 7.6).
+
+        Args:
+            selector: A duck-typed negative selector, or ``None`` to clear. When
+                set, it is consulted at the negative-selection point only if it
+                exposes a compatible batch-level selection method; otherwise the
+                OSCAR bucket logic is used as a safe fallback.
+        """
+        self.negative_selector = selector
+        logger.info(
+            "BatchProcessor: ORCA negative selector %s",
+            "set" if selector is not None else "cleared")
 
     def build_rejection_index(self, dataset_path: str) -> None:
         """Build index of rejected resumes per job from the training data.
@@ -322,6 +358,18 @@ class BatchProcessor:
                           or self._compute_resume_id(anchor_sample.resume),
         }
 
+        # ── ORCA per-negative ontology-feature capture (additive; Req 9.1) ──
+        # Only runs when ORCA is enabled; leaves the career path byte-identical
+        # otherwise. Records the per-negative ontology scalars ORCA's
+        # ReliabilityMLP / weak targets need (d_esco, d_isco, d_ot, s_esco,
+        # s_isco) so the loss engine sources them from OSCAR's skill matcher
+        # rather than proxying a single blended distance.
+        if getattr(self.config, 'orca_enabled', False):
+            feats = self._compute_negative_ontology_features(
+                anchor_sample, negatives)
+            if feats is not None:
+                view_metadata['negative_ontology_features'] = feats
+
         return ContrastiveTriplet(
             anchor=anchor,
             positive=positive,
@@ -329,6 +377,81 @@ class BatchProcessor:
             career_distances=career_distances,
             view_metadata=view_metadata
         )
+
+    def _compute_negative_ontology_features(
+        self, anchor_sample: TrainingSample, negatives: List[Dict[str, Any]]
+    ) -> Optional[List[Dict[str, float]]]:
+        """Per-negative ontology scalars for ORCA, aligned 1:1 with ``negatives``.
+
+        Reuses OSCAR's ``OntologySkillMatcher`` (no reimplementation, Req 9.1) to
+        produce ``{d_esco, d_isco, d_ot, s_esco, s_isco}`` for each
+        (resume, negative_job) pair:
+
+          * ``s_esco`` = ``ontology_set_similarity(resume_uris, job_uris)`` and
+            ``d_esco`` = ``1 - s_esco``;
+          * ``d_isco`` = ISCO occupation-hierarchy distance (``s_isco = 1 - d_isco``);
+          * ``d_ot``  = Sinkhorn optimal-transport distance, computed only when
+            ``orca_capture_ot_distance`` is set (it is expensive); otherwise a
+            neutral ``0.0``.
+
+        Returns ``None`` when the skill matcher is unavailable or the resume has
+        no skill URIs, so the ORCA adapter falls back to its per-negative
+        ``career_distances`` proxy. Missing per-pair signals degrade to neutral
+        values (Req 9.3) rather than raising.
+        """
+        matcher = self.skill_matcher
+        if matcher is None:
+            return None
+
+        resume = anchor_sample.resume
+        resume_uris = resume.get('skill_uris', []) if isinstance(resume, dict) else []
+        if not resume_uris:
+            return None
+
+        resume_occ = anchor_sample.metadata.get('resume_occupation_uri', '') \
+            or resume.get('occupation_uri', '')
+        capture_ot = getattr(self.config, 'orca_capture_ot_distance', False)
+
+        features: List[Dict[str, float]] = []
+        for job in negatives:
+            job_uris = job.get('skill_uris', []) if isinstance(job, dict) else []
+
+            # ESCO skill-set similarity → s_esco / d_esco.
+            if job_uris:
+                try:
+                    s_esco = float(matcher.ontology_set_similarity(resume_uris, job_uris))
+                except Exception:
+                    s_esco = 0.0
+            else:
+                s_esco = 0.0  # neutral: no ontology signal for this negative
+            d_esco = 1.0 - s_esco
+
+            # ISCO occupation-hierarchy distance → d_isco / s_isco.
+            job_occ = job.get('occupation_uri', '') if isinstance(job, dict) else ''
+            if self.use_isco_negatives and resume_occ and job_occ:
+                d_isco = float(self._isco_distance(resume_occ, job_occ))
+            else:
+                d_isco = 0.5  # neutral when ISCO data is unavailable
+            s_isco = 1.0 - d_isco
+
+            # Optimal-transport distance (expensive; opt-in).
+            d_ot = 0.0
+            if capture_ot and job_uris:
+                try:
+                    ot = matcher.ot_distance(resume_uris, job_uris)
+                    d_ot = float(ot) if ot is not None else 0.0
+                except Exception:
+                    d_ot = 0.0
+
+            features.append({
+                'd_esco': d_esco,
+                'd_isco': d_isco,
+                'd_ot': d_ot,
+                's_esco': s_esco,
+                's_isco': s_isco,
+            })
+
+        return features
 
     @staticmethod
     def _compute_resume_id(resume: Dict[str, Any]) -> str:
@@ -406,6 +529,66 @@ class BatchProcessor:
             "Selected %d CVE tiered negatives for anchor %s",
             len(negatives), anchor_cve)
         return negatives, career_distances
+
+    def _select_with_injected_selector(
+        self,
+        anchor_sample: TrainingSample,
+        candidate_negatives: List[Dict[str, Any]],
+        max_negatives: int,
+    ) -> Optional[tuple[List[Dict[str, Any]], List[float]]]:
+        """Route negative selection through an injected ORCA selector, if usable.
+
+        The injected selector is duck-typed. It is used only if it exposes a
+        batch-level ``select_batch_negatives(anchor_sample, candidate_negatives,
+        max_negatives, epoch)`` method returning either a list of selected
+        negative job dicts or a ``(negatives, career_distances)`` tuple. Any
+        other selector shape (e.g. a purely embedding/tensor-level sampler that
+        needs projected embeddings not available at this stage) is not usable
+        here, so this returns ``None`` and the caller falls back to the OSCAR
+        bucket logic.
+
+        Returning ``None`` on incompatibility (rather than raising) keeps the
+        seam purely additive: a set-but-incompatible selector degrades to OSCAR
+        behavior instead of breaking negative selection.
+
+        Args:
+            anchor_sample: The anchor (positive) sample.
+            candidate_negatives: The candidate negative job dicts.
+            max_negatives: The maximum number of negatives to select.
+
+        Returns:
+            A ``(negatives, career_distances)`` tuple when the selector produced
+            a selection, otherwise ``None`` to signal a fallback to OSCAR logic.
+        """
+        select = getattr(self.negative_selector, "select_batch_negatives", None)
+        if not callable(select):
+            # Not a batch-dict-level selector (e.g. a tensor-level sampler that
+            # operates after embedding). Fall back to OSCAR bucket selection.
+            return None
+
+        try:
+            result = select(
+                anchor_sample, candidate_negatives, max_negatives,
+                self.current_epoch)
+        except Exception as e:  # pragma: no cover - defensive additive guard
+            logger.warning(
+                "Injected ORCA negative selector failed (%s); falling back to "
+                "OSCAR bucket selection.", e)
+            return None
+
+        if result is None:
+            return None
+
+        # Accept either a bare list of negatives or a (negatives, distances) pair.
+        if isinstance(result, tuple) and len(result) == 2:
+            selected, career_distances = result
+        else:
+            selected = result
+            career_distances = [0.0] * len(selected)
+
+        logger.debug(
+            "Selected %d negatives via injected ORCA selector", len(selected))
+        return list(selected), list(career_distances)
 
     def _select_negatives(self, anchor_sample: TrainingSample, batch: List[TrainingSample], global_job_pool: Optional[List[Dict[str, Any]]] = None) -> tuple[List[Dict[str, Any]], List[float]]:
         """
@@ -488,6 +671,18 @@ class BatchProcessor:
 
         # Limit number of negatives to prevent memory issues
         max_negatives = min(len(candidate_negatives), self.max_negatives_per_anchor)
+
+        # ── ORCA adaptive negative selection (additive; Req 5.7) ──
+        # When an ORCA negative selector is injected (career / ORCA-Denominator
+        # default: None), route the final selection through it. This branch is
+        # skipped entirely when no selector is set, so the OSCAR bucket logic
+        # below stays byte-identical (Requirements 5.7, 7.5). Any incompatible
+        # selector falls back safely to the OSCAR logic (``None`` return).
+        if self.negative_selector is not None:
+            injected = self._select_with_injected_selector(
+                anchor_sample, candidate_negatives, max_negatives)
+            if injected is not None:
+                return injected
 
         # Check if pathway-aware negative selection is enabled
         if not self.use_pathway_negatives:

@@ -1,0 +1,79 @@
+{
+  "_description": "ORCA (Ontology-Regularized Contrastive Alignment with Uncertainty) experiment matrix. Each ORCA experiment resolves as the base ORCA config + per-variant overrides; the generator (scripts/generate_orca_experiments.py) materializes one training_config.json per (variant x dataset x seed) under results/research_runs/, then emits a train (run_orca_training.py) + eval (run_phase1_embedding_evaluation.py) command list. ORCA runs are directly comparable to the existing OSCAR/InfoNCE baselines (E4-InfoNCE, E4-OSCAR-Skill) because they are evaluated by the identical Phase-1 embedding evaluation on the same splits/seeds. All ORCA runs require the prepared v6/v7 splits (skill_uris present) so the ontology signal is real.",
+  "base_config": "config/orca_denominator_config.json",
+  "datasets": {
+    "cnamuangtoun": {
+      "train": "preprocess/data_splits_v7/train.jsonl",
+      "validation": "preprocess/data_splits_v7/validation.jsonl",
+      "test": "preprocess/data_splits_v7/test.jsonl"
+    }
+  },
+  "seeds": [13, 21, 42, 87, 123],
+  "baselines": {
+    "E4-InfoNCE": "Pure InfoNCE, no ontology weighting, no reliability. The 'all negatives fully trusted' reference (ORCA with every reliability == 1).",
+    "E4-OSCAR-Skill": "OSCAR: ontology skill-graph negatives + sample-level ontology weight. The fixed-ontology, no-reliability baseline ORCA layers on top of."
+  },
+  "experiments": [
+    {
+      "id": "ER-DEN",
+      "name": "ORCA-Denominator (MVP)",
+      "description": "Reliability folded into the InfoNCE denominator; OSCAR ontology-bucket negatives; ontology + encoder weak targets. The primary ORCA result. Its gain over E4-OSCAR-Skill is the value of learned per-negative reliability calibration.",
+      "orca_overrides": {
+        "orca_variant": "denominator",
+        "orca_use_alignment": false,
+        "orca_adaptive_sampling": false,
+        "orca_use_history": false
+      }
+    },
+    {
+      "id": "ER-EXT",
+      "name": "ORCA-ExternalWeight",
+      "description": "Reliability applied as a scalar multiplier on the final Standard_InfoNCE loss instead of inside the denominator. The HEADLINE ablation vs ER-DEN: identical reliabilities, different application site — isolates whether denominator calibration matters (Property 6).",
+      "orca_overrides": {
+        "orca_variant": "external_weight",
+        "orca_use_alignment": false,
+        "orca_adaptive_sampling": false,
+        "orca_use_history": false
+      }
+    },
+    {
+      "id": "ER-NOONT",
+      "name": "ORCA-NoOntology",
+      "description": "ReliabilityMLP built WITHOUT the ESCO/ISCO/OT scalar features (embeddings-only reliability), denominator calibration on. Ablation: how much of ORCA's benefit comes from the ontology features feeding the reliability estimate.",
+      "orca_overrides": {
+        "orca_variant": "no_ontology",
+        "orca_use_ontology_features": false,
+        "orca_use_alignment": false,
+        "orca_adaptive_sampling": true,
+        "orca_use_history": false
+      }
+    },
+    {
+      "id": "ER-NOALIGN",
+      "name": "ORCA-NoAlign",
+      "description": "Denominator calibration + adaptive negative sampling, but WITHOUT the ontology-alignment loss. Isolates the contribution of the alignment term when compared to ER-FULL.",
+      "orca_overrides": {
+        "orca_variant": "no_align",
+        "orca_use_alignment": false,
+        "orca_adaptive_sampling": true,
+        "orca_use_history": false
+      }
+    },
+    {
+      "id": "ER-FULL",
+      "name": "ORCA-Full",
+      "description": "Denominator calibration + adaptive negative sampling + ontology-alignment loss. The most ontology-retaining ORCA variant. Alignment job pairs are built in-batch from negatives carrying skill_uris.",
+      "orca_overrides": {
+        "orca_variant": "full",
+        "orca_use_alignment": true,
+        "orca_adaptive_sampling": true,
+        "orca_use_history": false
+      }
+    }
+  ],
+  "notes": [
+    "ER-NOFUT (no_future / history ablation) is intentionally omitted: it is only meaningful on temporal/repeated-interaction datasets, which the v7 split is not. Add it with orca_use_history semantics once a temporal split exists.",
+    "Each run trains via run_orca_training.py (the 4-phase OrcaPhaseOrchestrator) and is evaluated by run_phase1_embedding_evaluation.py against best_checkpoint.pt, producing phase1_evaluation/phase1_evaluation_results.json — the same artifact the OSCAR/InfoNCE baselines produce.",
+    "scripts/aggregate_orca_results.py summarizes mean +/- std per variant across seeds and reports the delta vs the E4-InfoNCE and E4-OSCAR-Skill baselines."
+  ]
+}
