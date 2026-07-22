@@ -143,6 +143,12 @@ def _collect(trainer, orchestrator, data_path: str, max_batches: int):
     # the BCE weak targets, which we are not measuring here).
     orchestrator._inject_orca_loss()
 
+    # Move the ReliabilityMLP onto the trainer's device (the orchestrator does
+    # this in phases 3/4, which the probe skips). Without it the CPU-resident
+    # MLP receives CUDA embeddings and every triplet is skipped on a device
+    # mismatch.
+    orchestrator._move_reliability_to_device()
+
     # Deterministic, dropout-free forward.
     if getattr(trainer, "model", None) is not None:
         trainer.model.eval()
