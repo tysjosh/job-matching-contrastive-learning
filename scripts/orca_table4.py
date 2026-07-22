@@ -26,10 +26,13 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / "results" / "research_runs"
 DATASET = "cnamuangtoun"
 
-# Row order: baselines first, then the ORCA family.
+# Row order: baselines first, then the ORCA family, then the unfrozen ordinal probe.
 ORDER = [
     "E4-InfoNCE", "E4-OSCAR-Skill", "E4-OSCAR-Hybrid", "E4-OSCAR-ISCO",
     "ER-DEN", "ER-EXT", "ER-NOONT", "ER-NOALIGN", "ER-FULL",
+    # Unfrozen-encoder ordinal probe + its ablations (compare ONLY within this block).
+    "UF-InfoNCE", "UF-Ordinal", "UF-Ordinal-RandNeg", "UF-Ordinal-FixedMargin",
+    "UF-Ordinal-NoGrouping", "UF-Ordinal-NoCurriculum",
 ]
 
 COLS = [
