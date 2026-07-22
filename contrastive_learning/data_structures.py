@@ -347,6 +347,26 @@ class TrainingConfig:
     # default (unchanged ontology-tiered behavior). Requires the Stage 1 driver's
     # band lookup; a no-op otherwise.
     cve_negative_cross_band: bool = False
+    # CVE Stage 1 ORDINAL contrastive: the priority_band ordinal order, lowest→
+    # highest severity. Used only when loss_type="ordinal" on the CVE domain to
+    # rank each candidate's band relative to the anchor's (band-proximity graded
+    # relevance: same band → good, adjacent → potential, distant → no). Bands not
+    # in this list get no rank and are treated as the no_fit floor. Career runs
+    # never read this (their levels come from good_fit/potential_fit/no_fit).
+    cve_band_order: List[str] = field(
+        default_factory=lambda: ["watch", "low", "medium", "high", "critical"]
+    )
+    # CVE ordinal Stage 1 negative BAND QUOTAS (primary fix for band skew). When
+    # on, negatives are drawn by band-distance to the anchor (adjacent bands →
+    # graded level 1, distant → level 0) from the whole split's band index rather
+    # than the ontology pools, so every query gets genuinely graded candidates
+    # even though ~91% of CVEs share the majority band. Same-band candidates are
+    # used only as last-resort fill. Requires the Stage 1 driver's band lookup +
+    # cve_band_order; a no-op otherwise. Off by default (ontology-tiered negatives).
+    cve_negative_band_quota: bool = False
+    # Share of the negative budget targeted at ADJACENT bands (distance 1); the
+    # remainder targets distant bands (distance >= 2). 0.5 = an even split.
+    cve_negative_band_quota_adjacent_ratio: float = 0.5
     # CVE Stage 2 decision calibration: after training, fit the classification
     # decision rules on the VALIDATION split instead of using fixed rules that
     # collapse under class imbalance (binary heads thresholded at 0.5; band by

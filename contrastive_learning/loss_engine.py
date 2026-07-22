@@ -604,6 +604,41 @@ class ContrastiveLossEngine:
 
         return total_credit / len(job_skills)
 
+    def _cve_band_rank(self, band):
+        """Ordinal rank of a CVE ``priority_band`` from ``config.cve_band_order``.
+
+        Returns an int rank (lowest→highest severity) or ``None`` when the band is
+        absent / not in the configured order. Career runs never call this (their
+        triplets carry no ``cve_anchor_band``), so the career path is unaffected.
+        """
+        m = getattr(self, "_cve_band_rank_map", None)
+        if m is None:
+            order = getattr(self.config, "cve_band_order", None) or [
+                "watch", "low", "medium", "high", "critical"]
+            m = {str(b).strip().lower(): i for i, b in enumerate(order)}
+            self._cve_band_rank_map = m
+        if band is None:
+            return None
+        return m.get(str(band).strip().lower())
+
+    def _cve_band_level(self, anchor_rank, cand_band) -> int:
+        """Graded relevance (2/1/0) from band proximity to the anchor's band.
+
+        Same band → 2 (good), adjacent band → 1 (potential), distant or unknown
+        band → 0 (no_fit floor). Mirrors the career good/potential/no levels.
+        """
+        if anchor_rank is None:
+            return 0
+        cand_rank = self._cve_band_rank(cand_band)
+        if cand_rank is None:
+            return 0
+        d = abs(anchor_rank - cand_rank)
+        if d == 0:
+            return 2
+        if d == 1:
+            return 1
+        return 0
+
     def _compute_ordinal_loss(self, triplets: List[ContrastiveTriplet],
                                embeddings: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
@@ -677,15 +712,35 @@ class ContrastiveLossEngine:
                 }
                 groups[rid] = g
 
-            # Positive job with its TRUE label (describes (r, j⁺)).
-            pos_level = LEVEL.get(vm.get('positive_original_label', 'good_fit'), 2)
-            g['jobs'].append((embeddings[pos_key].to(self.device), pos_level))
+            cve_anchor_band = vm.get('cve_anchor_band')
+            if cve_anchor_band is not None:
+                # CVE ordinal Stage 1: grade EVERY candidate (positive + each
+                # negative) by priority_band proximity to the anchor's band
+                # (same=2, adjacent=1, distant/unknown=0). This is the CVE analogue
+                # of good_fit/potential_fit/no_fit and is the only place the CVE
+                # band ordinal signal enters Stage 1. Career triplets never carry
+                # 'cve_anchor_band', so they take the unchanged branch below.
+                anchor_rank = self._cve_band_rank(cve_anchor_band)
+                pos_level = self._cve_band_level(anchor_rank, vm.get('cve_positive_band'))
+                g['jobs'].append((embeddings[pos_key].to(self.device), pos_level))
+                neg_bands = vm.get('cve_negative_bands') or []
+                for i, negative in enumerate(triplet.negatives):
+                    neg_key = self._get_content_key(negative)
+                    if neg_key in embeddings:
+                        band = neg_bands[i] if i < len(neg_bands) else None
+                        g['jobs'].append(
+                            (embeddings[neg_key].to(self.device),
+                             self._cve_band_level(anchor_rank, band)))
+            else:
+                # Positive job with its TRUE label (describes (r, j⁺)).
+                pos_level = LEVEL.get(vm.get('positive_original_label', 'good_fit'), 2)
+                g['jobs'].append((embeddings[pos_key].to(self.device), pos_level))
 
-            # Negatives: sampled non-matches for r → no_fit floor (level 0).
-            for negative in triplet.negatives:
-                neg_key = self._get_content_key(negative)
-                if neg_key in embeddings:
-                    g['jobs'].append((embeddings[neg_key].to(self.device), 0))
+                # Negatives: sampled non-matches for r → no_fit floor (level 0).
+                for negative in triplet.negatives:
+                    neg_key = self._get_content_key(negative)
+                    if neg_key in embeddings:
+                        g['jobs'].append((embeddings[neg_key].to(self.device), 0))
 
         # ── Compute per-query ordinal margins (vectorized, no .item()) ──
         effective_lambda1 = self._get_effective_lambda1()
