@@ -51,6 +51,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
+# Ensure the repo root is importable when this script is run from scripts/.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 # Quiet the noisy trainer/bath-processor logs; we only care about our summary.
 logging.basicConfig(level=logging.WARNING,
                     format="%(levelname)s %(name)s: %(message)s")
