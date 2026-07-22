@@ -297,6 +297,11 @@ class Stage1ContrastivePretrainer:
             and str(rec.get("cve_labels", {}).get("priority_band", "")).strip()
         }
         self.negative_selector.set_band_lookup(band_by_id)
+        # Ordinal Stage 1 band-quota selection needs the priority_band ordinal
+        # order to bucket negatives by distance to the anchor; a no-op when
+        # cve_negative_band_quota is off.
+        self.negative_selector.set_band_order(
+            getattr(self.config, "cve_band_order", None) or [])
 
         # --- Train split: negatives -> positives (exclude negatives) -> pair. ---
         train_report, paired_train_path = self._prepare_split(

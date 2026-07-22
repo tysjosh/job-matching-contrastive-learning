@@ -358,6 +358,19 @@ class BatchProcessor:
                           or self._compute_resume_id(anchor_sample.resume),
         }
 
+        # ── CVE ordinal Stage 1: per-candidate priority_band capture (additive) ──
+        # When the CVE record adapter tagged the anchor with a band, propagate the
+        # anchor / positive / per-negative bands so the ordinal loss can grade
+        # each candidate by band proximity to the anchor. Gated on the band being
+        # present, so the career path and CVE InfoNCE Stage 1 are unaffected.
+        if anchor_sample.metadata.get('cve_anchor_band') is not None:
+            view_metadata['cve_anchor_band'] = anchor_sample.metadata.get('cve_anchor_band')
+            view_metadata['cve_positive_band'] = anchor_sample.metadata.get('cve_positive_band')
+            view_metadata['cve_negative_bands'] = [
+                (neg.get('priority_band', '') if isinstance(neg, dict) else '')
+                for neg in negatives
+            ]
+
         # ── ORCA per-negative ontology-feature capture (additive; Req 9.1) ──
         # Only runs when ORCA is enabled; leaves the career path byte-identical
         # otherwise. Records the per-negative ontology scalars ORCA's
@@ -509,9 +522,16 @@ class BatchProcessor:
             if record is None:
                 # Selector already filters against present_ids, but guard anyway.
                 continue
+            neg_labels = record.get('cve_labels')
+            neg_band = ''
+            if isinstance(neg_labels, dict):
+                neg_band = str(neg_labels.get('priority_band', '') or '').strip()
             negatives.append({
                 'cve': cid,
                 'encoder_view': record.get('encoder_view', ''),
+                # Carried for ordinal Stage 1 band-proximity grading; ignored by
+                # the InfoNCE denominator, so it does not affect non-ordinal runs.
+                'priority_band': neg_band,
             })
 
         if not negatives:

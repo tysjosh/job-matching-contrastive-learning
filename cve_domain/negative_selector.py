@@ -104,6 +104,12 @@ class NegativeSelectionReport:
     # SupCon-consistent case) vs same-band negatives kept only as fill.
     cross_band_selected_count: int = 0
     same_band_selected_count: int = 0
+    # Band-quota mode only (0 otherwise): negatives supplied per band-distance
+    # bucket (adjacent = distance 1 -> level 1, far = distance >= 2 -> level 0),
+    # and same-band ids used only as last-resort fill when graded buckets ran dry.
+    band_quota_adjacent_count: int = 0
+    band_quota_far_count: int = 0
+    band_quota_samefill_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -115,6 +121,9 @@ class NegativeSelectionReport:
             "anchors_processed": self.anchors_processed,
             "cross_band_selected_count": self.cross_band_selected_count,
             "same_band_selected_count": self.same_band_selected_count,
+            "band_quota_adjacent_count": self.band_quota_adjacent_count,
+            "band_quota_far_count": self.band_quota_far_count,
+            "band_quota_samefill_count": self.band_quota_samefill_count,
         }
 
 
@@ -158,6 +167,9 @@ class CVENegativeSelector:
         seed: int = 42,
         cache_selections: bool = True,
         cross_band_negatives: bool = False,
+        band_quota: bool = False,
+        band_quota_adjacent_ratio: float = 0.5,
+        band_order: Optional[Sequence[str]] = None,
     ) -> None:
         if int(max_negatives_per_anchor) < 1:
             raise ValueError(
@@ -177,6 +189,16 @@ class CVENegativeSelector:
         # Requires a band lookup (set_band_lookup); a no-op without one.
         self.cross_band_negatives = bool(cross_band_negatives)
         self._band_by_id: Dict[str, str] = {}
+
+        # Band-quota mode: draw negatives by band-distance to the anchor from the
+        # split's band index so every query gets graded candidates (adjacent →
+        # level 1, distant → level 0) despite the majority-band skew.
+        self.band_quota = bool(band_quota)
+        self.band_quota_adjacent_ratio = float(band_quota_adjacent_ratio)
+        # band -> ordinal rank, from cve_band_order (lowest→highest severity).
+        self._band_order_rank: Dict[str, int] = {}
+        if band_order:
+            self.set_band_order(band_order)
 
         # Report accumulated across select_negatives calls; reset per split run.
         self.report = NegativeSelectionReport()
@@ -209,6 +231,19 @@ class CVENegativeSelector:
             if str(k).strip() and str(v).strip()
         }
         self._selection_cache.clear()
+
+    def set_band_order(self, band_order: Sequence[str]) -> None:
+        """Set the ``priority_band`` -> ordinal rank map (lowest→highest severity).
+
+        Used by band-quota selection to bucket candidates by band distance to the
+        anchor. Clears the memo since it changes selection.
+        """
+        self._band_order_rank = {
+            str(b).strip(): i for i, b in enumerate(band_order) if str(b).strip()
+        }
+        # May be called from __init__ before the memo exists; guard the clear.
+        if hasattr(self, "_selection_cache"):
+            self._selection_cache.clear()
 
     def _order_by_band(self, candidates: Sequence[str], anchor_band: Optional[str]) -> List[str]:
         """Stable-partition candidates so different-band ids come first.
@@ -247,6 +282,10 @@ class CVENegativeSelector:
             tier_ratios=getattr(config, "negative_tier_ratios", None),
             seed=getattr(config, "split_seed", 42),
             cross_band_negatives=getattr(config, "cve_negative_cross_band", False),
+            band_quota=getattr(config, "cve_negative_band_quota", False),
+            band_quota_adjacent_ratio=getattr(
+                config, "cve_negative_band_quota_adjacent_ratio", 0.5),
+            band_order=getattr(config, "cve_band_order", None),
         )
 
     # ------------------------------------------------------------------ #
@@ -294,6 +333,22 @@ class CVENegativeSelector:
 
         if present_ids is None:
             present_ids = set(str(c) for c in split_cve_ids)
+
+        # Band-quota mode (ordinal Stage 1): grade the ONTOLOGY-selected negatives
+        # by band distance to the anchor (adjacent → level 1, distant → level 0),
+        # using same-band ontology negatives only as fill. Candidates still come
+        # from the anchor's cyber-KG pools, so selection stays ontology-guided.
+        # Falls through to the standard ontology path when the band order is
+        # unavailable, so it is a safe no-op.
+        if self.band_quota and self._band_order_rank:
+            selected = self._select_band_quota_negatives(
+                anchor_cve, split_cve_ids, present_ids)
+            self.report.anchors_processed += 1
+            if len(selected) < self.max_negatives_per_anchor:
+                self.report.deficit_anchor_count += 1
+            if self.cache_selections:
+                self._selection_cache[anchor_cve] = list(selected)
+            return selected
 
         rng = random.Random(f"{self.seed}:{anchor_cve}")
         max_n = self.max_negatives_per_anchor
@@ -394,6 +449,113 @@ class CVENegativeSelector:
 
         if self.cache_selections:
             self._selection_cache[anchor_cve] = list(selected)
+        return selected
+
+    # ------------------------------------------------------------------ #
+    # Band-quota selection (ordinal Stage 1)
+    # ------------------------------------------------------------------ #
+    def _bucket_by_band_distance(self, candidates, anchor_rank):
+        """Split candidate ids into (adjacent, far, same) by band distance.
+
+        adjacent = band distance 1 (graded level 1), far = distance >= 2 or
+        unknown band (level 0), same = distance 0. Preserves input order within
+        each bucket (callers pre-shuffle for seeded draws).
+        """
+        adjacent, far, same = [], [], []
+        for cid in candidates:
+            rank = self._band_order_rank.get(self._band_by_id.get(cid, ""))
+            if anchor_rank is None or rank is None:
+                far.append(cid)
+            else:
+                d = abs(rank - anchor_rank)
+                (same if d == 0 else (adjacent if d == 1 else far)).append(cid)
+        return adjacent, far, same
+
+    def _select_band_quota_negatives(
+        self, anchor_cve: str, split_cve_ids: Sequence[str], present_ids: Set[str]
+    ) -> List[str]:
+        """Grade the ONTOLOGY-selected negatives by band distance (ordinal Stage 1).
+
+        The candidate universe is the anchor's cyber-KG hard/medium/easy pools
+        (so selection stays ontology-guided). Those ontology candidates are
+        bucketed by band distance to the anchor and drawn to the configured
+        adjacent/far quota, so a query gets graded negatives (adjacent → level 1,
+        distant → level 0) whenever its ontology pool carries band diversity.
+        Same-band ontology candidates are used only as fill. If the ontology pool
+        is too small/undiverse to reach the max, the existing same-split random
+        fallback tops up (also band-bucketed), matching Req 6.3/6.4. Seeded.
+        """
+        rng = random.Random(f"{self.seed}:bq:{anchor_cve}")
+        max_n = self.max_negatives_per_anchor
+        anchor_band = self._band_by_id.get(anchor_cve)
+        anchor_rank = self._band_order_rank.get(anchor_band) if anchor_band else None
+
+        # --- Ontology candidate universe: the anchor's tiered cyber-KG pools. ---
+        pool = self.ontology_adapter.get_pool(anchor_cve) if self.ontology_adapter else None
+        ontology_candidates: List[str] = []
+        seen_c: Set[str] = set()
+        for tier in TIER_NAMES:
+            for cid in self._filter_tier(self._tier_list(pool, tier), anchor_cve, present_ids):
+                if cid not in seen_c:
+                    seen_c.add(cid)
+                    ontology_candidates.append(cid)
+
+        adjacent, far, same = self._bucket_by_band_distance(ontology_candidates, anchor_rank)
+        rng.shuffle(adjacent)
+        rng.shuffle(far)
+        rng.shuffle(same)
+
+        selected: List[str] = []
+        seen: Set[str] = set()
+
+        def take(bucket: List[str], limit: int, counter: Optional[str]) -> None:
+            for cid in bucket:
+                if len(selected) >= max_n or limit <= 0:
+                    break
+                if cid in seen:
+                    continue
+                selected.append(cid)
+                seen.add(cid)
+                limit -= 1
+                if counter == "adjacent":
+                    self.report.band_quota_adjacent_count += 1
+                elif counter == "far":
+                    self.report.band_quota_far_count += 1
+                elif counter == "same":
+                    self.report.band_quota_samefill_count += 1
+
+        adj_target = int(round(max_n * self.band_quota_adjacent_ratio))
+        far_target = max_n - adj_target
+        # Primary graded draw over the ontology candidates.
+        take(adjacent, adj_target, "adjacent")
+        take(far, far_target, "far")
+        # Fill shortfall from the other graded ontology bucket first...
+        if len(selected) < max_n:
+            take(adjacent, max_n - len(selected), "adjacent")
+        if len(selected) < max_n:
+            take(far, max_n - len(selected), "far")
+        # ...then same-band ontology candidates (fill).
+        if len(selected) < max_n:
+            take(same, max_n - len(selected), "same")
+
+        # --- Same-split random fallback (existing safety net, Req 6.3/6.4) ---
+        # Only when the ontology pool could not fill the budget. Also band-bucketed
+        # so any top-up still prefers graded bands.
+        if len(selected) < max_n:
+            before = len(selected)
+            random_pool = [
+                cid for cid in (str(c) for c in split_cve_ids)
+                if cid != anchor_cve and cid not in seen
+            ]
+            r_adj, r_far, r_same = self._bucket_by_band_distance(random_pool, anchor_rank)
+            rng.shuffle(r_adj)
+            rng.shuffle(r_far)
+            rng.shuffle(r_same)
+            take(r_adj, max_n - len(selected), "adjacent")
+            take(r_far, max_n - len(selected), "far")
+            take(r_same, max_n - len(selected), "same")
+            if len(selected) > before:
+                self.report.random_fallback_anchor_count += 1
         return selected
 
     # ------------------------------------------------------------------ #

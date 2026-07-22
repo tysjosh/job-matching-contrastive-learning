@@ -65,7 +65,7 @@ _EXCLUDED_DIR_NAMES = {
 # career pipeline, so removing ``orca/`` is expected to remove them too. The
 # isolation guard concerns the OSCAR *pipeline* modules (Requirement 7.6), so
 # these entrypoints are excluded by name.
-_ALLOWED_ORCA_ENTRYPOINT_PREFIXES = ("run_orca",)
+_ALLOWED_ORCA_ENTRYPOINT_PREFIXES = ("run_orca", "probe_reliability")
 
 
 def _is_orca_entrypoint(path: Path) -> bool:

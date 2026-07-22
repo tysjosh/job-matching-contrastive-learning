@@ -247,6 +247,18 @@ class CVERecordAdapter:
         # Carry the anchor's present supervised labels for Stage 2.
         metadata["cve_labels"] = _present_labels(record.get("cve_labels"))
 
+        # Ordinal Stage 1 (loss_type="ordinal"): carry the anchor and positive
+        # priority_band so the batch processor / loss engine can grade each
+        # candidate by band proximity to the anchor. Empty string when a band is
+        # absent (the loss treats an unknown band as the no_fit floor). These are
+        # inert for InfoNCE Stage 1 and for the career domain.
+        anchor_labels = record.get("cve_labels")
+        anchor_labels = anchor_labels if isinstance(anchor_labels, Mapping) else {}
+        positive_labels = positive_record.get("cve_labels") if isinstance(positive_record, Mapping) else {}
+        positive_labels = positive_labels if isinstance(positive_labels, Mapping) else {}
+        metadata["cve_anchor_band"] = _clean_str(anchor_labels.get("priority_band"))
+        metadata["cve_positive_band"] = _clean_str(positive_labels.get("priority_band"))
+
         # Sample-level loss weighting metadata (only active when the Run_Config
         # sets ontology_weight > 0; otherwise the loss engine returns weight 1.0
         # and these fields are ignored — fully opt-in / backward compatible).
