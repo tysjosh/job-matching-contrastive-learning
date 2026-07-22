@@ -23,6 +23,8 @@ from .trainer import ContrastiveLearningTrainer
 from .training_mode_detector import TrainingModeDetector, TrainingMode
 from .training_strategy import TrainingStrategy, SinglePhaseStrategy, TwoPhaseStrategy, TrainingStrategyResult
 
+logger = logging.getLogger(__name__)
+
 # Import augmentation integration utilities
 try:
     from augmentation.pipeline_integration import (
@@ -34,8 +36,6 @@ try:
 except ImportError:
     AUGMENTATION_INTEGRATION_AVAILABLE = False
     logger.warning("Augmentation integration not available - enhanced augmentation features disabled")
-
-logger = logging.getLogger(__name__)
 
 
 class MLPipeline:
