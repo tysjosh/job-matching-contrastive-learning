@@ -197,6 +197,7 @@ def test_all_labels_absent_skips_every_metric(tmp_path: Path) -> None:
         "ranking",
         "classification_in_kev",
         "classification_priority_band",
+        "classification_priority_band_from_score",
         "embedding_separation",
     }
     # Each skip carries a non-empty reason (Req 10.5).

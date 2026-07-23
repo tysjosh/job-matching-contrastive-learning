@@ -219,6 +219,13 @@ class CVEEvaluationReporter:
         report.classification[PRIORITY_BAND_LABEL] = self._evaluate_band_classification(
             records, predictions, report.skipped_metrics
         )
+        # priority_band is a deterministic bucketing of priority_score; the softmax
+        # band head collapses to the majority class under the ~92% 'watch' skew, so
+        # we also report the band derived by bucketing the PREDICTED priority_score
+        # at the data's own cut points (an ordinal, non-degenerate band metric).
+        report.classification["priority_band_from_score"] = self._evaluate_band_from_score(
+            records, predictions, report.skipped_metrics
+        )
 
         # --- Req 10.4: embedding-separation diagnostics across priority_band classes.
         report.embedding_separation = self._evaluate_embedding_separation(
@@ -431,6 +438,105 @@ class CVEEvaluationReporter:
             "macro_f1": self._macro_f1(y_true, y_pred),
         }
 
+    def _evaluate_band_from_score(
+        self,
+        records: Sequence[Mapping[str, Any]],
+        predictions: Mapping[str, Mapping[str, Any]],
+        skipped: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """Ordinal ``priority_band`` derived by bucketing the PREDICTED priority_score.
+
+        ``priority_band`` is a deterministic bucketing of ``priority_score`` (the per-
+        band score ranges are contiguous and non-overlapping). The trained multiclass
+        band head collapses to the majority class ('watch', ~92%) and yields a
+        degenerate macro-F1; bucketing the regression head's predicted score at the
+        data's own cut points instead produces a non-degenerate, ordinal prediction
+        that is also sensitive to Stage 1 quality. Cut points and the severity order
+        are derived from the ground-truth (band, score) pairs so the metric adapts to
+        whatever bands are present rather than hard-coding thresholds.
+        """
+        metric_key = "classification_priority_band_from_score"
+        # Ground-truth (band, score) pairs define the severity order + cut points.
+        pairs = [
+            (band, score)
+            for r in records
+            for band in [self._get_band(r)]
+            for score in [self._to_float(self._get_label(r, PRIORITY_SCORE_LABEL))]
+            if band is not None and score is not None
+        ]
+        if not pairs:
+            reason = "priority_band and priority_score are not both present on any test record"
+            skipped[metric_key] = reason
+            return {"skipped": True, "reason": reason}
+
+        order, thresholds = self._derive_band_cutpoints(pairs)
+        if len(order) < 2:
+            reason = "fewer than two priority_band classes present; band-from-score is undefined"
+            skipped[metric_key] = reason
+            return {"skipped": True, "reason": reason}
+
+        rank = {b: i for i, b in enumerate(order)}
+
+        def bucket(score: float) -> str:
+            idx = 0
+            for i, t in enumerate(thresholds):
+                if score >= t:
+                    idx = i + 1
+            return order[idx]
+
+        y_true: List[str] = []
+        y_pred: List[str] = []
+        abs_score_err: List[float] = []
+        missing_prediction = 0
+        for record in records:
+            gt = self._get_band(record)
+            if gt is None or gt not in rank:
+                continue
+            cve = str(record.get("cve", ""))
+            pred = predictions.get(cve) or {}
+            pscore = self._to_float(pred.get(PRED_RANKING_SCORE))
+            if pscore is None:
+                missing_prediction += 1
+                continue
+            y_true.append(gt)
+            y_pred.append(bucket(pscore))
+            gt_score = self._to_float(self._get_label(record, PRIORITY_SCORE_LABEL))
+            if gt_score is not None:
+                abs_score_err.append(abs(pscore - gt_score))
+
+        if not y_true:
+            reason = "no predicted priority_score available for records with a priority_band label"
+            skipped[metric_key] = reason
+            return {"skipped": True, "reason": reason}
+
+        per_class: Dict[str, Dict[str, float]] = {}
+        for c in order:
+            tp = sum(1 for t, p in zip(y_true, y_pred) if t == c and p == c)
+            fp = sum(1 for t, p in zip(y_true, y_pred) if t != c and p == c)
+            fn = sum(1 for t, p in zip(y_true, y_pred) if t == c and p != c)
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+            per_class[c] = {
+                "precision": precision,
+                "recall": recall,
+                "f1": f1,
+                "support": sum(1 for t in y_true if t == c),
+            }
+
+        return {
+            "skipped": False,
+            "num_evaluated": len(y_true),
+            "num_missing_prediction": missing_prediction,
+            "accuracy": self._accuracy(y_true, y_pred),
+            "macro_f1": self._macro_f1(y_true, y_pred),
+            "adjacent_accuracy": self._adjacent_accuracy(y_true, y_pred, rank),
+            "mae_priority_score": (sum(abs_score_err) / len(abs_score_err)) if abs_score_err else None,
+            "severity_order": list(order),
+            "score_cut_points": list(thresholds),
+            "per_class": per_class,
+        }
+
     # ------------------------------------------------------------------ #
     # Embedding separation diagnostics (Req 10.4)
     # ------------------------------------------------------------------ #
@@ -559,6 +665,37 @@ class CVEEvaluationReporter:
             f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
             f1_scores.append(f1)
         return sum(f1_scores) / len(f1_scores)
+
+    @staticmethod
+    def _derive_band_cutpoints(
+        pairs: Sequence["tuple[str, float]"],
+    ) -> "tuple[List[str], List[float]]":
+        """Derive the band severity order + score cut points from (band, score) pairs.
+
+        Bands are ordered by their minimum observed ground-truth score (ascending
+        severity); the cut point between two adjacent bands is the minimum score of
+        the higher band (the per-band score ranges are contiguous/non-overlapping, so
+        this recovers the definitional threshold, e.g. 45 / 70 / 85).
+        """
+        scores_by_band: Dict[str, List[float]] = {}
+        for band, score in pairs:
+            scores_by_band.setdefault(band, []).append(score)
+        order = sorted(scores_by_band, key=lambda b: min(scores_by_band[b]))
+        thresholds = [min(scores_by_band[order[i + 1]]) for i in range(len(order) - 1)]
+        return order, thresholds
+
+    @staticmethod
+    def _adjacent_accuracy(
+        y_true: Sequence[str], y_pred: Sequence[str], rank: Mapping[str, int]
+    ) -> float:
+        """Fraction of predictions within one severity rank of the truth."""
+        if not y_true:
+            return 0.0
+        ok = sum(
+            1 for t, p in zip(y_true, y_pred)
+            if abs(rank.get(t, 0) - rank.get(p, rank.get(t, 0))) <= 1
+        )
+        return ok / len(y_true)
 
     # ------------------------------------------------------------------ #
     # Field accessors / coercion helpers

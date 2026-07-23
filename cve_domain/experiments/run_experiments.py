@@ -257,6 +257,7 @@ def _summary_row(exp_id: str, name: str, report: Dict[str, Any]) -> Dict[str, An
     cls = report.get("classification", {})
     kev = cls.get("in_kev", {})
     band = cls.get("priority_band", {})
+    band_score = cls.get("priority_band_from_score", {})
     sep = report.get("embedding_separation", {})
     return {
         "id": exp_id,
@@ -268,6 +269,9 @@ def _summary_row(exp_id: str, name: str, report: Dict[str, Any]) -> Dict[str, An
         "in_kev_macro_f1": None if kev.get("skipped") else kev.get("macro_f1"),
         "band_acc": None if band.get("skipped") else band.get("accuracy"),
         "band_macro_f1": None if band.get("skipped") else band.get("macro_f1"),
+        # Ordinal band derived from the predicted priority_score (non-degenerate).
+        "band_from_score_macro_f1": None if band_score.get("skipped") else band_score.get("macro_f1"),
+        "band_from_score_acc": None if band_score.get("skipped") else band_score.get("accuracy"),
         "band_separation_ratio": None if sep.get("skipped") else sep.get("separation_ratio"),
         "skipped_metrics": list(report.get("skipped_metrics", {}).keys()),
     }
@@ -284,7 +288,8 @@ def _write_summary(rows: List[Dict[str, Any]], output_root: Path) -> None:
         return str(v)
 
     headers = ["id", "name", "ndcg", "map", "in_kev_acc", "in_kev_macro_f1",
-               "band_acc", "band_macro_f1", "band_separation_ratio"]
+               "band_acc", "band_macro_f1", "band_from_score_macro_f1",
+               "band_separation_ratio"]
     lines = ["# CVE experiment summary", "",
              "| " + " | ".join(headers) + " |",
              "|" + "|".join(["---"] * len(headers)) + "|"]

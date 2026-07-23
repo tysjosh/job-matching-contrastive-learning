@@ -136,6 +136,7 @@ def main() -> None:
     predictions = trainer.predict_records(records)
 
     y_true, y_argmax, y_scorebucket, y_oracle = [], [], [], []
+    pred_scores = []  # predicted priority_score aligned with y_true
     missing = 0
     for rec in records:
         cve = str(rec.get("cve", "")).strip()
@@ -146,18 +147,77 @@ def main() -> None:
         if not pred or gt_band is None or gt_score is None or "ranking_score" not in pred:
             missing += 1
             continue
+        ps = float(pred["ranking_score"])
         y_true.append(gt_band)
         y_argmax.append(pred.get("priority_band", "watch"))
-        y_scorebucket.append(bucket_score(float(pred["ranking_score"])))
+        y_scorebucket.append(bucket_score(ps))
         y_oracle.append(bucket_score(float(gt_score)))
+        pred_scores.append(ps)
 
     print(f"evaluated: {len(y_true)}  (missing/skipped: {missing})", flush=True)
     print(f"ground-truth band counts: {dict(Counter(y_true))}\n", flush=True)
 
+    # --- Quantile (base-rate matched) thresholds on the PREDICTED score ------
+    # The fixed 45/70/85 cut points fail on high/critical because MSE compresses
+    # the predicted scores below 70. But if the RANKING is good, the top of the
+    # predicted-score distribution still holds the true high/critical items. So we
+    # also bucket by choosing thresholds at the cumulative base-rate quantiles of
+    # the predicted scores (no retraining, no test-label leakage beyond the known
+    # class priors). This maps e.g. the top ~0.22% of predicted scores -> critical.
+    import numpy as np
+    scores_arr = np.array(pred_scores, dtype=float)
+    n = len(y_true)
+    counts = Counter(y_true)
+    # Cumulative fraction at each severity boundary (ascending severity).
+    q_thresholds = []
+    cum = 0.0
+    for b in BANDS[:-1]:
+        cum += counts.get(b, 0) / n
+        q_thresholds.append(float(np.quantile(scores_arr, cum)))
+
+    def bucket_quantile(score: float) -> str:
+        idx = 0
+        for i, t in enumerate(q_thresholds):
+            if score >= t:
+                idx = i + 1
+        return BANDS[idx]
+
+    y_quantile = [bucket_quantile(s) for s in pred_scores]
+
+    # --- Per-true-band predicted-score percentile diagnostic ----------------
+    # Answers the key question: does the predicted score RANK true high/critical
+    # near the top? If the median percentile climbs monotonically watch<medium<
+    # high<critical and high/critical sit near the top, quantile thresholds (Tier A,
+    # no retraining) can recover them; if not, the score head needs a weighted-loss
+    # retrain (Tier B).
+    order_rank = np.argsort(np.argsort(scores_arr))  # 0..n-1 rank by predicted score
+    pct = order_rank / (n - 1) * 100.0
+    print("=== predicted-score percentile by TRUE band (does ranking separate them?) ===")
+    band_pctiles = {}
+    for c in BANDS:
+        idxs = [i for i, t in enumerate(y_true) if t == c]
+        if not idxs:
+            continue
+        cs = scores_arr[idxs]
+        cp = pct[idxs]
+        band_pctiles[c] = {
+            "n": len(idxs),
+            "median_pred_score": float(np.median(cs)),
+            "median_percentile": float(np.median(cp)),
+            "p25_percentile": float(np.percentile(cp, 25)),
+            "p75_percentile": float(np.percentile(cp, 75)),
+        }
+        print(f"    {c:<9} n={len(idxs):<6} median_pred_score={np.median(cs):6.2f} "
+              f"median_pctile={np.median(cp):6.2f}  IQR[{np.percentile(cp,25):.1f}, {np.percentile(cp,75):.1f}]")
+    print()
+
     summary = {"experiment": args.experiment, "evaluated": len(y_true),
-               "gt_band_counts": dict(Counter(y_true)), "variants": {}}
+               "gt_band_counts": dict(Counter(y_true)),
+               "quantile_thresholds": q_thresholds,
+               "band_percentiles": band_pctiles, "variants": {}}
     for name, y_pred in [("argmax_reported_head", y_argmax),
-                         ("score_bucket_predicted", y_scorebucket),
+                         ("score_bucket_fixed_45_70_85", y_scorebucket),
+                         ("score_bucket_quantile", y_quantile),
                          ("oracle_bucket_gt_score", y_oracle)]:
         mf1, per = macro_f1(y_true, y_pred, BANDS)
         acc = accuracy(y_true, y_pred)
