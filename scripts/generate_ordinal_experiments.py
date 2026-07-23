@@ -115,7 +115,10 @@ def overlay(variant: str) -> dict:
     if variant == "EO-E":      # no resume grouping
         return {"group_by_resume": False}
     if variant == "EO-OntNeg":   # skill-level ontology negatives, no sample weighting
-        return {"ontology_guided_negatives": True}
+        # Rank tiers too: on v7 the absolute hard cut point (d<=0.3) is never
+        # reached, so without rank tiers the "hard" bucket stays empty and this
+        # collapses to random negatives. Rank tiers make "hard" = hardest available.
+        return {"ontology_guided_negatives": True, "ontology_negative_rank_tiers": True}
     if variant == "EO-RandNeg":  # random (non-ontology) negatives
         return {"use_pathway_negatives": False}
     raise ValueError(variant)

@@ -211,6 +211,15 @@ class TrainingConfig:
     # negatives) regardless of ontology_weight, enabling a clean ontology-guided
     # ordinal ablation. Default False keeps existing career/CVE runs byte-identical.
     ontology_guided_negatives: bool = False
+    # Rank/quantile-based negative tiers instead of absolute skill-distance cut
+    # points (d<=0.3 hard / 0.3-0.6 medium / >0.6 easy). On datasets where the
+    # realized skill-distance distribution never reaches the absolute "hard"
+    # threshold (career v7: hardest available job is ~0.5), the absolute hard
+    # bucket is always empty and ontology-tiered selection collapses to random.
+    # With this True, hard/medium/easy are the closest/middle/farthest terciles of
+    # each anchor's candidate pool, so "hard" = hardest AVAILABLE. Default False
+    # keeps existing career/CVE runs byte-identical.
+    ontology_negative_rank_tiers: bool = False
 
     # Phase 1 loss function selection
     loss_type: str = "infonce"             # "infonce" (standard), "wasserstein" (graduated), "hybrid" (infonce + ws2), or "ordinal" (OCL)
