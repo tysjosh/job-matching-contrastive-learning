@@ -10,6 +10,11 @@ Variants (each isolates one design decision of the ordinal loss):
   EO-C  Ordinal-NoCurriculum: EO-A with ordinal_curriculum_switch=0.0 (L2+L3 from start).
   EO-D  Ordinal-FixedMargin : EO-A with ordinal_fixed_m1=true (no φ-guided m1).
   EO-E  Ordinal-NoGrouping  : EO-A with group_by_resume=false (siblings not co-batched).
+  EO-OntNeg Ordinal-OntologyNeg: EO-A + ontology_guided_negatives=true (builds the
+                              ESCO skill matcher → skill-level ontology negatives)
+                              WITHOUT the OSCAR sample weight. Isolates skill-level
+                              ontology negative selection, which was previously
+                              coupled to ontology_weight>0 (see EO-B).
   EO-RandNeg Ordinal-RandNeg : EO-A with use_pathway_negatives=false (random negatives;
                               isolates ontology-tiered negative selection).
 
@@ -109,12 +114,14 @@ def overlay(variant: str) -> dict:
         return {"ordinal_fixed_m1": True}
     if variant == "EO-E":      # no resume grouping
         return {"group_by_resume": False}
+    if variant == "EO-OntNeg":   # skill-level ontology negatives, no sample weighting
+        return {"ontology_guided_negatives": True}
     if variant == "EO-RandNeg":  # random (non-ontology) negatives
         return {"use_pathway_negatives": False}
     raise ValueError(variant)
 
 
-VARIANTS = ["EO-A", "EO-B", "EO-C", "EO-D", "EO-E", "EO-RandNeg"]
+VARIANTS = ["EO-A", "EO-B", "EO-C", "EO-D", "EO-E", "EO-OntNeg", "EO-RandNeg"]
 
 
 def main():

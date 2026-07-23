@@ -204,6 +204,13 @@ class TrainingConfig:
     ontology_weight: float = 0.0           # 0.0 = disabled, 0.3 = moderate, 0.5 = strong
     ot_distance_scale: float = 10.0        # Normalization scale for OT distance
     use_ot_distance: bool = True           # Include OT distance in ontology weight (false = only ontology_similarity)
+    # Decouple skill-level ontology NEGATIVE selection from the sample-level
+    # ontology WEIGHT. Historically the OntologySkillMatcher was built only when
+    # ontology_weight > 0, so a "no sample weighting" run silently lost skill-level
+    # ontology negatives too. Set True to build the matcher (→ skill-level ontology
+    # negatives) regardless of ontology_weight, enabling a clean ontology-guided
+    # ordinal ablation. Default False keeps existing career/CVE runs byte-identical.
+    ontology_guided_negatives: bool = False
 
     # Phase 1 loss function selection
     loss_type: str = "infonce"             # "infonce" (standard), "wasserstein" (graduated), "hybrid" (infonce + ws2), or "ordinal" (OCL)

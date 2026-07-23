@@ -81,10 +81,20 @@ class BatchProcessor:
         else:
             self.career_graph = None
 
-        # Initialize OntologySkillMatcher for skill-level negative selection
+        # Initialize OntologySkillMatcher for skill-level negative selection.
+        #
+        # Historically this was gated ONLY on ``ontology_weight > 0`` — which
+        # coupled two independent mechanisms: the sample-level ontology *weight*
+        # (applied to L1) and skill-level ontology *negative selection*. That made
+        # a clean "ontology-guided negatives, no sample weighting" ablation
+        # impossible: turning the weight to 0 silently disabled skill negatives.
+        # ``ontology_guided_negatives`` decouples them — when set it builds the
+        # matcher regardless of ``ontology_weight`` (default False keeps every
+        # existing career/CVE run byte-identical).
         self.skill_matcher = None
         use_ontology = getattr(config, 'ontology_weight', 0.0) > 0.0
-        if use_ontology and esco_graph_path:
+        force_skill_negatives = getattr(config, 'ontology_guided_negatives', False)
+        if (use_ontology or force_skill_negatives) and esco_graph_path:
             try:
                 from .ontology_skill_matcher import OntologySkillMatcher
                 # Use the full ESCO KG for skill matching (not the career graph)
