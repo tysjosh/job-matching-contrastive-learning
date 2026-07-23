@@ -10,6 +10,19 @@ Variants (each isolates one design decision of the ordinal loss):
   EO-C  Ordinal-NoCurriculum: EO-A with ordinal_curriculum_switch=0.0 (L2+L3 from start).
   EO-D  Ordinal-FixedMargin : EO-A with ordinal_fixed_m1=true (no φ-guided m1).
   EO-E  Ordinal-NoGrouping  : EO-A with group_by_resume=false (siblings not co-batched).
+  EO-OntNeg Ordinal-OntologyNeg: EO-A + ontology_guided_negatives=true (builds the
+                              ESCO skill matcher → skill-level ontology negatives)
+                              WITHOUT the OSCAR sample weight. Isolates skill-level
+                              ontology negative selection, which was previously
+                              coupled to ontology_weight>0 (see EO-B).
+  EO-ISCONeg Ordinal-ISCONeg : EO-A + real occupation-level hard negatives via ISCO
+                              (use_isco_negatives=true, isco_weight=1.0). Negatives
+                              are bucketed purely by ISCO occupation-hierarchy
+                              distance {0.0,0.2,0.4,0.7,1.0}, so unlike the skill
+                              route the absolute hard bucket (d<=0.3) IS reachable
+                              (0.0/0.2 = same 4-/3-digit ISCO group). No OSCAR/ISCO
+                              loss weighting — isolates the negative-selection effect.
+                              Ordinal counterpart of InfoNCE E4-OSCAR-ISCO.
   EO-RandNeg Ordinal-RandNeg : EO-A with use_pathway_negatives=false (random negatives;
                               isolates ontology-tiered negative selection).
 
@@ -109,12 +122,31 @@ def overlay(variant: str) -> dict:
         return {"ordinal_fixed_m1": True}
     if variant == "EO-E":      # no resume grouping
         return {"group_by_resume": False}
+    if variant == "EO-OntNeg":   # skill-level ontology negatives, no sample weighting
+        # Rank tiers too: on v7 the absolute hard cut point (d<=0.3) is never
+        # reached, so without rank tiers the "hard" bucket stays empty and this
+        # collapses to random negatives. Rank tiers make "hard" = hardest available.
+        return {"ontology_guided_negatives": True, "ontology_negative_rank_tiers": True}
+    if variant == "EO-ISCONeg":  # real occupation-level hard negatives via ISCO
+        # ontology_guided_negatives builds the skill matcher so the ontology-
+        # negative path is entered (it is gated on skill_matcher being set);
+        # ontology_weight stays 0 so there is no OSCAR sample weighting. With
+        # isco_weight=1.0 the skill computation is skipped and negatives are
+        # scored purely by ISCO occupation-hierarchy distance, whose discrete
+        # values {0.0,0.2,0.4,0.7,1.0} make the absolute hard bucket (d<=0.3)
+        # reachable — so NO rank tiers are needed here (unlike EO-OntNeg).
+        return {
+            "ontology_guided_negatives": True,
+            "use_isco_negatives": True,
+            "isco_weight": 1.0,
+            "esco_occupations_path": "dataset/esco/occupations_en.csv",
+        }
     if variant == "EO-RandNeg":  # random (non-ontology) negatives
         return {"use_pathway_negatives": False}
     raise ValueError(variant)
 
 
-VARIANTS = ["EO-A", "EO-B", "EO-C", "EO-D", "EO-E", "EO-RandNeg"]
+VARIANTS = ["EO-A", "EO-B", "EO-C", "EO-D", "EO-E", "EO-OntNeg", "EO-ISCONeg", "EO-RandNeg"]
 
 
 def main():

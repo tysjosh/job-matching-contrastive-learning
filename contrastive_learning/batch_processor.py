@@ -81,10 +81,20 @@ class BatchProcessor:
         else:
             self.career_graph = None
 
-        # Initialize OntologySkillMatcher for skill-level negative selection
+        # Initialize OntologySkillMatcher for skill-level negative selection.
+        #
+        # Historically this was gated ONLY on ``ontology_weight > 0`` — which
+        # coupled two independent mechanisms: the sample-level ontology *weight*
+        # (applied to L1) and skill-level ontology *negative selection*. That made
+        # a clean "ontology-guided negatives, no sample weighting" ablation
+        # impossible: turning the weight to 0 silently disabled skill negatives.
+        # ``ontology_guided_negatives`` decouples them — when set it builds the
+        # matcher regardless of ``ontology_weight`` (default False keeps every
+        # existing career/CVE run byte-identical).
         self.skill_matcher = None
         use_ontology = getattr(config, 'ontology_weight', 0.0) > 0.0
-        if use_ontology and esco_graph_path:
+        force_skill_negatives = getattr(config, 'ontology_guided_negatives', False)
+        if (use_ontology or force_skill_negatives) and esco_graph_path:
             try:
                 from .ontology_skill_matcher import OntologySkillMatcher
                 # Use the full ESCO KG for skill matching (not the career graph)
@@ -973,10 +983,30 @@ class BatchProcessor:
 
             scored.append((job, distance))
 
-        # Bucket by ontology distance
-        hard = [(j, d) for j, d in scored if d <= 0.3]       # very similar skills
-        medium = [(j, d) for j, d in scored if 0.3 < d <= 0.6]
-        easy = [(j, d) for j, d in scored if d > 0.6]        # very different skills
+        # Bucket by ontology distance.
+        #
+        # Two schemes:
+        #  * ABSOLUTE (default, unchanged): fixed cut points d<=0.3 / 0.3-0.6 / >0.6.
+        #    On some datasets (e.g. career v7) the realized skill-distance
+        #    distribution never reaches 0.3 — the hardest job for a resume sits at
+        #    d~0.5 — so the "hard" bucket is ALWAYS empty and the tiering collapses
+        #    to easy + random fill (ontology injects no hard negatives).
+        #  * RANK/QUANTILE (ontology_negative_rank_tiers=True): tiers are terciles
+        #    of the *realized* per-anchor distance distribution, so "hard" always
+        #    means the closest (hardest-available) third of the candidate pool,
+        #    regardless of the absolute scale. This is what actually delivers hard
+        #    negatives to the loss when absolute cut points are unreachable.
+        if getattr(self.config, 'ontology_negative_rank_tiers', False):
+            ranked = sorted(scored, key=lambda jd: jd[1])   # ascending distance
+            k = len(ranked)
+            t1, t2 = k // 3, (2 * k) // 3
+            hard = ranked[:t1] or ranked[:1]                # closest third = hardest
+            medium = ranked[t1:t2]
+            easy = ranked[t2:]
+        else:
+            hard = [(j, d) for j, d in scored if d <= 0.3]       # very similar skills
+            medium = [(j, d) for j, d in scored if 0.3 < d <= 0.6]
+            easy = [(j, d) for j, d in scored if d > 0.6]        # very different skills
 
         # Get ratios from the configured scheduler
         hard_ratio, medium_ratio, easy_ratio = self._compute_negative_ratios()
