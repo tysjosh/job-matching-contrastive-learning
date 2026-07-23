@@ -10,6 +10,8 @@ Variants (each isolates one design decision of the ordinal loss):
   EO-C  Ordinal-NoCurriculum: EO-A with ordinal_curriculum_switch=0.0 (L2+L3 from start).
   EO-D  Ordinal-FixedMargin : EO-A with ordinal_fixed_m1=true (no φ-guided m1).
   EO-E  Ordinal-NoGrouping  : EO-A with group_by_resume=false (siblings not co-batched).
+  EO-RandNeg Ordinal-RandNeg : EO-A with use_pathway_negatives=false (random negatives;
+                              isolates ontology-tiered negative selection).
 
 Reference baseline for comparison: existing E4-InfoNCE runs.
 
@@ -107,10 +109,12 @@ def overlay(variant: str) -> dict:
         return {"ordinal_fixed_m1": True}
     if variant == "EO-E":      # no resume grouping
         return {"group_by_resume": False}
+    if variant == "EO-RandNeg":  # random (non-ontology) negatives
+        return {"use_pathway_negatives": False}
     raise ValueError(variant)
 
 
-VARIANTS = ["EO-A", "EO-B", "EO-C", "EO-D", "EO-E"]
+VARIANTS = ["EO-A", "EO-B", "EO-C", "EO-D", "EO-E", "EO-RandNeg"]
 
 
 def main():

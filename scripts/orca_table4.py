@@ -30,6 +30,9 @@ DATASET = "cnamuangtoun"
 ORDER = [
     "E4-InfoNCE", "E4-OSCAR-Skill", "E4-OSCAR-Hybrid", "E4-OSCAR-ISCO",
     "ER-DEN", "ER-EXT", "ER-NOONT", "ER-NOALIGN", "ER-FULL",
+    # Frozen-encoder ordinal ablation family (EO): A=base, B=+OSCAR, C=no-curriculum,
+    # D=fixed-margin, E=no-grouping, RandNeg=random (non-ontology) negatives.
+    "EO-A", "EO-B", "EO-C", "EO-D", "EO-E", "EO-RandNeg",
     # Unfrozen-encoder ordinal probe + its ablations (compare ONLY within this block).
     "UF-InfoNCE", "UF-Ordinal", "UF-Ordinal-RandNeg", "UF-Ordinal-FixedMargin",
     "UF-Ordinal-NoGrouping", "UF-Ordinal-NoCurriculum",
