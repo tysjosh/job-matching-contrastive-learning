@@ -40,17 +40,24 @@ from sentence_transformers import SentenceTransformer
 SCALE = 100.0  # priority_score stored as cvss*10 in [0,100]; normalize to [0,1].
 
 
-def _read_jsonl(path: Path, limit: int) -> List[dict]:
-    out = []
+def _read_jsonl(path: Path, limit: int, seed: int = 42) -> List[dict]:
+    """Read all rows, then take a RANDOM sample of ``limit`` (representative).
+
+    Head-of-file slicing is unsafe here: the split files are stratified/ordered,
+    so the first N rows can be a skewed, low-variance slice. Random sampling with
+    a fixed seed keeps the probe representative and reproducible.
+    """
+    import random
+    rows = []
     with open(path) as f:
         for line in f:
             line = line.strip()
-            if not line:
-                continue
-            out.append(json.loads(line))
-            if limit and len(out) >= limit:
-                break
-    return out
+            if line:
+                rows.append(json.loads(line))
+    if limit and len(rows) > limit:
+        rng = random.Random(seed)
+        rows = rng.sample(rows, limit)
+    return rows
 
 
 def _xy(records) -> Tuple[List[str], np.ndarray, List[str]]:
