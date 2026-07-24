@@ -32,8 +32,9 @@ ORDER = [
     "ER-DEN", "ER-EXT", "ER-NOONT", "ER-NOALIGN", "ER-FULL",
     # Frozen-encoder ordinal ablation family (EO): A=base, B=+OSCAR, C=no-curriculum,
     # D=fixed-margin, E=no-grouping, OntNeg=skill-level ontology negatives (decoupled
-    # from sample weighting), RandNeg=random (non-ontology) negatives.
-    "EO-A", "EO-B", "EO-C", "EO-D", "EO-E", "EO-OntNeg", "EO-RandNeg",
+    # from sample weighting), ISCONeg=occupation-level ISCO hard negatives,
+    # RandNeg=random (non-ontology) negatives.
+    "EO-A", "EO-B", "EO-C", "EO-D", "EO-E", "EO-OntNeg", "EO-ISCONeg", "EO-RandNeg",
     # Unfrozen-encoder ordinal probe + its ablations (compare ONLY within this block).
     "UF-InfoNCE", "UF-Ordinal", "UF-Ordinal-RandNeg", "UF-Ordinal-FixedMargin",
     "UF-Ordinal-NoGrouping", "UF-Ordinal-NoCurriculum",
