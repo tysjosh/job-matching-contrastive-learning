@@ -34,15 +34,15 @@
   "use_ot_distance": false,
   "cve_ontology_overlap_weighting": false,
 
-  "_leakage_comment": "priority_score is an EPSS+KEV formula; excluding the CVSS/EPSS/KEV/ransomware segments from the Profile_Text_View forces the encoder to predict priority from the semantic description (name, CWE, product) rather than by reading the label's own inputs out of the text.",
+  "_target_comment": "Alternate ordinal target: CVSS base severity (independent of the EPSS-derived priority_score). The converter fills the priority_score/priority_band slots from cvss_base_score (scaled x10 to 0-100) and lower-cased cvss_base_severity, so the whole pipeline is target-agnostic. Leakage stripping stays ON because CVSS is now the label.",
+  "cve_target_label": "cvss",
   "cve_exclude_leakage_segments": true,
 
-  "_ordinal_stage1_comment": "Ordinal Stage 1: same-band positives + cross-band negatives give graded band-proximity candidates (same=good, adjacent=potential, distant=no). Requires the band lookup wired by the Stage 1 driver.",
   "cve_positive_signal": "priority_band",
   "cve_negative_cross_band": true,
   "cve_negative_band_quota": true,
   "cve_negative_band_quota_adjacent_ratio": 0.5,
-  "cve_band_order": ["watch", "low", "medium", "high", "critical"],
+  "cve_band_order": ["none", "low", "medium", "high", "critical"],
   "ordinal_alpha": 0.5,
   "ordinal_lambda1": 1.0,
   "ordinal_lambda2": 1.0,
@@ -58,7 +58,7 @@
   "encoder_max_seq_length": 512,
   "embedding_cache_size": 400000,
   "enable_embedding_preload": true,
-  "embedding_cache_path": "cve_domain/runs/stage1_contrastive/embedding_cache/text_embeddings.pt",
+  "embedding_cache_path": "cve_domain/runs/stage1_contrastive_cvss/embedding_cache/text_embeddings.pt",
   "clear_cache_between_epochs": false,
   "projection_dim": 128,
   "projection_dropout": 0.3,
@@ -66,7 +66,7 @@
   "freeze_contrastive_layers": false,
   "validate_every_n_epochs": 1,
 
-  "output_dir": "cve_domain/runs/stage1_contrastive",
-  "checkpoint_path": "cve_domain/runs/stage1_contrastive/best_checkpoint.pt",
-  "validation_path": "cve_domain/runs/stage1_contrastive/data_splits/validation.jsonl"
+  "output_dir": "cve_domain/runs/stage1_contrastive_cvss",
+  "checkpoint_path": "cve_domain/runs/stage1_contrastive_cvss/best_checkpoint.pt",
+  "validation_path": "cve_domain/runs/stage1_contrastive_cvss/data_splits/validation.jsonl"
 }

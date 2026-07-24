@@ -307,6 +307,32 @@ class CVEEvaluationReporter:
         result["map"] = self._average_precision(binary_rel)
         result["map_relevance_threshold"] = threshold
         result["num_relevant"] = sum(binary_rel)
+
+        # Threshold-free rank agreement between the model score and the ground-truth
+        # priority_score (Spearman rho). Unlike the single median-threshold MAP, this
+        # is not sensitive to where the relevance cut falls, so it fairly compares
+        # models even when the median sits inside the compressed majority ('watch')
+        # band. Reported alongside MAP to characterize the MAP trade-off honestly.
+        result["spearman_rho"] = self._spearman(
+            [rel for _, rel, _ in triples], [s for _, _, s in triples]
+        )
+
+        # MAP at the fixed priority_band lower boundaries (medium>=45, high>=70,
+        # critical>=85) in addition to the data-median. These coarse, semantically
+        # meaningful cut points isolate BETWEEN-band ranking quality (where ordinal
+        # Stage 1 sharpens separation) from the WITHIN-'watch' granularity that the
+        # median threshold measures (where ordinal compression can cost MAP).
+        map_at: Dict[str, Any] = {}
+        for name, thr in (("medium_plus_45", 45.0), ("high_plus_70", 70.0), ("critical_plus_85", 85.0)):
+            br = [1 if rel >= thr else 0 for _, rel, _ in model_ranked]
+            n_rel = sum(br)
+            if n_rel > 0:
+                map_at[name] = {
+                    "threshold": thr,
+                    "map": self._average_precision(br),
+                    "num_relevant": n_rel,
+                }
+        result["map_at_band_boundaries"] = map_at
         return result
 
     @staticmethod
@@ -802,6 +828,43 @@ class CVEEvaluationReporter:
         if n % 2 == 1:
             return ordered[mid]
         return (ordered[mid - 1] + ordered[mid]) / 2.0
+
+    @staticmethod
+    def _spearman(a: Sequence[float], b: Sequence[float]) -> Optional[float]:
+        """Spearman rank correlation between ``a`` and ``b`` (pure Python).
+
+        Computed as the Pearson correlation of the average (tie-corrected) ranks,
+        so it is well-defined under the heavy score ties common in this data.
+        Returns ``None`` when undefined (fewer than two points or zero variance in
+        either ranking, e.g. all-equal scores).
+        """
+        if len(a) != len(b) or len(a) < 2:
+            return None
+
+        def ranks(values: Sequence[float]) -> List[float]:
+            order = sorted(range(len(values)), key=lambda i: values[i])
+            out = [0.0] * len(values)
+            i = 0
+            while i < len(order):
+                j = i
+                while j + 1 < len(order) and values[order[j + 1]] == values[order[i]]:
+                    j += 1
+                avg_rank = (i + j) / 2.0 + 1.0  # 1-based average rank for ties
+                for k in range(i, j + 1):
+                    out[order[k]] = avg_rank
+                i = j + 1
+            return out
+
+        ra, rb = ranks(a), ranks(b)
+        n = len(ra)
+        mean_a = sum(ra) / n
+        mean_b = sum(rb) / n
+        cov = sum((ra[i] - mean_a) * (rb[i] - mean_b) for i in range(n))
+        var_a = sum((ra[i] - mean_a) ** 2 for i in range(n))
+        var_b = sum((rb[i] - mean_b) ** 2 for i in range(n))
+        if var_a <= 0.0 or var_b <= 0.0:
+            return None
+        return cov / math.sqrt(var_a * var_b)
 
     # ------------------------------------------------------------------ #
     # IO
