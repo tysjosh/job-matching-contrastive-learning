@@ -143,10 +143,38 @@ def overlay(variant: str) -> dict:
         }
     if variant == "EO-RandNeg":  # random (non-ontology) negatives
         return {"use_pathway_negatives": False}
+
+    # ── Ontology-negative-base knob ablations (EO-ON-*) ──────────────────────
+    # The EO-A..E block ablates loss knobs on top of the DEFAULT (random) negative
+    # selection (skill_matcher is off at ontology_weight=0). The design intent was
+    # to ablate those knobs on an ONTOLOGY-negative base. These variants fix that:
+    # each derives from the EO-OntNeg base (ontology_guided_negatives + rank tiers,
+    # ontology_weight=0) and flips exactly one knob, so the effect is measured in
+    # the ontology-negative regime the study intended. EO-OntNeg itself is the base.
+    # Confirmed clean: the two negative-selection flags never touch the loss engine,
+    # and sample weighting is a no-op while ontology_weight=0 (loss_engine returns
+    # 1.0), so EO-ON-C/D/E differ from EO-OntNeg by their single loss knob only.
+    if variant == "EO-ON-C":     # ontology-neg base + no curriculum
+        return {"ontology_guided_negatives": True, "ontology_negative_rank_tiers": True,
+                "ordinal_curriculum_switch": 0.0}
+    if variant == "EO-ON-D":     # ontology-neg base + fixed margin
+        return {"ontology_guided_negatives": True, "ontology_negative_rank_tiers": True,
+                "ordinal_fixed_m1": True}
+    if variant == "EO-ON-E":     # ontology-neg base + no resume grouping
+        return {"ontology_guided_negatives": True, "ontology_negative_rank_tiers": True,
+                "group_by_resume": False}
+    if variant == "EO-ON-B":     # ontology-neg base + OSCAR-skill sample weighting
+        # The clean sample-weighting knob: identical to EO-OntNeg except
+        # ontology_weight=0.3 turns on the per-sample loss weight. (Contrast EO-B,
+        # which conflates weighting with a switch to ABSOLUTE-bucket skill negatives
+        # that collapse toward random on v7.)
+        return {"ontology_guided_negatives": True, "ontology_negative_rank_tiers": True,
+                "ontology_weight": 0.3, "use_ot_distance": True}
     raise ValueError(variant)
 
 
-VARIANTS = ["EO-A", "EO-B", "EO-C", "EO-D", "EO-E", "EO-OntNeg", "EO-ISCONeg", "EO-RandNeg"]
+VARIANTS = ["EO-A", "EO-B", "EO-C", "EO-D", "EO-E", "EO-OntNeg", "EO-ISCONeg", "EO-RandNeg",
+            "EO-ON-B", "EO-ON-C", "EO-ON-D", "EO-ON-E"]
 
 
 def main():
