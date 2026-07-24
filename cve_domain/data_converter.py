@@ -127,6 +127,7 @@ def _build_segments(
     row: Mapping[str, Any],
     profile: Optional[Mapping[str, Any]],
     max_cpes: int,
+    exclude_leakage: bool = False,
 ) -> List[str]:
     """Build the ordered, present-only segment list for the Profile_Text_View.
 
@@ -140,6 +141,15 @@ def _build_segments(
         7. known_ransomware_campaign_use -> "Known ransomware use" (only when truthy)
         8. affected product: vendor_project / product + up to max_cpes cpes_sample
     Missing/empty fields contribute no segment (Req 2.4).
+
+    Leakage control: ``priority_score`` (the ranking target) is a deterministic
+    formula dominated by EPSS (~0.70 weight) plus the CISA-KEV and ransomware
+    flags. Segments 4–7 (CVSS, EPSS, "In CISA KEV", "Known ransomware use")
+    therefore leak the label's own inputs into the encoder's input text. When
+    ``exclude_leakage`` is True these four segments are dropped, leaving a purely
+    *semantic* description (identifier, name/description, CWEs, affected product)
+    so the model must predict priority from meaning rather than by copying the
+    EPSS/KEV tokens it was handed. Default False preserves the original view.
     """
     segments: List[str] = []
 
@@ -162,29 +172,33 @@ def _build_segments(
     if cwe_tokens:
         segments.append(", ".join(cwe_tokens))
 
-    # 4. CVSS — combine the present score/severity parts, no dangling delimiter
-    cvss_score = _get(row, profile, "cvss_base_score")
-    cvss_severity = _get(row, profile, "cvss_base_severity")
-    cvss_parts: List[str] = []
-    if _present(cvss_score):
-        cvss_parts.append(_clean(cvss_score))
-    if _present(cvss_severity):
-        cvss_parts.append(_clean(cvss_severity))
-    if cvss_parts:
-        segments.append("CVSS " + " ".join(cvss_parts))
+    # Segments 4–7 carry the label's own inputs (EPSS dominates priority_score,
+    # plus the KEV / ransomware flags). Skip them entirely when excluding leakage
+    # so the view is a purely semantic description (Req: no-leakage ablation).
+    if not exclude_leakage:
+        # 4. CVSS — combine the present score/severity parts, no dangling delimiter
+        cvss_score = _get(row, profile, "cvss_base_score")
+        cvss_severity = _get(row, profile, "cvss_base_severity")
+        cvss_parts: List[str] = []
+        if _present(cvss_score):
+            cvss_parts.append(_clean(cvss_score))
+        if _present(cvss_severity):
+            cvss_parts.append(_clean(cvss_severity))
+        if cvss_parts:
+            segments.append("CVSS " + " ".join(cvss_parts))
 
-    # 5. epss
-    epss = _get(row, profile, "epss")
-    if _present(epss):
-        segments.append("EPSS " + _clean(epss))
+        # 5. epss
+        epss = _get(row, profile, "epss")
+        if _present(epss):
+            segments.append("EPSS " + _clean(epss))
 
-    # 6. in_kev -> only when truthy
-    if _is_truthy(_get(row, profile, "in_kev")):
-        segments.append("In CISA KEV")
+        # 6. in_kev -> only when truthy
+        if _is_truthy(_get(row, profile, "in_kev")):
+            segments.append("In CISA KEV")
 
-    # 7. known_ransomware_campaign_use -> only when truthy
-    if _is_truthy(_get(row, profile, "known_ransomware_campaign_use")):
-        segments.append("Known ransomware use")
+        # 7. known_ransomware_campaign_use -> only when truthy
+        if _is_truthy(_get(row, profile, "known_ransomware_campaign_use")):
+            segments.append("Known ransomware use")
 
     # 8. affected product: vendor_project / product + up to max_cpes cpes_sample
     vendor = _get(row, profile, "vendor_project")
@@ -248,6 +262,7 @@ def build_profile_text_view_report(
     *,
     max_cpes: int = DEFAULT_MAX_CPES,
     max_chars: int = MAX_VIEW_CHARS,
+    exclude_leakage: bool = False,
 ) -> ProfileTextView:
     """Serialize a CVE_Record into a Profile_Text_View with a truncation flag.
 
@@ -257,12 +272,14 @@ def build_profile_text_view_report(
             when the row lacks a present one.
         max_cpes: Maximum number of cpes_sample values to render (Req 2.6).
         max_chars: Maximum view length before segment-boundary truncation (Req 2.8).
+        exclude_leakage: When True, drop the CVSS / EPSS / KEV / ransomware
+            segments that leak the label's own inputs (see ``_build_segments``).
 
     Returns:
         A ``ProfileTextView`` carrying the deterministic, length-bounded text and
         whether the untruncated view would have exceeded ``max_chars``.
     """
-    segments = _build_segments(row, profile, max_cpes)
+    segments = _build_segments(row, profile, max_cpes, exclude_leakage=exclude_leakage)
     full = _render(segments)
 
     if len(full) <= max_chars:
@@ -278,6 +295,7 @@ def build_profile_text_view(
     *,
     max_cpes: int = DEFAULT_MAX_CPES,
     max_chars: int = MAX_VIEW_CHARS,
+    exclude_leakage: bool = False,
 ) -> str:
     """Serialize a CVE_Record into its Profile_Text_View string (Req 2).
 
@@ -285,7 +303,7 @@ def build_profile_text_view(
     text, matching the design's ``build_profile_text_view`` signature.
     """
     return build_profile_text_view_report(
-        row, profile, max_cpes=max_cpes, max_chars=max_chars
+        row, profile, max_cpes=max_cpes, max_chars=max_chars, exclude_leakage=exclude_leakage
     ).text
 
 
@@ -364,8 +382,49 @@ def _parse_priority_score(value: Any) -> Optional[float]:
     return num
 
 
-def extract_labels_report(row: Mapping[str, Any]) -> ExtractedLabels:
+def _parse_cvss_score(value: Any) -> Optional[float]:
+    """Parse a CVSS base score into a float within ``[0, 10]`` or None.
+
+    Used only for the alternate CVSS target. Booleans and NaN/inf are rejected;
+    out-of-range values are treated as absent so the caller omits + counts them,
+    mirroring :func:`_parse_priority_score`.
+    """
+    if isinstance(value, bool):
+        return None
+    if value is None:
+        return None
+    try:
+        num = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if num != num:  # NaN
+        return None
+    if num < 0.0 or num > 10.0:
+        return None
+    return num
+
+
+# Valid target labels for extract_labels_report. "priority" is the default
+# EPSS-derived priority_score/priority_band; "cvss" swaps in the CVSS base
+# score/severity (an independent ordinal target) via the same label slots.
+TARGET_LABEL_PRIORITY = "priority"
+TARGET_LABEL_CVSS = "cvss"
+
+
+def extract_labels_report(row: Mapping[str, Any], target_label: str = TARGET_LABEL_PRIORITY) -> ExtractedLabels:
     """Extract the four supervised labels from a CVE_Record with accounting (Req 3).
+
+    ``target_label`` selects what fills the ordinal ``priority_score`` /
+    ``priority_band`` slots:
+
+    * ``"priority"`` (default): the EPSS-derived ``priority_score`` (0–100) and
+      its ``priority_band`` bucketing — the original behavior.
+    * ``"cvss"``: the CVSS base score (0–10, scaled ×10 to the 0–100 range so the
+      Stage 2 regression normalization and evaluation cut points are unchanged)
+      and the lower-cased CVSS ``cvss_base_severity`` as the band. This is an
+      ordinal target independent of the EPSS formula, used to show the method is
+      not tuned to one label definition. ``in_kev`` / ``ransomware`` are unchanged.
+    
 
     Produces the ``cve_labels`` dict attached to each CVE_View_Record plus the
     per-record counts the conversion report aggregates:
@@ -387,17 +446,27 @@ def extract_labels_report(row: Mapping[str, Any]) -> ExtractedLabels:
     """
     labels: dict = {}
 
-    # priority_score — present-key-only, numeric within [0, 100] (Req 3.2, 3.3)
-    score = _parse_priority_score(row.get("priority_score"))
+    # Select the source of the ordinal score/band by target (default: priority).
+    if target_label == TARGET_LABEL_CVSS:
+        cvss_num = _parse_cvss_score(row.get("cvss_base_score"))
+        score = None if cvss_num is None else cvss_num * 10.0  # 0–10 -> 0–100
+        band_source = row.get("cvss_base_severity")
+        band_is_cvss = True
+    else:
+        score = _parse_priority_score(row.get("priority_score"))
+        band_source = row.get("priority_band")
+        band_is_cvss = False
+
+    # priority_score slot — present-key-only, numeric within [0, 100] (Req 3.2, 3.3)
     priority_score_omitted = score is None
     if score is not None:
         labels["priority_score"] = score
 
-    # priority_band — present-key-only categorical (Req 3.6, 3.7)
-    band = row.get("priority_band")
-    priority_band_omitted = not _present(band)
+    # priority_band slot — present-key-only categorical (Req 3.6, 3.7). CVSS
+    # severities are lower-cased so they match the configured band order.
+    priority_band_omitted = not _present(band_source)
     if not priority_band_omitted:
-        labels["priority_band"] = _clean(band)
+        labels["priority_band"] = _clean(band_source).lower() if band_is_cvss else _clean(band_source)
 
     # in_kev / ransomware — always-present booleans, default False + count (Req 3.4, 3.5)
     defaulted_label_count = 0
@@ -422,15 +491,16 @@ def extract_labels_report(row: Mapping[str, Any]) -> ExtractedLabels:
     )
 
 
-def extract_labels(row: Mapping[str, Any]) -> dict:
+def extract_labels(row: Mapping[str, Any], target_label: str = TARGET_LABEL_PRIORITY) -> dict:
     """Extract the four supervised labels from a CVE_Record (Req 3).
 
     Thin wrapper over :func:`extract_labels_report` that returns just the
     ``cve_labels`` dict (present-keys-only for ``priority_score`` /
     ``priority_band``, always-present booleans for ``in_kev`` / ``ransomware``),
-    matching the design's ``extract_labels`` signature.
+    matching the design's ``extract_labels`` signature. ``target_label`` selects
+    the ordinal target (``"priority"`` default or ``"cvss"``).
     """
-    return extract_labels_report(row).labels
+    return extract_labels_report(row, target_label).labels
 
 
 # ---------------------------------------------------------------------------
@@ -455,11 +525,18 @@ class CVEConvertConfig:
             Profile_Text_View affected-product segment (Req 2.6).
         max_view_chars: Maximum Profile_Text_View length before segment-boundary
             truncation (Req 2.8).
+        exclude_leakage_segments: When True, the Profile_Text_View omits the
+            CVSS / EPSS / "In CISA KEV" / "Known ransomware use" segments, which
+            leak the label's own inputs (priority_score is an EPSS+KEV formula).
+            Used for the no-leakage ablation so the model predicts priority from
+            the semantic description alone. Default False keeps the original view.
     """
 
     domain_adapter: str = "cve"
     max_cpes: int = DEFAULT_MAX_CPES
     max_view_chars: int = MAX_VIEW_CHARS
+    exclude_leakage_segments: bool = False
+    cve_target_label: str = "priority"
 
 
 @dataclass
@@ -669,12 +746,13 @@ class CVEDataConverter:
     ) -> str:
         """Serialize a CVE_Record into its Profile_Text_View (design signature)."""
         return build_profile_text_view(
-            row, profile, max_cpes=self.config.max_cpes, max_chars=self.config.max_view_chars
+            row, profile, max_cpes=self.config.max_cpes, max_chars=self.config.max_view_chars,
+            exclude_leakage=self.config.exclude_leakage_segments,
         )
 
     def extract_labels(self, row: Mapping[str, Any]) -> dict:
         """Extract the four supervised labels from a CVE_Record (design signature)."""
-        return extract_labels(row)
+        return extract_labels(row, self.config.cve_target_label)
 
     # ------------------------------------------------------------------ #
     # Internals
@@ -688,12 +766,13 @@ class CVEDataConverter:
     ) -> Dict[str, Any]:
         """Assemble one CVE_View_Record and fold its per-record counts into report."""
         view = build_profile_text_view_report(
-            row, profile, max_cpes=self.config.max_cpes, max_chars=self.config.max_view_chars
+            row, profile, max_cpes=self.config.max_cpes, max_chars=self.config.max_view_chars,
+            exclude_leakage=self.config.exclude_leakage_segments,
         )
         if view.truncated:
             report.truncation_count += 1
 
-        labels = extract_labels_report(row)
+        labels = extract_labels_report(row, self.config.cve_target_label)
         if labels.priority_score_omitted:
             report.priority_score_omitted_count += 1
         if labels.priority_band_omitted:

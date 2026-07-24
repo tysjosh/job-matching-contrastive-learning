@@ -107,7 +107,18 @@ def prepare_view_records(base_stage1: Dict[str, Any], shared_dir: Path,
         logger.info("Reusing existing view records: %s", out_path)
         return out_path
 
-    converter = CVEDataConverter(CVEConvertConfig(domain_adapter="cve"))
+    exclude_leakage = bool(base_stage1.get("cve_exclude_leakage_segments", False))
+    if exclude_leakage:
+        logger.info("Profile_Text_View leakage segments (CVSS/EPSS/KEV/ransomware) EXCLUDED "
+                    "(cve_exclude_leakage_segments=true).")
+    target_label = str(base_stage1.get("cve_target_label", "priority"))
+    if target_label != "priority":
+        logger.info("Ordinal target = %r (priority_score/priority_band slots are filled from "
+                    "this target's score/severity).", target_label)
+    converter = CVEDataConverter(
+        CVEConvertConfig(domain_adapter="cve", exclude_leakage_segments=exclude_leakage,
+                         cve_target_label=target_label)
+    )
     full_path = shared_dir / "view_records_full.jsonl"
     if not full_path.exists() or force:
         logger.info("Converting CSV + profiles -> %s", full_path)
@@ -259,12 +270,19 @@ def _summary_row(exp_id: str, name: str, report: Dict[str, Any]) -> Dict[str, An
     band = cls.get("priority_band", {})
     band_score = cls.get("priority_band_from_score", {})
     sep = report.get("embedding_separation", {})
+    # Between-band ranking (MAP at the high>=70 boundary) and threshold-free rank
+    # agreement (Spearman) characterize the ranking quality without depending on
+    # where the single median relevance cut falls (see reporter docstring).
+    map_boundaries = ranking.get("map_at_band_boundaries", {}) or {}
+    map_high = map_boundaries.get("high_plus_70", {}) if not ranking.get("skipped") else {}
     return {
         "id": exp_id,
         "name": name,
         "status": report.get("status"),
         "ndcg": None if ranking.get("skipped") else ranking.get("ndcg"),
         "map": None if ranking.get("skipped") else ranking.get("map"),
+        "map_high70": None if ranking.get("skipped") else map_high.get("map"),
+        "spearman": None if ranking.get("skipped") else ranking.get("spearman_rho"),
         "in_kev_acc": None if kev.get("skipped") else kev.get("accuracy"),
         "in_kev_macro_f1": None if kev.get("skipped") else kev.get("macro_f1"),
         "band_acc": None if band.get("skipped") else band.get("accuracy"),
@@ -287,8 +305,8 @@ def _write_summary(rows: List[Dict[str, Any]], output_root: Path) -> None:
             return f"{v:.4f}"
         return str(v)
 
-    headers = ["id", "name", "ndcg", "map", "in_kev_acc", "in_kev_macro_f1",
-               "band_acc", "band_macro_f1", "band_from_score_macro_f1",
+    headers = ["id", "name", "ndcg", "map", "map_high70", "spearman",
+               "in_kev_macro_f1", "band_from_score_macro_f1",
                "band_separation_ratio"]
     lines = ["# CVE experiment summary", "",
              "| " + " | ".join(headers) + " |",

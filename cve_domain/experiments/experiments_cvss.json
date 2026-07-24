@@ -1,0 +1,49 @@
+{
+  "_description": "CVE experiment matrix with the ALTERNATE ordinal target = CVSS base severity (independent of the EPSS-derived priority_score). Identical structure to experiments.json but base.stage1_config points at the CVSS target config, so the converter fills the priority_score/priority_band slots from CVSS. Run under a separate --output-root (e.g. cve_domain/runs/experiments_cvss) so it never collides with the priority-target runs. Purpose: show the ontology-guided ordinal method is not tuned to one label definition — it transfers to a second, independent notion of vulnerability priority on the same corpus.",
+  "base": {
+    "stage1_config": "cve_domain/configs/stage1_contrastive_cvss.json",
+    "stage2_config": "cve_domain/configs/stage2_supervised.json"
+  },
+  "experiments": [
+    {
+      "id": "E0",
+      "name": "no-stage1 baseline (CVSS target)",
+      "description": "Stage 2 supervised heads over FROZEN base embeddings, no Stage 1. Reference for the value of ordinal Stage 1 on the CVSS target.",
+      "split": "stratified",
+      "base_embeddings": true,
+      "stage2_overrides": {}
+    },
+    {
+      "id": "E1",
+      "name": "baseline ordinal contrastive (CVSS target)",
+      "description": "Ordinal Stage 1 (same-band positives + cross-band negatives) with ontology-tiered negatives and no sample weighting.",
+      "split": "stratified",
+      "stage1_overrides": {
+        "ontology_weight": 0.0,
+        "cve_ontology_overlap_weighting": false,
+        "negative_tier_ratios": {"hard": 0.34, "medium": 0.33, "easy": 0.33}
+      }
+    },
+    {
+      "id": "E4",
+      "name": "hard-negative emphasis (CVSS target)",
+      "description": "E1 with a harder negative mix (0.7/0.2/0.1) to test whether emphasizing ontology-hard negatives sharpens the CVSS-severity embedding.",
+      "split": "stratified",
+      "stage1_overrides": {
+        "ontology_weight": 0.0,
+        "negative_tier_ratios": {"hard": 0.7, "medium": 0.2, "easy": 0.1}
+      }
+    },
+    {
+      "id": "E7",
+      "name": "ontology-refined positives (CVSS target)",
+      "description": "Positives must share the anchor's CVSS-severity band AND (preferably) an ontology token, falling back to same-band-only. Tests whether adding topical relatedness on top of the severity alignment helps vs the pure same-band positives in E1. (E8/E9 from the priority matrix are omitted: under the ordinal base config they resolve identically to E1/E7 respectively.)",
+      "split": "stratified",
+      "stage1_overrides": {
+        "ontology_weight": 0.0,
+        "cve_positive_signal": "priority_band_and_ontology",
+        "negative_tier_ratios": {"hard": 0.34, "medium": 0.33, "easy": 0.33}
+      }
+    }
+  ]
+}
