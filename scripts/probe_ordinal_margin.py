@@ -225,15 +225,24 @@ def _report(variant_label, epoch, stats):
     print("-" * 70)
 
     verdicts = []
-    if frac_near_1 > 0.7:
+    if ow.std() == 0.0 and abs(ow.mean() - 1.0) < 1e-9:
         verdicts.append(
-            "ont_weight is NEAR-CONSTANT ~1.0 for most triplets -> OSCAR sample "
-            "weighting (EO-ON-B) is near-inert on this data; expect it to barely "
-            "move metrics vs its ontology-negative base.")
+            "ont_weight is EXACTLY 1.0 with zero variance -> ontology_weight is "
+            "configured to 0.0 for this run (the early-return branch in "
+            "_compute_ontology_weight), i.e. OSCAR sample weighting is OFF BY "
+            "CONFIG, not collapsed by training. This is expected/uninformative "
+            "unless this run is supposed to have ontology_weight > 0.")
+    elif frac_near_1 > 0.7:
+        verdicts.append(
+            "ont_weight clusters near 1.0 (with some spread) for most triplets "
+            "-> OSCAR sample weighting is enabled but has converged to a "
+            "near-inert multiplier on this data; expect it to barely move "
+            "metrics vs its ontology-negative base.")
     else:
         verdicts.append(
             "ont_weight varies meaningfully across triplets -> sample weighting "
-            "is NOT inert; the tie is not explained by a collapsed weight.")
+            "is enabled and NOT inert; the tie is not explained by a collapsed "
+            "weight.")
 
     if ratio < 0.05:
         verdicts.append(
