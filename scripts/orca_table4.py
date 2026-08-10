@@ -35,6 +35,10 @@ ORDER = [
     # from sample weighting), ISCONeg=occupation-level ISCO hard negatives,
     # RandNeg=random (non-ontology) negatives.
     "EO-A", "EO-B", "EO-C", "EO-D", "EO-E", "EO-OntNeg", "EO-ISCONeg", "EO-RandNeg",
+    # Ontology-negative-base knob ablations (EO-ON-*): same knobs as B/C/D/E above,
+    # but layered on the EO-OntNeg (skill-level ontology negative) base instead of
+    # EO-A's random-negative base.
+    "EO-ON-B", "EO-ON-C", "EO-ON-D", "EO-ON-E",
     # Unfrozen-encoder ordinal probe + its ablations (compare ONLY within this block).
     "UF-InfoNCE", "UF-Ordinal", "UF-Ordinal-RandNeg", "UF-Ordinal-FixedMargin",
     "UF-Ordinal-NoGrouping", "UF-Ordinal-NoCurriculum",
