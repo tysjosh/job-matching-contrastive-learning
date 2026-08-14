@@ -34,14 +34,17 @@ VARIANT_NAME = {
     "E4-OSCAR-Skill": "OSCAR-Skill (baseline: fixed ontology, no reliability)",
     "ER-DEN": "ORCA-Denominator (MVP)",
     "ER-EXT": "ORCA-ExternalWeight",
-    "ER-NOONT": "ORCA-NoOntology",
+    "ER-NOONT": "ORCA-NoOntology (MLP input features removed)",
     "ER-NOALIGN": "ORCA-NoAlign",
     "ER-FULL": "ORCA-Full",
+    "ER-NOONTW": "ORCA-NoOntologyWeakTarget (lambda_ont=0; features kept)",
+    "ER-NOONTALL": "ORCA-NoOntologyAtAll (lambda_ont=0 AND features removed)",
 }
 
 # Column order: baselines first, then the ORCA family.
 ORDER = ["E4-InfoNCE", "E4-OSCAR-Skill",
-         "ER-DEN", "ER-EXT", "ER-NOONT", "ER-NOALIGN", "ER-FULL"]
+         "ER-DEN", "ER-EXT", "ER-NOONT", "ER-NOALIGN", "ER-FULL",
+         "ER-NOONTW", "ER-NOONTALL"]
 
 # Baselines the ORCA delta is reported against.
 BASELINES = ["E4-OSCAR-Skill", "E4-InfoNCE"]

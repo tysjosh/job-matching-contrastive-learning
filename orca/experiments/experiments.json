@@ -69,6 +69,34 @@
         "orca_adaptive_sampling": true,
         "orca_use_history": false
       }
+    },
+    {
+      "id": "ER-NOONTW",
+      "name": "ORCA-NoOntologyWeakTarget",
+      "description": "Ontology removed from the weak-target SUPERVISION (orca_lambda_ont=0 -> r_tilde renormalizes to pure r_enc), while the ESCO/ISCO/OT scalars are STILL fed to the ReliabilityMLP. Identical to ER-DEN on every other factor (denominator site, adaptive sampling off, alignment off), so ER-NOONTW - ER-DEN is a clean single-factor contrast. Motivation: ER-NOONT only strips the MLP's INPUT features, but ontology still enters ORCA through r_ont = 1-exp(-beta*d_ont) in the weak targets, so the MLP can recover the ontology signal from its BCE target. This variant is what actually tests whether the ontology-derived supervision matters.",
+      "orca_overrides": {
+        "orca_variant": "denominator",
+        "orca_lambda_ont": 0.0,
+        "orca_lambda_enc": 1.0,
+        "orca_use_ontology_features": true,
+        "orca_use_alignment": false,
+        "orca_adaptive_sampling": false,
+        "orca_use_history": false
+      }
+    },
+    {
+      "id": "ER-NOONTALL",
+      "name": "ORCA-NoOntologyAtAll",
+      "description": "Ontology removed from BOTH sites: no ontology weak-target supervision (orca_lambda_ont=0) AND no ontology scalars in the ReliabilityMLP (orca_use_ontology_features=false). Reliability is then learned purely from warmup-encoder similarity. Also matched to ER-DEN on all other factors. This is the floor of the ontology story: if ER-NOONTALL matches ER-DEN, ORCA's gain is encoder-similarity reliability and the ontology contributes nothing; the gap ER-DEN - ER-NOONTALL is the total value of the ontology. Against ER-NOONTW it isolates the input features given no ontology supervision.",
+      "orca_overrides": {
+        "orca_variant": "denominator",
+        "orca_lambda_ont": 0.0,
+        "orca_lambda_enc": 1.0,
+        "orca_use_ontology_features": false,
+        "orca_use_alignment": false,
+        "orca_adaptive_sampling": false,
+        "orca_use_history": false
+      }
     }
   ],
   "notes": [

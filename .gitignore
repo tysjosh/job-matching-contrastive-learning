@@ -97,6 +97,12 @@ mlruns/
 !cve_domain/experiments/**
 cve_domain/runs/
 
+# Same for orca/experiments/, which is the ORCA experiment MATRIX definition
+# (experiments.json + README) consumed by scripts/generate_orca_experiments.py,
+# not a results dir. ORCA run outputs live under results/, ignored separately.
+!orca/experiments/
+!orca/experiments/**
+
 # Compressed files
 *.zip
 *.tar.gz
@@ -190,3 +196,8 @@ results_*/
 cybersecurity-vulnerability-ranking/data/ontology/cyber_edges.csv
 cybersecurity-vulnerability-ranking/data/ontology/cyber_kg.gexf
 cybersecurity-vulnerability-ranking/data/processed/vulnerability_priority_ranking_nvd_all.csv
+
+# Hugging Face sync staging dirs (scripts/hf_pull_results.py, hf_upload_data.py)
+hf_results/
+hf_data/
+hf_orca_results/
