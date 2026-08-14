@@ -30,6 +30,10 @@ DATASET = "cnamuangtoun"
 ORDER = [
     "E4-InfoNCE", "E4-OSCAR-Skill", "E4-OSCAR-Hybrid", "E4-OSCAR-ISCO",
     "ER-DEN", "ER-EXT", "ER-NOONT", "ER-NOALIGN", "ER-FULL",
+    # Ontology-source ablations: NOONTW removes ontology from the weak-target
+    # supervision only; NOONTALL removes it from both the supervision and the
+    # ReliabilityMLP inputs. Both are matched to ER-DEN on every other factor.
+    "ER-NOONTW", "ER-NOONTALL",
     # Frozen-encoder ordinal ablation family (EO): A=base, B=+OSCAR, C=no-curriculum,
     # D=fixed-margin, E=no-grouping, OntNeg=skill-level ontology negatives (decoupled
     # from sample weighting), ISCONeg=occupation-level ISCO hard negatives,

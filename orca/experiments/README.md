@@ -21,6 +21,32 @@ OSCAR / InfoNCE baselines.
 | ER-NOONT | no_ontology | value of the ontology features in the ReliabilityMLP |
 | ER-NOALIGN | no_align | denominator + adaptive, no alignment term |
 | ER-FULL | full | denominator + adaptive sampling + ontology alignment |
+| ER-NOONTW | denominator, `λ_ont=0` | value of the ontology *weak-target supervision* |
+| ER-NOONTALL | denominator, `λ_ont=0` + no features | total value of the ontology (both sites) |
+
+### Reading the ablations: pick the matched control
+The variants form a lattice over four factors (reliability application site,
+adaptive sampling, alignment, ontology). Each factor is only isolable against
+the control that matches on the other three — see `VARIANT_TABLE` in
+`orca/config.py`:
+
+| factor | contrast | note |
+|---|---|---|
+| reliability | ER-DEN − E4-OSCAR-Skill | |
+| application site | ER-EXT − ER-DEN | both have adaptive sampling off |
+| adaptive sampling | ER-NOALIGN − ER-DEN | both denominator, alignment off |
+| alignment | ER-FULL − ER-NOALIGN | both have adaptive sampling on |
+| ontology MLP features | ER-NOALIGN − ER-NOONT | **not** vs ER-DEN: `no_ontology` has `adaptive_sampling: True` while `denominator` has it off, so ER-NOONT − ER-DEN confounds two factors |
+| ontology supervision | ER-NOONTW − ER-DEN | |
+| ontology, total | ER-NOONTALL − ER-DEN | |
+
+Note that ER-NOONT alone understates the ontology's role: it removes only the
+ReliabilityMLP's input scalars, while ontology still reaches the model through
+`r_ont = 1-exp(-β·d_ont)` in the weak targets (`orca/weak_targets.py`), which
+supervises reliability via the BCE term. ER-NOONTW / ER-NOONTALL close that gap.
+
+NDCG@10 carries std 0.06–0.16 across every variant and baseline, so it is too
+noisy at n=5 to support a claim on its own.
 
 Baselines (already in `results/research_runs/`): `E4-InfoNCE` (all negatives
 trusted) and `E4-OSCAR-Skill` (fixed ontology, no reliability).
