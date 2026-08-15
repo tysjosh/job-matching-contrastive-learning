@@ -46,15 +46,26 @@ def main() -> None:
                     help="Write a bash script with train+eval commands for all runs")
     ap.add_argument("--experiments", default="",
                     help="Comma list of experiment ids to generate (default: all)")
+    ap.add_argument("--dataset", default="",
+                    help="Comma list of dataset labels to generate (default: all in "
+                         "the manifest, e.g. 'cnamuangtoun' or 'cnamuangtoun,trec_ct')")
     ap.add_argument("--require-ontology", action="store_true", default=True,
                     help="Pass --require-ontology to the ORCA runner (default on).")
     args = ap.parse_args()
 
     manifest = _load_json(Path(args.manifest))
-    base_config_path = ROOT / manifest["base_config"]
-    base_config = _load_json(base_config_path)
+    default_base_config = _load_json(ROOT / manifest["base_config"])
     datasets = manifest["datasets"]
     seeds = manifest["seeds"]
+
+    wanted_ds = {d.strip() for d in args.dataset.split(",") if d.strip()}
+    if wanted_ds:
+        unknown = wanted_ds - set(datasets)
+        if unknown:
+            raise SystemExit(
+                f"Unknown dataset(s): {sorted(unknown)}. "
+                f"Available: {sorted(datasets)}")
+        datasets = {k: v for k, v in datasets.items() if k in wanted_ds}
 
     wanted = {e.strip() for e in args.experiments.split(",") if e.strip()}
     experiments = [
@@ -68,12 +79,25 @@ def main() -> None:
         exp_id = exp["id"]
         overrides = exp.get("orca_overrides", {})
         for ds_label, ds in datasets.items():
+            # A dataset may declare its OWN base_config (e.g. the TREC-CT trials
+            # domain ships config/orca_trials_denominator_config.json). Honor it,
+            # otherwise fall back to the manifest-level default. Without this a
+            # non-career dataset silently inherits the career base config.
+            if "base_config" in ds:
+                ds_base = _load_json(ROOT / ds["base_config"])
+            else:
+                ds_base = default_base_config
+
             for seed in seeds:
-                cfg = copy.deepcopy(base_config)
+                cfg = copy.deepcopy(ds_base)
                 cfg.update(overrides)          # variant-specific ORCA overrides
                 cfg["orca_enabled"] = True     # ER-* are always ORCA runs
                 cfg["validation_path"] = ds["validation"]
                 cfg["training_seed"] = seed
+                # Propagate the dataset's domain adapter so a non-career dataset
+                # gets its ontology matcher / negative selector wired up.
+                if "domain_adapter" in ds:
+                    cfg["domain_adapter"] = ds["domain_adapter"]
 
                 run_id = f"{exp_id}__{ds_label}__s{seed}"
                 run_dir = OUT_ROOT / run_id

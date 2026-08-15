@@ -6,6 +6,21 @@
       "train": "preprocess/data_splits_v7/train.jsonl",
       "validation": "preprocess/data_splits_v7/validation.jsonl",
       "test": "preprocess/data_splits_v7/test.jsonl"
+    },
+    "trec_ct": {
+      "_description": "TREC Clinical Trials 2021/2022. Second domain. Topic-disjoint: train+validation are 2021 topics (60/15), test is the full 2022 topic set (50). Positives are the grade-2 (eligible) pairs; graded negatives are NOT records — they live in negative_pools.jsonl and are drawn per topic by trials_domain.negative_selector.TrialsNegativeSelector. Requires base_config config/orca_trials_denominator_config.json and trials_domain.run_config.attach_trials_domain to inject the MeSH matcher and the selector.",
+      "base_config": "config/orca_trials_denominator_config.json",
+      "domain_adapter": "trials",
+      "train": "preprocess/trec_ct_splits/train.jsonl",
+      "validation": "preprocess/trec_ct_splits/validation.jsonl",
+      "test": "preprocess/trec_ct_splits/test.jsonl",
+      "_why_this_dataset": "The qrels are graded, and grade 1 (patient has the condition but fails eligibility) is an expert-annotated ambiguous negative — precisely the phenomenon ORCA models. Measured MeSH separation: grade1 vs grade0 Cohen's d = +0.69, so the r_ont weak target is well founded; grade2 vs grade1 d = +0.21, so the ontology is near-blind to eligibility itself and the ReliabilityMLP has real work the ontology cannot do. That combination makes the ER-NOONT / ER-NOONTW / ER-NOONTALL ablations informative here rather than degenerate, and it allows validating learned r_hat directly against the gold grade — which the career v7 split cannot support because its soft_label derives from the same ontology signals that feed r_ont.",
+      "_caveats": [
+        "Anchor scarcity: 125 topics vs career v7's ~619 distinct anchors, each recurring across ~76 positives. Expect wider seed-to-seed variance than the career runs.",
+        "7 of 125 topics are diagnostic vignettes that never name the disease, so their coarse condition signal is absent and d_isco degrades to the neutral 0.5: 2021_53, 2021_67, 2022_1, 2022_10, 2022_15, 2022_17, 2022_31. The rate is worse in the test year (5/50) than the train year (2/75).",
+        "Intervention MeSH terms resolve at 81.5% (conditions: 100%): the release ships desc2021.gz but not supp2021.gz, and many drug names are Supplementary Concept Records. Adding supp2021.gz would close this.",
+        "ER-NOFUT remains untestable: TREC-CT has no repeated patient-trial interactions, so orca_use_history stays off here as on v7."
+      ]
     }
   },
   "seeds": [13, 21, 42, 87, 123],
@@ -97,11 +112,25 @@
         "orca_adaptive_sampling": false,
         "orca_use_history": false
       }
+    },
+    {
+      "id": "ER-SCHED",
+      "name": "ORCA-ScheduleOnly (reliability neutralized)",
+      "description": "THE confound control for the headline result. orca_r_min=1.0 makes clamp(r, 1.0, 1.0) == 1.0 for every negative, so the reliability-calibrated denominator reduces to Standard_InfoNCE bit-for-bit (the invariant documented on OrcaLossEngine.orca_loss); orca_eta_rel=0.0 removes the reliability BCE term so the ReliabilityMLP cannot regularize the shared projection head either. What remains is OSCAR trained under ORCA's exact 4-phase schedule (warmup -> reliability -> joint, with per-phase optimizer rebuilds). The E4-* baselines train single-phase, so ER-DEN - E4-OSCAR-Skill currently bundles reliability + schedule + auxiliary loss. If ER-SCHED lands near E4-OSCAR-Skill (~0.811) the reliability claim is clean; if it lands near ER-DEN (~0.849) the headline is really about the training procedure.",
+      "orca_overrides": {
+        "orca_variant": "denominator",
+        "orca_r_min": 1.0,
+        "orca_eta_rel": 0.0,
+        "orca_use_alignment": false,
+        "orca_adaptive_sampling": false,
+        "orca_use_history": false
+      }
     }
   ],
   "notes": [
     "ER-NOFUT (no_future / history ablation) is intentionally omitted: it is only meaningful on temporal/repeated-interaction datasets, which the v7 split is not. Add it with orca_use_history semantics once a temporal split exists.",
     "Each run trains via run_orca_training.py (the 4-phase OrcaPhaseOrchestrator) and is evaluated by run_phase1_embedding_evaluation.py against best_checkpoint.pt, producing phase1_evaluation/phase1_evaluation_results.json — the same artifact the OSCAR/InfoNCE baselines produce.",
-    "scripts/aggregate_orca_results.py summarizes mean +/- std per variant across seeds and reports the delta vs the E4-InfoNCE and E4-OSCAR-Skill baselines."
+    "scripts/aggregate_orca_results.py summarizes mean +/- std per variant across seeds and reports the delta vs the E4-InfoNCE and E4-OSCAR-Skill baselines.",
+    "ER-CONST (constant-reliability control) is NOT registered because it cannot be expressed config-only. Motivation: probe_reliability.py on ER-DEN s13 (2261 training pairs) found reliability confined to [0.024, 0.410], mean 0.221, within-anchor std 0.080 -- no negative is ever trusted and the UNIFORM component is ~3x the per-negative variation, so ORCA's gain may be a scale effect a retuned temperature would also buy. Why config-only fails: the clamp is clamp(r, r_min, 1.0), a LOWER bound; a model trained under a high floor still emits larger values (sigmoid reaches 1.0) and the eta_rel BCE pushes outputs toward r_tilde ~ 0.5. Verified numerically: orca_r_min=0.45 still yields clamped r in [0.459, 0.564], within-anchor std 0.025. Only orca_r_min=1.0 forces a true constant, and that is ER-SCHED (r == 1.0, no down-weighting). To implement: add an additive default-off field orca_constant_reliability (null = unchanged) that replaces the ReliabilityMLP output inside OrcaLossEngine._predict_reliability, then set it to 0.22 to match ER-DEN's observed mean with zero variance."
   ]
 }
