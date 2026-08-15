@@ -10,12 +10,18 @@ artifacts are fetched by default (not checkpoints), so this is cheap.
 
 Layout-agnostic: the repo can nest the runs however it likes. Every downloaded
 file whose path contains a run id (``<VARIANT>__<dataset>__s<seed>``) is copied
-to::
+to ``results/research_runs/<run_id>/`` PRESERVING whatever sub-path followed the
+run id in the repo, so each artifact lands where its consumer expects::
 
-    results/research_runs/<run_id>/phase1_evaluation/<filename>
+    <run_id>/phase1_evaluation/ordinal_evaluation_results.json   -> orca_table4.py
+    <run_id>/phase1_evaluation/phase1_evaluation_results.json    -> aggregate_orca_results.py
+    <run_id>/phase1_pretraining/best_checkpoint.pt               -> the reliability probes
+    <run_id>/training_config.json                                -> provenance
 
-which is where scripts/orca_table4.py and scripts/orca_sig_test.py look for
-``ordinal_evaluation_results.json``.
+Preserving the sub-path matters: an earlier version forced everything except
+``training_config.json`` into ``phase1_evaluation/``, which silently put
+checkpoints at ``phase1_evaluation/best_checkpoint.pt`` where nothing looks for
+them.
 
 Prereq (one-time auth, only needed for a private repo):
   huggingface-cli login      # or: export HF_TOKEN=hf_xxx
@@ -92,7 +98,8 @@ def main() -> None:
     for src in sorted(Path(local).rglob("*")):
         if not src.is_file():
             continue
-        m = RUN_RE.search(str(src.relative_to(local)))
+        rel = str(src.relative_to(local))
+        m = RUN_RE.search(rel)
         if not m:
             unmatched += 1
             continue
@@ -100,9 +107,12 @@ def main() -> None:
         if not fnmatch.fnmatch(run_id, args.runs):
             continue
 
-        dest = DEST_ROOT / run_id / (
-            "" if src.name == "training_config.json" else "phase1_evaluation"
-        ) / src.name
+        # Preserve whatever sub-path followed the run id in the repo (e.g.
+        # ``phase1_pretraining/best_checkpoint.pt``) so every artifact lands where
+        # its consumer looks. Falls back to the bare filename if the run id is the
+        # last path component.
+        tail = rel[m.end():].lstrip("/")
+        dest = DEST_ROOT / run_id / (tail or src.name)
         runs_seen.add(run_id)
 
         if dest.exists() and not args.overwrite:
