@@ -63,6 +63,38 @@ bash run_orca.sh
 python scripts/aggregate_orca_results.py --dataset cnamuangtoun
 ```
 
+## Artifact retention (read before uploading)
+A run is only fully analyzable if THREE artifacts survive:
+
+| artifact | produced by | consumed by |
+|---|---|---|
+| `phase1_pretraining/best_checkpoint.pt` | `run_orca_training.py` | both evals + `probe_reliability*.py` |
+| `phase1_evaluation/phase1_evaluation_results.json` | `run_phase1_embedding_evaluation.py` | `aggregate_orca_results.py` |
+| `phase1_evaluation/ordinal_evaluation_results.json` | `run_ordinal_evaluation.py` | `orca_table4.py`, `orca_sig_test.py` |
+
+Two traps that have already cost re-runs:
+
+1. **The generated runner does not call `run_ordinal_evaluation.py`.** It emits
+   train + `run_phase1_embedding_evaluation.py` only, so four of the five Table-4
+   metrics are missing unless you run the ordinal pass yourself. Only AUC is
+   recoverable from the phase-1 artifact (there `metrics.auc_roc` is numerically
+   identical to ordinal `binary_aucs.good_vs_rest`).
+2. **Do not upload with `--include '*.json'`.** That silently drops the
+   checkpoint, and without it the ordinal eval and the reliability probes cannot
+   be run later — the run must be retrained from scratch. Upload the whole run
+   directory:
+
+```bash
+r=ER-DEN__cnamuangtoun__s13
+hf upload olukotunjosh/cdcl-orca-results "results/research_runs/$r" "orca/$r" --repo-type=dataset
+```
+
+Pull them back (checkpoints are opt-in, since they dominate the transfer):
+```bash
+python3 scripts/hf_pull_results.py --repo-id olukotunjosh/cdcl-orca-results \
+    --include-checkpoints --runs 'ER-*' --overwrite
+```
+
 Notes
 - ORCA runs require the prepared v6/v7 splits (with `skill_uris`); the runner
   passes `--require-ontology` and errors on raw data.
