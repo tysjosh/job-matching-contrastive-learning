@@ -1,0 +1,81 @@
+{
+  "_description": "CAREER arm B: ontology-guided NEGATIVE SELECTION only, single factor. Identical to config/lc_career_baseline.json except ontology_guided_negatives=true. Sample-level ontology weighting stays OFF (ontology_weight=0.0) and optimal transport stays OFF, so the contrast against the baseline isolates one mechanism.",
+
+  "_why_single_factor": "The existing results_v7_lc_*_ontology runs changed FOUR things at once versus vanilla: ontology_weight 0.0->0.3 (sample-level loss weighting), use_pathway_negatives False->True and pathway_weight 0.0->0.8 (negative selection), and use_ot_distance False->True (an extra ontology signal). Their +0.0226 at 10% therefore cannot be attributed to any one mechanism, and the non-monotonic curve plus the ISCO arm going negative at 50% are consistent with the components pulling in different directions. ontology_guided_negatives exists specifically to decouple selection from weighting: it builds the skill matcher regardless of ontology_weight.",
+
+  "_paired_with": "config/lc_trials_ontneg_only.json — the same single mechanism (ontology-tiered negative selection) implemented over MeSH instead of ESCO, so the two datasets can share one table.",
+
+  "domain_adapter": "career",
+
+  "batch_size": 64,
+  "learning_rate": 0.000085,
+  "num_epochs": 15,
+  "temperature": 0.07,
+  "negative_sampling_ratio": 0.7,
+  "shuffle_data": true,
+  "checkpoint_frequency": 500,
+  "log_frequency": 10,
+
+  "text_encoder_model": "sentence-transformers/all-mpnet-base-v2",
+  "text_encoder_device": null,
+  "freeze_text_encoder": true,
+  "projection_dim": 128,
+  "projection_dropout": 0.3,
+  "training_phase": "self_supervised",
+
+  "_comment_cache": "Same dedicated path as the baseline arm, deliberately. Text embeddings come from the FROZEN encoder, so they are arm-independent and sharing them makes the second arm's runs fast without leaking anything learned between arms.",
+  "embedding_cache_path": "embedding_cache/career_v7_lc_text_embeddings.pt",
+  "embedding_cache_size": 40000,
+  "enable_embedding_preload": true,
+  "clear_cache_between_epochs": false,
+
+  "use_view_augmentation": false,
+  "max_resume_views": 1,
+  "max_job_views": 1,
+  "fallback_on_augmentation_failure": true,
+
+  "_comment_the_factor": "THE ONE THING THAT VARIES. ontology_guided_negatives=true builds the ESCO skill matcher and routes negative selection through _select_ontology_negatives, which tiers candidates by skill-graph distance. ontology_negative_rank_tiers=true is required, not optional: the absolute cut points (d<=0.3 hard) are never reached on career v7, where the hardest job for a resume sits near d~0.5, so with absolute tiering the hard bucket is always empty and ontology injects no hard negatives at all.",
+  "ontology_guided_negatives": true,
+  "ontology_negative_rank_tiers": true,
+
+  "_comment_held_off": "Everything else ontology-related is OFF so the contrast is single-factor.",
+  "ontology_weight": 0.0,
+  "use_ot_distance": false,
+  "use_pathway_negatives": false,
+  "pathway_weight": 0.0,
+  "use_isco_negatives": false,
+  "isco_loss_weight": false,
+  "isco_only_weight": false,
+  "use_reuse_weighting": false,
+
+  "esco_graph_path": "training_output/career_graph_bridged_complete.gexf",
+  "esco_kg_path": "dataset/esco/esco_kg.gexf",
+  "esco_occupations_path": null,
+  "esco_skills_path": null,
+
+  "_comment_skill_distances": "Seeds the matcher's distance cache. The previously hardcoded skill_distances.pkl (116,848 pairs) covers only 0.6% of the skill pairs formed by the 5,292 distinct ESCO URIs in this dataset, so ~99% of lookups became nx.shortest_path_length calls on the full ESCO KG and a single 640-record epoch stalled for many minutes. The v7 pickle (11,675,625 pairs) covers 68.9% of the same sample. Distances are identical either way — this is purely cost. Set in BOTH arms so it cannot become a second factor; it is inert in the baseline, which builds no matcher.",
+  "skill_distance_cache_path": "embedding_cache/skill_distances_v7_backup.pkl",
+
+  "global_negative_sampling": true,
+  "global_negative_pool_size": 1000,
+  "max_negatives_per_anchor": 7,
+  "hard_negative_max_distance": 2.0,
+  "medium_negative_max_distance": 4.0,
+
+  "negative_curriculum": false,
+  "negative_scheduler": "fixed",
+  "negative_hard_ratio": 0.33,
+  "negative_medium_ratio": 0.34,
+  "negative_easy_ratio": 0.33,
+
+  "loss_type": "infonce",
+  "ws2_weight": 0.0,
+  "ot_distance_scale": 10.0,
+
+  "validate_every_n_epochs": 1,
+
+  "_comment_seed": "Must be set per run. The existing learning-curve runs have training_seed=null, which is why their single-run deltas cannot be separated from the +/-0.013 seed spread measured on the 5-seed full-data comparison.",
+  "training_seed": 42,
+
+  "orca_enabled": false
+}

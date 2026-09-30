@@ -1,0 +1,77 @@
+{
+  "_description": "CAREER arm A: baseline. Identical to config/lc_career_ontneg_only.json except ontology_guided_negatives=false and ontology_negative_rank_tiers=false, so negatives are drawn at random from the global pool with no ontology involvement. The pair (A, B) isolates ontology-guided negative selection as a single factor.",
+
+  "_note_on_the_matcher": "With ontology_guided_negatives=false AND ontology_weight=0.0, BatchProcessor builds no skill matcher at all (it is gated on 'use_ontology or force_skill_negatives'). So this arm loads no ESCO graph and has no ontology signal anywhere — the esco_* paths below are inert and kept only so the two configs differ in as few lines as possible.",
+
+  "domain_adapter": "career",
+
+  "batch_size": 64,
+  "learning_rate": 0.000085,
+  "num_epochs": 15,
+  "temperature": 0.07,
+  "negative_sampling_ratio": 0.7,
+  "shuffle_data": true,
+  "checkpoint_frequency": 500,
+  "log_frequency": 10,
+
+  "text_encoder_model": "sentence-transformers/all-mpnet-base-v2",
+  "text_encoder_device": null,
+  "freeze_text_encoder": true,
+  "projection_dim": 128,
+  "projection_dropout": 0.3,
+  "training_phase": "self_supervised",
+
+  "_comment_cache": "Dedicated path, shared by BOTH career learning-curve arms. Text embeddings come from the FROZEN encoder, so they are identical across arms and the second arm reuses them for free; nothing arm-specific or learned is cached. It must not be the historical shared 'embedding_cache/text_embeddings.pt': that file predates v7, covers 0% of these content hashes, and writing v7 vectors back into it would grow a file other experiments depend on. Size is set well above the ~16k unique resume/job texts in frac_100 + validation so nothing is evicted; at 10000 the tail of frac_100 thrashes and the hit rate collapses.",
+  "embedding_cache_path": "embedding_cache/career_v7_lc_text_embeddings.pt",
+  "embedding_cache_size": 40000,
+  "enable_embedding_preload": true,
+  "clear_cache_between_epochs": false,
+
+  "use_view_augmentation": false,
+  "max_resume_views": 1,
+  "max_job_views": 1,
+  "fallback_on_augmentation_failure": true,
+
+  "_comment_the_factor": "THE ONE THING THAT VARIES, here switched OFF.",
+  "ontology_guided_negatives": false,
+  "ontology_negative_rank_tiers": false,
+
+  "ontology_weight": 0.0,
+  "use_ot_distance": false,
+  "use_pathway_negatives": false,
+  "pathway_weight": 0.0,
+  "use_isco_negatives": false,
+  "isco_loss_weight": false,
+  "isco_only_weight": false,
+  "use_reuse_weighting": false,
+
+  "esco_graph_path": "training_output/career_graph_bridged_complete.gexf",
+  "esco_kg_path": "dataset/esco/esco_kg.gexf",
+  "esco_occupations_path": null,
+  "esco_skills_path": null,
+
+  "_comment_skill_distances": "Matched to the ontology arm so it cannot become a second factor. Inert here: this arm builds no skill matcher, so nothing reads it.",
+  "skill_distance_cache_path": "embedding_cache/skill_distances_v7_backup.pkl",
+
+  "global_negative_sampling": true,
+  "global_negative_pool_size": 1000,
+  "max_negatives_per_anchor": 7,
+  "hard_negative_max_distance": 2.0,
+  "medium_negative_max_distance": 4.0,
+
+  "negative_curriculum": false,
+  "negative_scheduler": "fixed",
+  "negative_hard_ratio": 0.33,
+  "negative_medium_ratio": 0.34,
+  "negative_easy_ratio": 0.33,
+
+  "loss_type": "infonce",
+  "ws2_weight": 0.0,
+  "ot_distance_scale": 10.0,
+
+  "validate_every_n_epochs": 1,
+
+  "training_seed": 42,
+
+  "orca_enabled": false
+}
