@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "artifacts": [
+    {
+      "id": "go-basic-2026-07-26",
+      "group": "go_ppi",
+      "path": "dataset/go_ppi/bulk/go-basic.obo",
+      "url": "https://purl.obolibrary.org/obo/go/go-basic.obo",
+      "source_is_mutable": true,
+      "bytes": 32227785,
+      "sha256": "b08d45b268b8c24ccb2513dbbbc7d4df9f6521c099b413f79eb31e06e0fa3bcc",
+      "license": "CC-BY-4.0",
+      "notes": "OBO header data-version: releases/2026-07-26. The URL is mutable; the checksum pins the acquired snapshot."
+    },
+    {
+      "id": "goa-human-2026-05-21",
+      "group": "go_ppi",
+      "path": "dataset/go_ppi/bulk/goa_human.gaf.gz",
+      "url": "https://current.geneontology.org/annotations/goa_human.gaf.gz",
+      "source_is_mutable": true,
+      "bytes": 15041996,
+      "sha256": "db472faff1785878521693af62646546cea6af4a386609dd01c72c0554a46a30",
+      "license": "CC-BY-4.0",
+      "notes": "GAF header date-generated: 2026-05-21. Filter IPI and other interaction-derived evidence in leakage-sensitive analyses."
+    },
+    {
+      "id": "string-human-protein-info-v12.0",
+      "group": "go_ppi",
+      "path": "dataset/go_ppi/bulk/9606.protein.info.v12.0.txt.gz",
+      "url": "https://stringdb-downloads.org/download/protein.info.v12.0/9606.protein.info.v12.0.txt.gz",
+      "source_is_mutable": false,
+      "bytes": 1970090,
+      "sha256": "144de4b0d98c6a7dfde6ddc2591cf88657f27b989eadff4f501450c3ed1f0f1c",
+      "license": "CC-BY-4.0"
+    },
+    {
+      "id": "string-human-protein-aliases-v12.0",
+      "group": "go_ppi",
+      "path": "dataset/go_ppi/bulk/9606.protein.aliases.v12.0.txt.gz",
+      "url": "https://stringdb-downloads.org/download/protein.aliases.v12.0/9606.protein.aliases.v12.0.txt.gz",
+      "source_is_mutable": false,
+      "bytes": 19777800,
+      "sha256": "b65f730b993ed0c1bd72edf4565d3d425db42861101b29699704810e8f125680",
+      "license": "CC-BY-4.0",
+      "notes": "Maps HuRI/Lit-BM Ensembl gene identifiers through STRING proteins to preferred gene symbols used by GOA."
+    },
+    {
+      "id": "string-human-physical-links-v12.0",
+      "group": "go_ppi",
+      "path": "dataset/go_ppi/bulk/9606.protein.physical.links.v12.0.txt.gz",
+      "url": "https://stringdb-downloads.org/download/protein.physical.links.v12.0/9606.protein.physical.links.v12.0.txt.gz",
+      "source_is_mutable": false,
+      "bytes": 8954065,
+      "sha256": "1ca87209a93cf7685e9c2997fbcfbfc69fedc6a803ccc1df917318a651df0823",
+      "license": "CC-BY-4.0",
+      "notes": "Physical-network combined score. Do not treat absent or low-score pairs as verified negatives."
+    },
+    {
+      "id": "string-human-detailed-links-v12.0",
+      "group": "go_ppi",
+      "path": "dataset/go_ppi/bulk/9606.protein.links.detailed.v12.0.txt.gz",
+      "url": "https://stringdb-downloads.org/download/protein.links.detailed.v12.0/9606.protein.links.detailed.v12.0.txt.gz",
+      "source_is_mutable": false,
+      "bytes": 139634808,
+      "sha256": "28a2ea3b22c964e691c0f2f934c5e3e397a4b0a12c833d8787fa02b7847b91b6",
+      "license": "CC-BY-4.0",
+      "notes": "Use the experimental channel for the main ceiling diagnostic; combined/database/text-mining channels can be circular with functional annotation."
+    },
+    {
+      "id": "huri-nature-2020",
+      "group": "go_ppi",
+      "path": "dataset/go_ppi/independent/HuRI.tsv",
+      "url": "https://interactome-atlas.org/data/HuRI.tsv",
+      "source_is_mutable": false,
+      "bytes": 1681536,
+      "sha256": "4cdf94366ff6e23e71ef9ec81922e85b2b3a1fb08e938f7b00d86c027cf1ecd6",
+      "license": "source-terms",
+      "notes": "52,548 published systematic binary interactions; cite Luck et al., Nature 2020."
+    },
+    {
+      "id": "huri-literature-benchmark-2020",
+      "group": "go_ppi",
+      "path": "dataset/go_ppi/independent/Lit-BM.tsv",
+      "url": "https://interactome-atlas.org/data/Lit-BM.tsv",
+      "source_is_mutable": false,
+      "bytes": 430112,
+      "sha256": "f39c9c4b8a372286c3eca77d0ff651d837a643d32235eae866daae082663391d",
+      "license": "source-terms",
+      "notes": "13,441 literature benchmark interactions; cite Luck et al., Nature 2020."
+    },
+    {
+      "id": "cpc-scheme-2020-08",
+      "group": "patent_cpc",
+      "path": "dataset/patent_cpc/ontology/CPCSchemeXML202008.zip",
+      "url": "https://link.epo.org/cpc/CPCSchemeXML202008.zip",
+      "source_is_mutable": false,
+      "bytes": 10063909,
+      "sha256": "a6fd7cc5983098b1bccc330213c8cddd4a5b0559a6904d5aa3735f15b064a9ac",
+      "license": "official-public-data",
+      "notes": "Temporally matched to the 2020 PatentMatch release. Extracts to 682 XML scheme files plus supporting assets."
+    },
+    {
+      "id": "patentmatch-balanced-train-kaggle-mirror-v1",
+      "group": "patent_cpc",
+      "path": "dataset/patent_cpc/patentmatch_mirror/train_balanced.tsv.zip",
+      "url": "https://www.kaggle.com/api/v1/datasets/download/seshurajup/patent-match/train_balanced.tsv?datasetVersionNumber=1",
+      "source_is_mutable": false,
+      "bytes": 86433856,
+      "sha256": "69629cd91157ae868b8a67ea4a85525a345dcc482e68adae1b51dab4158c7c0d",
+      "license": "UNVERIFIED",
+      "notes": "Third-party mirror: 278,304 rows, nearly balanced labels. Contains patent publication IDs but no CPC/IPC assignments. Internal diagnostics only until upstream redistribution terms are verified."
+    },
+    {
+      "id": "patentmatch-balanced-test-kaggle-mirror-v1",
+      "group": "patent_cpc",
+      "path": "dataset/patent_cpc/patentmatch_mirror/test_balanced.tsv.zip",
+      "url": "https://www.kaggle.com/api/v1/datasets/download/seshurajup/patent-match/test_balanced.tsv?datasetVersionNumber=1",
+      "source_is_mutable": false,
+      "bytes": 20521027,
+      "sha256": "73f39a301fb89b7e4295e6365ec4fa72b435a291c3448840a2703a5a137c4523",
+      "license": "UNVERIFIED",
+      "notes": "Third-party mirror: 69,576 rows, nearly balanced labels. Contains patent publication IDs but no CPC/IPC assignments. Internal diagnostics only until upstream redistribution terms are verified."
+    }
+  ]
+}
