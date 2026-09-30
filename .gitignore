@@ -95,6 +95,7 @@ mlruns/
 # (Run outputs live under cve_domain/runs/, which stays ignored below.)
 !cve_domain/experiments/
 !cve_domain/experiments/**
+cve_domain/experiments/__pycache__/
 cve_domain/runs/
 
 # Same for orca/experiments/, which is the ORCA experiment MATRIX definition
@@ -201,3 +202,7 @@ cybersecurity-vulnerability-ranking/data/processed/vulnerability_priority_rankin
 hf_results/
 hf_data/
 hf_orca_results/
+
+# Downloaded TREC/MeSH source archives and judgments: keep local; see
+# trec-clinical-trials/README.md for provenance and redistribution terms.
+trec-clinical-trials/raw/
