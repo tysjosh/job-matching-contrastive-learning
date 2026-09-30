@@ -66,6 +66,22 @@ class ContrastiveLossEngine:
         # Loss function selection: "infonce", "wasserstein", "hybrid", or "ordinal"
         self.loss_type = getattr(config, 'loss_type', 'infonce')
         self.ws2_weight = getattr(config, 'ws2_weight', 0.3)
+        self.go_ordinal_lambda_high_weak = getattr(config, 'go_ordinal_lambda_high_weak', 1.0)
+        self.go_ordinal_lambda_weak_unobserved = getattr(config, 'go_ordinal_lambda_weak_unobserved', 0.1)
+        self.go_ordinal_margin_high_weak = getattr(config, 'go_ordinal_margin_high_weak', 0.1)
+        self.go_ordinal_margin_weak_unobserved = getattr(config, 'go_ordinal_margin_weak_unobserved', 0.05)
+        self.go_ordinal_rank_temperature = getattr(config, 'go_ordinal_rank_temperature', 0.1)
+        if self.loss_type == 'go_ordinal':
+            if getattr(config, 'domain_adapter', None) != 'go_ppi':
+                raise ValueError('go_ordinal loss requires domain_adapter="go_ppi"')
+            weights = (self.go_ordinal_lambda_high_weak,
+                       self.go_ordinal_lambda_weak_unobserved)
+            margins = (self.go_ordinal_margin_high_weak,
+                       self.go_ordinal_margin_weak_unobserved)
+            if any(not 0 <= x < float('inf') for x in (*weights, *margins)):
+                raise ValueError('GO ordinal weights and margins must be finite and nonnegative')
+            if not 0 < self.go_ordinal_rank_temperature < float('inf'):
+                raise ValueError('GO ordinal ranking temperature must be finite and positive')
 
         # Ordinal contrastive loss (OCL) parameters
         self.ordinal_alpha = getattr(config, 'ordinal_alpha', 0.5)
@@ -166,6 +182,9 @@ class ContrastiveLossEngine:
         if self.loss_type == 'ordinal':
             return self._compute_ordinal_loss(triplets, embeddings)
 
+        if self.loss_type == 'go_ordinal':
+            return self._compute_go_ordinal_loss(triplets, embeddings)
+
         # InfoNCE: per-triplet loss averaged
         losses = []
         
@@ -186,6 +205,62 @@ class ContrastiveLossEngine:
             return losses[0]
         else:
             return torch.stack(losses).mean()
+
+    def _compute_go_ordinal_loss(self, triplets: List[ContrastiveTriplet],
+                                 embeddings: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """InfoNCE plus same-anchor high>weak and weak>unobserved ranking.
+
+        Each comparison is averaged within its evidence tier before the batch
+        mean, so the number of grade-0 candidates cannot drown out grade 1.
+        The weak>unobserved term is intentionally downweighted because an
+        unrecorded STRING edge is not a confirmed non-interaction.
+        """
+        losses = []
+        temp = self.go_ordinal_rank_temperature
+        for triplet in triplets:
+            base = self._compute_triplet_loss(triplet, embeddings)
+            if base is None:
+                continue
+            anchor_key = self._get_content_key(triplet.anchor)
+            positive_key = self._get_content_key(triplet.positive)
+            anchor = embeddings[anchor_key].to(self.device)
+            positive = embeddings[positive_key].to(self.device)
+            high_score = torch.sum(anchor * positive, dim=-1)
+            weak_scores, unobserved_scores = [], []
+            for negative in triplet.negatives:
+                key = self._get_content_key(negative)
+                if key not in embeddings:
+                    continue
+                # Some validation anchors have no graded pool and the shared
+                # batch processor supplies this placeholder. Keep its ordinary
+                # InfoNCE contribution, but it has no evidence rank to compare.
+                if negative.get('job_id') == 'dummy_negative':
+                    continue
+                grade = negative.get('grade')
+                if grade not in (0, 1):
+                    raise ValueError(f'GO ordinal negative requires grade 0 or 1, got {grade!r}')
+                score = torch.sum(anchor * embeddings[key].to(self.device), dim=-1)
+                (weak_scores if grade == 1 else unobserved_scores).append(score)
+
+            ranking = high_score.new_zeros(())
+            if weak_scores and self.go_ordinal_lambda_high_weak:
+                weak = torch.stack(weak_scores)
+                gap = high_score - weak
+                penalty = F.softplus((self.go_ordinal_margin_high_weak - gap) / temp) * temp
+                ranking = ranking + self.go_ordinal_lambda_high_weak * penalty.mean()
+            if (weak_scores and unobserved_scores
+                    and self.go_ordinal_lambda_weak_unobserved):
+                weak = torch.stack(weak_scores)
+                unobserved = torch.stack(unobserved_scores)
+                gap = weak[:, None] - unobserved[None, :]
+                penalty = F.softplus(
+                    (self.go_ordinal_margin_weak_unobserved - gap) / temp) * temp
+                ranking = ranking + self.go_ordinal_lambda_weak_unobserved * penalty.mean()
+            losses.append(base + ranking)
+
+        if not losses:
+            raise ValueError('GO ordinal loss received no triplets with embeddings')
+        return torch.stack(losses).mean()
 
     def _compute_triplet_loss(self, triplet: ContrastiveTriplet,
                               embeddings: Dict[str, torch.Tensor]) -> Optional[torch.Tensor]:

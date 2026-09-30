@@ -128,6 +128,157 @@ def _resolve_data(args) -> tuple:
     return splits["train"], val_path
 
 
+def _register_domain(config) -> None:
+    """Import a non-career domain's adapter so the seam registry knows it.
+
+    Must run **before** ``ContrastiveLearningTrainer`` is constructed: the trainer
+    builds a ``DataLoader``, which resolves ``config.domain_adapter`` through
+    ``get_domain_adapter`` immediately and raises ``KeyError`` for an unregistered
+    name. Registration happens as an import-time side effect of the domain's
+    ``record_adapter`` module, so importing it is sufficient.
+
+    The career adapter registers when ``contrastive_learning.domain_adapters`` is
+    imported, so the default path needs nothing here.
+    """
+    adapter = getattr(config, "domain_adapter", "career")
+    if adapter == "career":
+        return
+
+    #: Domain name -> the module whose import registers its adapter.
+    registrars = {
+        "trials": "trials_domain.record_adapter",
+        "cve": "cve_domain.record_adapter",
+        "go_ppi": "go_ppi_domain.record_adapter",
+    }
+    module = registrars.get(adapter)
+    if module is None:
+        logger.error(
+            "config.domain_adapter=%r is not a domain this runner knows how to "
+            "register. Known: %s (plus 'career', registered by default).",
+            adapter, ", ".join(sorted(registrars)))
+        sys.exit(1)
+
+    import importlib
+
+    try:
+        importlib.import_module(module)
+    except ImportError as exc:
+        logger.error(
+            "domain_adapter=%r requires %s, which is not importable: %s",
+            adapter, module, exc)
+        sys.exit(1)
+    logger.info("Registered the %r domain adapter via %s", adapter, module)
+
+
+def _attach_domain(trainer, config) -> None:
+    """Perform any domain-specific seam injection before training starts.
+
+    The career domain needs nothing here: its ontology matcher is built inside
+    ``BatchProcessor`` from the ``esco_*`` config paths. A non-career domain has
+    to inject its own matcher and negative selector through the additive seams,
+    and that injection has to happen *before* Phase 2 — the warmup snapshot is
+    frozen from whatever negatives are in play, so attaching afterwards would
+    train the warmup encoder on one negative distribution and then swap another
+    in underneath the frozen embeddings.
+
+    Raises:
+        SystemExit: If the domain's wiring cannot be applied. This is deliberately
+            fatal rather than a warning: an unwired trials run trains happily on
+            random negatives with no ontology signal and produces
+            plausible-looking numbers, which is the worst possible failure mode.
+    """
+    adapter = getattr(config, "domain_adapter", "career")
+    if adapter not in ("trials", "go_ppi"):
+        return
+
+    if adapter == "trials":
+        try:
+            from trials_domain.run_config import attach_trials_domain
+        except ImportError as exc:
+            logger.error(
+                "domain_adapter='trials' but trials_domain is not importable: %s", exc)
+            sys.exit(1)
+        attach_fn = attach_trials_domain
+        ontology_label = "MeSH descriptors"
+        ontology_count_key = "mesh_descriptors"
+        split_dir_field = "trials_split_dir"
+    else:
+        try:
+            from go_ppi_domain.run_config import attach_go_ppi_domain
+        except ImportError as exc:
+            logger.error(
+                "domain_adapter='go_ppi' but go_ppi_domain is not importable: %s", exc)
+            sys.exit(1)
+        attach_fn = attach_go_ppi_domain
+        ontology_label = "GO terms"
+        ontology_count_key = "go_terms"
+        split_dir_field = "go_ppi_split_dir"
+
+    try:
+        summary = attach_fn(trainer, config, split="train")
+    except Exception as exc:
+        logger.error("Failed to attach the %s domain: %s", adapter, exc)
+        sys.exit(1)
+
+    pools = summary.get("pools", {})
+    logger.info(
+        "%s domain attached: %d %s, %d anchor pools "
+        "(%d grade-1 / %d grade-0 candidates), hard ratio %.2f -> %.2f",
+        adapter, summary.get(ontology_count_key, 0), ontology_label,
+        pools.get("topics", 0),
+        pools.get("hard_total", 0),
+        pools.get("easy_total", 0),
+        summary.get("curriculum", {}).get("start_hard_ratio", 0.0),
+        summary.get("curriculum", {}).get("end_hard_ratio", 0.0),
+    )
+    if not pools.get("topics"):
+        logger.error(
+            "The %s negative selector indexed 0 anchor pools. Negatives would "
+            "silently fall back to other anchors' positives and the graded "
+            "grade-1 judgments would never reach the loss. Check %s=%s contains "
+            "negative_pools.jsonl for the train split.",
+            adapter, split_dir_field, getattr(config, split_dir_field, "<unset>"))
+        sys.exit(1)
+
+
+def _verify_ontology_wiring(trainer, config, require: bool) -> None:
+    """Assert an ontology matcher is actually live on the batch processor.
+
+    ``_check_orca_data_quality`` only inspects the *data*. That is not sufficient:
+    a run can carry perfectly good ``skill_uris`` and still have no matcher wired,
+    in which case ``_compute_negative_ontology_features`` returns ``None`` and
+    ORCA silently degrades to the blended ``career_distances`` proxy — losing the
+    d_esco/d_isco decomposition the ontology ablations exist to measure. This
+    checks the wiring itself.
+    """
+    batch_processor = getattr(trainer, "batch_processor", None)
+    if batch_processor is None:
+        return
+
+    resolver = getattr(batch_processor, "_effective_skill_matcher", None)
+    matcher = resolver() if callable(resolver) else getattr(
+        batch_processor, "skill_matcher", None)
+
+    if matcher is not None:
+        logger.info(
+            "Ontology wiring OK: %s active for negative selection and ORCA "
+            "feature capture.", type(matcher).__name__)
+        return
+
+    msg = (
+        "No ontology matcher is active on the BatchProcessor. ORCA's per-negative "
+        "features (d_esco/d_isco/d_ot/s_esco/s_isco) cannot be computed and will "
+        "degrade to the blended career_distances proxy, making the ontology "
+        "ablations meaningless. For the career domain set esco_graph_path / "
+        "esco_kg_path; for a non-career domain ensure its matcher is injected via "
+        "BatchProcessor.set_ontology_matcher."
+    )
+    if require:
+        logger.error(msg)
+        sys.exit(1)
+    logger.warning(msg)
+
+
 def _check_orca_data_quality(train_path: str, require: bool) -> None:
     """Warn (or error) if the training data lacks the ontology fields ORCA needs.
 
@@ -135,6 +286,9 @@ def _check_orca_data_quality(train_path: str, require: bool) -> None:
     and jobs. On the raw enriched dataset these are absent (nested under
     ``esco_enrichment_v3``), which silently degrades ORCA to career-distance
     proxies and random negative selection. Surface that early.
+
+    NOTE: this inspects the data only. It cannot tell whether a matcher is wired,
+    so :func:`_verify_ontology_wiring` is the necessary companion check.
     """
     import json
 
@@ -247,6 +401,7 @@ def main() -> int:
     logger.info("=" * 60)
     logger.info("ORCA training")
     logger.info("  variant:        %s", config.orca_variant)
+    logger.info("  domain:         %s", getattr(config, "domain_adapter", "career"))
     logger.info("  train:          %s", train_path)
     logger.info("  validation:     %s", val_path or "(none)")
     logger.info("  output_dir:     %s", args.output_dir)
@@ -256,8 +411,17 @@ def main() -> int:
                 config.orca_joint_epochs)
     logger.info("=" * 60)
 
+    # Register a non-career domain adapter BEFORE the trainer is built: the
+    # trainer's DataLoader resolves config.domain_adapter during construction.
+    _register_domain(config)
+
     # Build the standard OSCAR trainer, then drive it with the ORCA orchestrator.
     trainer = ContrastiveLearningTrainer(config=config, output_dir=args.output_dir)
+
+    # Domain-specific seam injection MUST precede the orchestrator run so the
+    # Phase-2 warmup snapshot is captured from this domain's negatives.
+    _attach_domain(trainer, config)
+    _verify_ontology_wiring(trainer, config, require=args.require_ontology)
 
     try:
         orchestrator = OrcaPhaseOrchestrator(config, trainer)

@@ -97,6 +97,10 @@ class ContrastiveLearningTrainer:
             )
 
         self.config = config
+        # Seed before constructing the projection head (and any other component
+        # that may initialize randomly). Seeding only in train() is too late:
+        # runs with the same training_seed could start from different weights.
+        _set_seed(int(getattr(config, 'training_seed', 42)))
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -153,7 +157,7 @@ class ContrastiveLearningTrainer:
             # Initialize structured feature extractor
             self.feature_extractor = StructuredFeatureExtractor()
             structured_feature_dim = getattr(config, 'structured_feature_dim', 32)
-            
+
             # Create enhanced model with structured features
             self.model = model or EnhancedContrastiveModel(
                 text_embed_dim=text_encoder_dim,
@@ -794,6 +798,31 @@ class ContrastiveLearningTrainer:
         validation_losses = []
         validation_samples = 0
         validation_triplets = 0
+        cache_size_before_validation = len(self.embedding_cache.cache)
+
+        # A curriculum is useful for training, but changing the validation
+        # negatives every epoch makes validation losses incomparable. Biomedical
+        # publication runs opt into a fixed, hard-target validation draw: the
+        # final curriculum tier mix and one dedicated seed are used at every
+        # epoch and for every training seed. Restore training state afterward.
+        fixed_validation = bool(getattr(
+            self.config, 'fixed_validation_negatives', False))
+        selector = getattr(self.batch_processor, 'domain_negative_selector', None)
+        train_negative_epoch = getattr(self.batch_processor, 'current_epoch', 0)
+        selector_training_seed = getattr(selector, 'training_seed', None)
+        if fixed_validation and selector is not None:
+            validation_epoch = getattr(
+                self.config, 'validation_negative_epoch', None)
+            if validation_epoch is None:
+                validation_epoch = max(0, int(self.config.num_epochs) - 1)
+            self.batch_processor.set_epoch(int(validation_epoch))
+            if selector_training_seed is not None:
+                selector.training_seed = int(getattr(
+                    self.config, 'validation_negative_seed', 1729))
+            self.structured_logger.logger.info(
+                "Fixed validation negatives: selector_epoch=%d, selector_seed=%d",
+                int(validation_epoch),
+                int(getattr(self.config, 'validation_negative_seed', 1729)))
 
         # Create a validation-specific config that doesn't filter by augmentation
         # This ensures we validate on ALL samples, not just augmented ones
@@ -839,7 +868,27 @@ class ContrastiveLearningTrainer:
         except Exception as e:
             self.structured_logger.logger.error(f"Error during validation: {e}")
         finally:
+            if fixed_validation and selector is not None:
+                self.batch_processor.set_epoch(train_negative_epoch)
+                if selector_training_seed is not None:
+                    selector.training_seed = selector_training_seed
             self.model.train()
+
+        # Validation can be the first place the frozen encoder sees held-out
+        # anchor/positive texts.  Persist those text embeddings when the cache
+        # grows so every seed does not pay the same encoding cost again.  This
+        # is a pure performance cache: the trainable projection is still run
+        # afresh for every batch, and no validation labels enter the encoder.
+        cache_path = getattr(self.config, 'embedding_cache_path', None)
+        if (self.freeze_text_encoder
+                and self.config.enable_embedding_preload
+                and cache_path
+                and len(self.embedding_cache.cache) > cache_size_before_validation):
+            try:
+                self.embedding_cache.save_to_disk(cache_path)
+            except Exception as cache_error:
+                self.structured_logger.logger.warning(
+                    f"Could not persist validation text cache: {cache_error}")
 
         avg_val_loss = sum(validation_losses) / len(validation_losses) if validation_losses else float('inf')
         
@@ -1465,9 +1514,11 @@ class ContrastiveLearningTrainer:
         cache_path = getattr(
             self.config, "embedding_cache_path", "embedding_cache/text_embeddings.pt"
         )
-        if self.embedding_cache.load_from_disk(cache_path):
-            logger.info("Skipped preloading — loaded embeddings from disk cache")
-            return
+        loaded_from_disk = self.embedding_cache.load_from_disk(cache_path)
+        if loaded_from_disk:
+            logger.info(
+                f"Loaded {len(self.embedding_cache.cache)} embeddings from "
+                f"{cache_path}; checking coverage of this dataset.")
         
         try:
             # Collect all unique content from the dataset (keyed by hash to deduplicate)
@@ -1483,9 +1534,31 @@ class ContrastiveLearningTrainer:
                     if job_key not in unique_content:
                         unique_content[job_key] = (sample.job, 'job')
             
+            # Encode ONLY what the disk cache does not already cover.
+            #
+            # This used to return early whenever load_from_disk() succeeded, which
+            # treated any cache as a complete one. A cache built from a different
+            # dataset loads fine and covers none of these keys, so preloading was
+            # skipped and every text became a cache miss encoded one-at-a-time
+            # inside the training loop — measured at ~120 s/batch with a 0.00% hit
+            # rate on the v7 learning-curve data, versus seconds once warm. The
+            # keys are content hashes, so coverage is checked directly rather than
+            # inferred from the file existing.
+            total_unique = len(unique_content)
+            missing = {k: v for k, v in unique_content.items()
+                       if k not in self.embedding_cache.cache}
+            covered = total_unique - len(missing)
+            logger.info(
+                f"Dataset needs {total_unique} unique embeddings: "
+                f"{covered} cached, {len(missing)} to encode "
+                f"({covered / max(total_unique, 1):.1%} coverage).")
+            if not missing:
+                logger.info("Disk cache fully covers this dataset — nothing to encode.")
+                return
+
             # Encode text embeddings only (frozen SentenceTransformer output)
             # The trainable projection model is applied fresh each batch for grad flow
-            items = list(unique_content.items())
+            items = list(missing.items())
             batch_size_preload = batch_size
             for start in range(0, len(items), batch_size_preload):
                 chunk = items[start:start + batch_size_preload]
