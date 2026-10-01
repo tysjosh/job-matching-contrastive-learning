@@ -142,6 +142,11 @@ def attach_trials(trainer, config) -> Dict[str, Any]:
     selector.pools.update(validation_selector.pools)
     selector.views.update(validation_selector.views)
 
+    if getattr(config, "trials_common_validation", False):
+        if not selector.soft_guidance:
+            raise ValueError("common Trials validation requires the V2 sampler")
+        selector.common_validation_topics = set(validation_selector.pools)
+
     setter = getattr(batch_processor, "set_domain_negative_selector", None)
     if not callable(setter):
         raise RuntimeError(
@@ -336,6 +341,12 @@ def main(argv=None) -> int:
         selector = trainer.batch_processor.domain_negative_selector
         attach["preencoded"] = preencode_pool(trainer, selector)
         attach["cache_check"] = assert_cache_valid(trainer)
+        if args.domain == "trials" and getattr(config, "trials_soft_guidance", ""):
+            from trials_domain.soft_sampling import prepare_text_scores
+            attach["soft_guidance"] = config.trials_soft_guidance
+            attach["common_validation_topics"] = sorted(selector.common_validation_topics)
+            attach["text_mining_scores"] = prepare_text_scores(
+                trainer, selector, config.trials_converted_dir)
 
     result = trainer.train(str(args.train_file))
 
