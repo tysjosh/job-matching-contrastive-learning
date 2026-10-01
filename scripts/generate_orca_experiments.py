@@ -103,8 +103,18 @@ def main() -> None:
                 run_dir = OUT_ROOT / run_id
                 run_dir.mkdir(parents=True, exist_ok=True)
                 cfg_path = run_dir / "training_config.json"
+                # Strip documentation-only keys before materializing the run
+                # config. Base configs may carry "_description" / "_comment_*"
+                # entries to explain non-obvious settings inline, but several
+                # consumers construct the dataclass positionally via
+                # ``TrainingConfig(**config_dict)`` (e.g.
+                # run_phase1_embedding_evaluation.py) rather than through
+                # ``from_json``, and an undeclared key raises TypeError there.
+                # Filtering at the point of materialization keeps the docs in the
+                # base config while emitting a config every consumer accepts.
+                runnable_cfg = {k: v for k, v in cfg.items() if not k.startswith("_")}
                 with open(cfg_path, "w") as f:
-                    json.dump(cfg, f, indent=2)
+                    json.dump(runnable_cfg, f, indent=2)
                 written += 1
 
                 out_dir = f"results/research_runs/{run_id}"

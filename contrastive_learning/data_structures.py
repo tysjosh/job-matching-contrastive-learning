@@ -199,6 +199,12 @@ class TrainingConfig:
     # Validation configuration
     validation_path: Optional[str] = None  # Path to validation dataset (JSONL format)
     validate_every_n_epochs: int = 1       # Run validation every N epochs
+    # When enabled for a domain selector, keep both the validation tier mix and
+    # sampled candidates identical at every epoch and across training seeds.
+    # This makes validation losses comparable for best-checkpoint selection.
+    fixed_validation_negatives: bool = False
+    validation_negative_epoch: Optional[int] = None  # None = final curriculum epoch
+    validation_negative_seed: int = 1729
 
     # Ontology-aware loss weighting (uses precomputed ESCO enrichment scores)
     ontology_weight: float = 0.0           # 0.0 = disabled, 0.3 = moderate, 0.5 = strong
@@ -222,8 +228,17 @@ class TrainingConfig:
     ontology_negative_rank_tiers: bool = False
 
     # Phase 1 loss function selection
-    loss_type: str = "infonce"             # "infonce" (standard), "wasserstein" (graduated), "hybrid" (infonce + ws2), or "ordinal" (OCL)
+    loss_type: str = "infonce"             # "infonce", "go_ordinal", "wasserstein", "hybrid", or career "ordinal"
     ws2_weight: float = 0.3               # Weight for WS2 component in hybrid loss (0.0-1.0)
+
+    # GO/PPI evidence-aware ranking, active only when loss_type="go_ordinal".
+    # A missing STRING edge is unobserved, not a verified non-interaction;
+    # therefore weak-evidence > unobserved gets a deliberately small weight.
+    go_ordinal_lambda_high_weak: float = 1.0
+    go_ordinal_lambda_weak_unobserved: float = 0.1
+    go_ordinal_margin_high_weak: float = 0.1
+    go_ordinal_margin_weak_unobserved: float = 0.05
+    go_ordinal_rank_temperature: float = 0.1
 
     # Ordinal contrastive loss (OCL) configuration
     ordinal_alpha: float = 0.5            # φ-guided margin scale: m₁(φ) = α·(1 − φ)
@@ -254,6 +269,11 @@ class TrainingConfig:
     phi_optional_weight: float = 0.5       # Weight for optional skills in φ denominator
     phi_use_weighted: bool = False          # If True, weight essential > optional in φ computation
     esco_relations_path: Optional[str] = None  # Path to occupationSkillRelations_en.csv
+    # Precomputed ESCO skill-pair distances used to seed the matcher's LRU cache.
+    # Must be declared here: TrainingConfig.from_json silently DROPS undeclared
+    # keys, so a config setting this would otherwise be ignored without warning.
+    # Default preserves the previously hardcoded path.
+    skill_distance_cache_path: Optional[str] = "embedding_cache/skill_distances.pkl"
 
     # Adaptive margin annealing: λ₁(t) = λ₁ · (1 − anneal_rate · t/T)
     margin_anneal: bool = False            # If True, decay λ₁ over training
@@ -432,6 +452,126 @@ class TrainingConfig:
     # Default False keeps negative processing cheap; ``d_ot`` is then left at a
     # neutral 0.0 in the captured feature vector.
     orca_capture_ot_distance: bool = False
+
+    # ── TREC Clinical Trials domain (domain_adapter="trials") ──
+    # Additive, mirroring the cve_* block above. Career and CVE runs never read
+    # these, so the defaults are inert there. They must be declared here rather
+    # than left as loose JSON keys: TrainingConfig.from_json silently drops
+    # undeclared keys, so an undeclared mesh_alpha would read back as the
+    # hardcoded fallback and tuning it in the config would have no effect.
+    #
+    # MeSH 2021 descriptor hierarchy, replacing the ESCO graph + ISCO code table.
+    mesh_descriptor_path: str = "trec-clinical-trials/raw/ontology/desc2021.gz"
+    # Pickle cache for the parsed index; skips a ~8s XML parse per run.
+    mesh_index_cache: str = "embedding_cache/mesh2021_index.pkl"
+    # Exponential decay on MeSH tree hops. Lower than the ESCO matcher's 0.7
+    # because the distance scale differs: MeSH tree hops span 0-26 across a
+    # 13-level hierarchy while ESCO skill-graph hops cap at 8, so reusing 0.7
+    # would drive every non-sibling pair to ~0 similarity and flatten the signal.
+    mesh_alpha: float = 0.5
+    # Tree hops beyond which two descriptors count as unrelated.
+    mesh_max_hops: int = 12
+    # MeSH negative-ranking similarity: direct descriptor identity (symmetric
+    # best-match average) or the existing tree-hop best-match average.
+    mesh_similarity_mode: str = "hierarchy"
+    # Directory holding train/validation/test.jsonl + negative_pools.jsonl.
+    trials_split_dir: str = "preprocess/trec_ct_splits"
+    # Directory holding the converted trials.jsonl / topics.jsonl / qrels.jsonl.
+    trials_converted_dir: str = "preprocess/trec_ct"
+    # Curriculum endpoints for the share of negatives drawn from grade 1
+    # (ineligible = the expert-annotated ambiguous negatives) rather than grade 0.
+    # Ramps linearly across training, mirroring the career linear_easy_to_hard
+    # schedule so results on the two datasets are read the same way.
+    trials_start_hard_ratio: float = 0.2
+    trials_end_hard_ratio: float = 0.6
+    # Whether the graded negative pool is TIERED BY MeSH DISTANCE rather than
+    # sampled uniformly. This is the single factor in the shared learning-curve
+    # study: both arms draw from the same human-graded pool with the same label
+    # budget, and differ only in whether the ontology orders it. Mirrors
+    # ``ontology_guided_negatives`` on the career side.
+    trials_mesh_tiered_negatives: bool = False
+    # Candidates MeSH-scored per anchor per epoch. The dominant cost: at 400 it
+    # produced ~25,600 set-similarity computations per batch and ~37 s/batch.
+    trials_mesh_score_cap: int = 100
+    # Diversity-control modes for the Trials negative selector. ``uniform`` is
+    # the historical baseline; ``deterministic`` is the historical MeSH prefix;
+    # ``random_window`` and ``stochastic`` form the diversity-matched pair.
+    trials_tier_sampling: str = "uniform"
+    trials_tier_window_frac: float = 0.34
+    # Additive MeSH decomposition controls. Defaults preserve historical runs.
+    trials_mesh_facet: str = "all"  # "all" or source-annotated "disease"
+    trials_mesh_tier_scope: str = "both"  # "both", "ineligible", "not_relevant"
+    # Subsample of the unjudged corpus used only by the separate
+    # judgment-substitution study, not by the learning curve.
+    trials_corpus_pool_size: int = 2000
+
+    # ── Gene Ontology / protein-interaction domain (domain_adapter="go_ppi") ──
+    # Additive, mirroring the trials_* block above. Career, CVE and trials runs
+    # never read these, so the defaults are inert there. As with the mesh_* block,
+    # they must be declared here rather than left as loose JSON keys:
+    # TrainingConfig.from_json silently drops undeclared keys, so an undeclared
+    # go_alpha would read back as the hardcoded fallback and tuning it in the
+    # config would have no effect.
+    #
+    # GO DAG and human annotations, replacing the ESCO graph + ISCO code table.
+    go_obo_path: str = "dataset/go_ppi/bulk/go-basic.obo"
+    go_annotation_path: str = "dataset/go_ppi/bulk/goa_human.gaf.gz"
+    # Pickle cache for the parsed DAG + closures + information content; skips a
+    # ~30s parse per run, which matters when every learning-curve point builds
+    # its own matcher.
+    go_index_cache: str = "preprocess/go_ppi/go_index_P.pkl"
+    # GO aspect. "P" (biological_process) is the default because it is the aspect
+    # the ceiling was measured on (hard-contrast rank-AUC 0.8195) and because it
+    # structurally excludes molecular_function's GO:0005515 "protein binding",
+    # which is annotated straight from interaction assays and would leak the
+    # STRING experimental label this domain uses as its grade.
+    go_aspect: str = "P"
+    # exact = direct-term Jaccard; ancestor = closure Jaccard; simgic =
+    # IC-weighted closure Jaccard. With aspect A, each branch is scored
+    # separately and the available branch scores are averaged by these weights.
+    go_similarity_mode: str = "simgic"
+    go_aspect_weights: Dict[str, float] = field(
+        default_factory=lambda: {"P": 1.0, "F": 1.0, "C": 1.0})
+    # Decay on GO DAG hops for the term-level skill_sim. Not used by simGIC, which
+    # is the measure ontology_set_similarity actually implements.
+    go_alpha: float = 0.5
+    go_max_hops: int = 12
+    # Directory holding train/validation/test.jsonl + negative_pools.jsonl.
+    go_ppi_split_dir: str = "preprocess/go_ppi_splits"
+    # Directory holding the converted proteins.jsonl / pairs.jsonl.
+    go_ppi_converted_dir: str = "preprocess/go_ppi"
+    # Curriculum endpoints for the share of negatives drawn from grade 1
+    # (weak experimental evidence = the ambiguous negatives) rather than grade 0.
+    # Ramps linearly, mirroring trials_start/end_hard_ratio and the career
+    # linear_easy_to_hard schedule so all three datasets are read the same way.
+    go_ppi_start_hard_ratio: float = 0.2
+    go_ppi_end_hard_ratio: float = 0.6
+    # Whether the graded negative pool is TIERED BY GO simGIC DISTANCE rather than
+    # sampled uniformly. THE SINGLE FACTOR for this domain: both arms draw from the
+    # same graded pool with the same label budget and the same grade mix, and
+    # differ only in whether the ontology orders it. Mirrors
+    # trials_mesh_tiered_negatives and career's ontology_guided_negatives.
+    go_ppi_go_tiered_negatives: bool = False
+    # Candidates GO-scored per anchor per epoch. Far higher than trials' cap of 100
+    # is affordable because simGIC is O(|A|+|B|) set arithmetic, whereas the MeSH
+    # matcher's best-match average is O(|A|x|B|) — that quadratic cost is what
+    # forced the low trials cap.
+    go_ppi_go_score_cap: int = 400
+    # How the GO-ordered tier is drawn. "deterministic" takes a fixed prefix of the
+    # ordered pool (what trials does); "stochastic" samples from the closest
+    # go_ppi_tier_window_frac of it.
+    #
+    # This exists because the deterministic form confounds the measurement. It
+    # changes two things at once relative to the baseline: negatives come from the
+    # GO-closest region (intended), AND the anchor gets the SAME negatives every
+    # epoch, while the baseline reseeds per (seed, epoch, anchor) and draws a fresh
+    # sample each time. Over 15 epochs that is 1 negative set versus up to 15 — a
+    # large diversity difference unrelated to the ontology, biasing the comparison
+    # against the ontology arm. "stochastic" keeps the ontology in charge of which
+    # region negatives come from while restoring per-epoch variety, and is the arm
+    # that isolates the ontology effect.
+    go_ppi_tier_sampling: str = "deterministic"
+    go_ppi_tier_window_frac: float = 0.34
 
     def __post_init__(self):
         """Validate configuration parameters."""

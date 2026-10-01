@@ -10,7 +10,7 @@ import json
 import argparse
 import numpy as np
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -113,8 +113,131 @@ class JSONLDataset(Dataset):
         }
 
 
+#: Process-local cache of frozen text-encoder outputs, keyed by the exact text.
+#: The encoder is frozen during Phase-1 evaluation, so its output for a given
+#: string is fixed and safe to reuse. Without this the script re-encodes every
+#: record on every invocation — 6,216 texts per run on the trials validation
+#: split, ~20 minutes each, repeated for every arm and seed.
+#:
+#: Keyed by text rather than by record so the many (topic, trial) pairs that share
+#: a topic narrative encode it once.
+_TEXT_EMB_CACHE: Dict[str, "torch.Tensor"] = {}
+
+
+def _batch_grades(jobs, n: int) -> List:
+    """Per-record graded relevance, or ``None`` where unavailable.
+
+    Reads the ``grade`` the trials domain attaches to each candidate slot. Career
+    and CVE records carry none, so this yields ``None`` and the per-grade section
+    is simply omitted from the report.
+
+    The DataLoader may hand ``jobs`` over as a dict of collated lists rather than a
+    list of dicts, so both shapes are handled.
+    """
+    def one(i):
+        try:
+            if isinstance(jobs, dict):
+                value = jobs.get('grade')
+                if value is None:
+                    return None
+                item = value[i] if hasattr(value, '__getitem__') else value
+            else:
+                item = jobs[i].get('grade') if isinstance(jobs[i], dict) else None
+            if item is None:
+                return None
+            return int(item.item() if hasattr(item, 'item') else item)
+        except Exception:
+            return None
+
+    return [one(i) for i in range(n)]
+
+
+def per_grade_report(similarities, grades) -> Optional[Dict]:
+    """Pairwise AUC between graded relevance levels.
+
+    Reports each contrast separately: eligible-vs-irrelevant measures topical
+    relevance, whereas eligible-vs-ineligible measures the eligibility judgement
+    that is the actual task. These can diverge sharply — a model may be strong on
+    the first and at chance on the second — and a pooled figure hides that.
+    """
+    pairs = [(g, s) for g, s in zip(grades, similarities) if g is not None]
+    if len(pairs) < 2:
+        return None
+
+    by_grade: Dict[int, List[float]] = {}
+    for g, s in pairs:
+        by_grade.setdefault(g, []).append(float(s))
+    if len(by_grade) < 2:
+        return None
+
+    def auc(pos: List[float], neg: List[float]) -> Optional[float]:
+        if not pos or not neg:
+            return None
+        merged = sorted([(v, 1) for v in pos] + [(v, 0) for v in neg])
+        ranks: Dict[int, float] = {}
+        i = 0
+        while i < len(merged):
+            j = i
+            while j + 1 < len(merged) and merged[j + 1][0] == merged[i][0]:
+                j += 1
+            avg = (i + j) / 2.0 + 1.0
+            for k in range(i, j + 1):
+                ranks[k] = avg
+            i = j + 1
+        rank_sum = sum(ranks[k] for k, (_v, lab) in enumerate(merged) if lab == 1)
+        n_pos, n_neg = len(pos), len(neg)
+        return (rank_sum - n_pos * (n_pos + 1) / 2.0) / (n_pos * n_neg)
+
+    NAMES = {2: 'eligible', 1: 'ineligible', 0: 'not_relevant'}
+    report: Dict = {
+        'counts': {NAMES.get(g, str(g)): len(v) for g, v in sorted(by_grade.items())},
+        'mean_similarity': {
+            NAMES.get(g, str(g)): sum(v) / len(v) for g, v in sorted(by_grade.items())
+        },
+        'pairwise_auc': {},
+    }
+    for hi, lo, label in ((2, 0, 'eligible_vs_not_relevant'),
+                          (2, 1, 'eligible_vs_ineligible'),
+                          (1, 0, 'ineligible_vs_not_relevant')):
+        value = auc(by_grade.get(hi, []), by_grade.get(lo, []))
+        if value is not None:
+            report['pairwise_auc'][label] = value
+    return report
+
+
+def _encode_cached(text_encoder, texts: List[str], device) -> "torch.Tensor":
+    """Encode ``texts``, reusing previously computed embeddings.
+
+    Only genuinely new strings are sent to the encoder; results are stacked back
+    into the caller's original order.
+    """
+    missing = [t for t in dict.fromkeys(texts) if t not in _TEXT_EMB_CACHE]
+    if missing:
+        fresh = text_encoder.encode(missing, convert_to_tensor=True)
+        for text, emb in zip(missing, fresh):
+            _TEXT_EMB_CACHE[text] = emb.detach().cpu()
+    return torch.stack([_TEXT_EMB_CACHE[t] for t in texts]).to(device)
+
+
 def content_to_text(content: Dict, content_type: str) -> str:
-    """Convert structured content to text for embedding"""
+    """Convert structured content to text for embedding.
+
+    A pre-serialized ``encoder_view`` takes precedence over the career-schema
+    branches below. Domains whose records are not resume/job shaped (the CVE and
+    TREC clinical-trials domains) carry their text there, and the training path
+    already honours it — ``trainer._encode_content_to_text_embedding`` and
+    ``BatchEfficientEncoder._content_to_text`` both check for it first.
+
+    Without this check the career branches find none of their expected keys and
+    return a near-empty string, so evaluation silently scores the model on blank
+    text. That produced AUC 0.5050 for a trials checkpoint that actually scores
+    0.6876 when its real text is encoded — a null result manufactured entirely by
+    the metric.
+    """
+    view = content.get('encoder_view')
+    if isinstance(view, str) and view.strip():
+        return view.strip()
+
     if content_type == 'resume':
         parts = []
         
@@ -209,19 +332,40 @@ def evaluate_phase1_embeddings(model: nn.Module,
     
     all_similarities = []
     all_labels = []
-    
+    # Graded relevance, when the dataset carries it. Pooled binary AUC collapses
+    # several distinct contrasts into one number whose value depends on the
+    # negative class's grade mixture, which is a property of how the split was
+    # built rather than of the model. Collected alongside — never instead of — the
+    # binary labels, so the pooled metric is unchanged.
+    all_grades = []
+
     with torch.no_grad():
         for batch in data_loader:
             resumes = batch['resume']
             jobs = batch['job']
             labels = batch['label'].numpy()
+            all_grades.extend(_batch_grades(jobs, len(labels)))
             
             # Convert to text and get base embeddings from SentenceTransformer
             resume_texts = [content_to_text(r, 'resume') for r in resumes]
             job_texts = [content_to_text(j, 'job') for j in jobs]
-            
-            resume_base = text_encoder.encode(resume_texts, convert_to_tensor=True).to(device)
-            job_base = text_encoder.encode(job_texts, convert_to_tensor=True).to(device)
+
+            # Refuse to score blank text. Encoding empty strings yields a valid
+            # tensor and a plausible-looking AUC near chance, so this failure is
+            # invisible without an explicit check — it is exactly how a trials
+            # checkpoint scoring 0.6876 was reported as 0.5050.
+            for name, texts in (('resume', resume_texts), ('job', job_texts)):
+                blank = sum(1 for t in texts if not t or not t.strip())
+                if blank:
+                    raise ValueError(
+                        f"{blank}/{len(texts)} {name} records serialized to empty "
+                        f"text. content_to_text found none of its expected fields. "
+                        f"For a non-career domain, ensure each record carries a "
+                        f"non-empty 'encoder_view'."
+                    )
+
+            resume_base = _encode_cached(text_encoder, resume_texts, device)
+            job_base = _encode_cached(text_encoder, job_texts, device)
             
             if use_structured_features and feature_extractor is not None:
                 # Extract structured features for resumes
@@ -266,13 +410,19 @@ def evaluate_phase1_embeddings(model: nn.Module,
     
     similarities = np.array(all_similarities)
     true_labels = np.array(all_labels)
+    graded = per_grade_report(all_similarities, all_grades)
     
     # Convert similarities to probabilities (map from [-1, 1] to [0, 1])
     probabilities = (similarities + 1) / 2
     
     # Default threshold of 0.5 similarity (0.0 in cosine space)
     predictions = (similarities > 0.0).astype(int)
-    
+
+    # Stash the graded breakdown on the function so main() can attach it to the
+    # results file without changing this function's return signature, which other
+    # callers depend on.
+    evaluate_phase1_embeddings.last_per_grade = graded
+
     return predictions, probabilities, true_labels
 
 
@@ -309,11 +459,19 @@ def main():
     print("  - Measures representation quality from Phase 1 pretraining")
     print("  - Baseline for comparing Phase 2 improvements\n")
     
-    # Load config
+    # Load config.
+    #
+    # Uses TrainingConfig.from_json (which routes through from_dict and drops keys
+    # that are not dataclass fields) rather than TrainingConfig(**config_dict).
+    # The raw-kwargs form raises TypeError on any ``_``-prefixed documentation key,
+    # which every non-career arm config carries (``_description``, ``_paired_with``,
+    # ``_comment_the_factor``, ...). Those keys are deliberate provenance: they
+    # record which single factor an arm varies. Loading the same way the trainer
+    # does also removes a real hazard — the two paths could otherwise disagree
+    # about a config, so a checkpoint would be evaluated under settings it was not
+    # trained with.
     print(f"Loading config from: {args.config}")
-    with open(args.config, 'r') as f:
-        config_dict = json.load(f)
-    config = TrainingConfig(**config_dict)
+    config = TrainingConfig.from_json(args.config)
     
     # Setup device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -484,7 +642,9 @@ def main():
             'precision': float(precision),
             'recall': float(recall),
             'f1_score': float(f1),
-            'auc_roc': float(auc_roc)
+            'auc_roc': float(auc_roc),
+            # Kept as-is. The graded breakdown below is additive context, not a
+            # replacement: pooled auc_roc remains the headline binary metric.
         },
         'confusion_matrix': {
             'true_positives': int(tp),
@@ -503,7 +663,26 @@ def main():
         'checkpoint': args.checkpoint,
         'dataset_path': args.dataset
     }
-    
+
+    # Additive: graded relevance breakdown, present only for datasets that carry
+    # per-candidate grades. Pooled auc_roc above is untouched.
+    per_grade = getattr(evaluate_phase1_embeddings, 'last_per_grade', None)
+    if per_grade:
+        results['per_grade'] = per_grade
+        print(f"\n📐 Graded relevance breakdown (additive to AUC-ROC above):")
+        for name, count in per_grade['counts'].items():
+            mean = per_grade['mean_similarity'][name]
+            print(f"  {name:16s} n={count:6d}  mean_sim={mean:.4f}")
+        print("  pairwise AUC:")
+        for label, value in per_grade['pairwise_auc'].items():
+            print(f"    {label:32s} {value:.4f}")
+        elig = per_grade['pairwise_auc'].get('eligible_vs_ineligible')
+        topical = per_grade['pairwise_auc'].get('eligible_vs_not_relevant')
+        if elig is not None and topical is not None:
+            print(f"  -> topical relevance {topical:.4f} vs eligibility {elig:.4f}; "
+                  f"the pooled AUC-ROC mixes these two in a ratio set by the "
+                  f"split's grade composition.")
+
     results_path = output_dir / "phase1_evaluation_results.json"
     with open(results_path, 'w') as f:
         json.dump(results, f, indent=2)

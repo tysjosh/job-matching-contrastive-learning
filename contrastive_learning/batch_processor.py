@@ -21,6 +21,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+#: Content-dict key carrying a domain's *coarse* ontology URIs — the input to an
+#: injected ``coarse_distance_fn`` (see ``BatchProcessor.set_ontology_matcher``).
+#: This is the generalization of the career path's single ``occupation_uri``: a
+#: non-career entity usually has no one primary category, so the coarse signal is
+#: a list. Career and CVE records never carry this key, so it reads as an empty
+#: list there and the ESCO/ISCO scalar lookup is used unchanged.
+COARSE_URIS_KEY = 'coarse_uris'
+
 
 class BatchProcessor:
     """
@@ -94,6 +102,10 @@ class BatchProcessor:
         self.skill_matcher = None
         use_ontology = getattr(config, 'ontology_weight', 0.0) > 0.0
         force_skill_negatives = getattr(config, 'ontology_guided_negatives', False)
+        # Retained on the instance because _select_negatives must consult it too:
+        # building the matcher is not enough if the routing gate still refuses to
+        # reach the ontology path. See the gate in _select_negatives.
+        self.ontology_guided_negatives = bool(force_skill_negatives)
         if (use_ontology or force_skill_negatives) and esco_graph_path:
             try:
                 from .ontology_skill_matcher import OntologySkillMatcher
@@ -118,10 +130,28 @@ class BatchProcessor:
                 import os
                 if os.path.exists(transversal_path) and getattr(config, 'use_reuse_weighting', False):
                     self.skill_matcher.load_transversal_skills(transversal_path, weight=0.3)
-                # Load precomputed skill distances if available
-                dist_cache_path = "embedding_cache/skill_distances.pkl"
-                if os.path.exists(dist_cache_path):
+                # Load precomputed skill distances if available.
+                #
+                # The path used to be hardcoded to skill_distances.pkl, which holds
+                # 116,848 pairs and was built for an earlier dataset. Measured
+                # against the 5,292 distinct ESCO skill URIs in the v7 learning
+                # curve, it covers 0.6% of sampled skill pairs, so ~99% of lookups
+                # fell through to nx.shortest_path_length on the full ESCO KG.
+                # That is a silent performance cliff, not a correctness bug: the
+                # distances are the same either way, but a run stalls for many
+                # minutes per epoch. The v7 pickle (11.67M pairs) covers 68.9% of
+                # the same sample. Configurable now, defaulting to the historical
+                # file so existing runs are unchanged.
+                dist_cache_path = getattr(
+                    config, 'skill_distance_cache_path',
+                    "embedding_cache/skill_distances.pkl")
+                if dist_cache_path and os.path.exists(dist_cache_path):
                     self.skill_matcher.load_precomputed_distances(dist_cache_path)
+                    logger.info(f"Loaded precomputed skill distances from {dist_cache_path}")
+                elif dist_cache_path:
+                    logger.warning(
+                        f"Skill-distance cache {dist_cache_path} not found; every "
+                        f"pair will be a graph shortest-path computation.")
                 logger.info("OntologySkillMatcher enabled for skill-level negative selection")
             except Exception as e:
                 logger.warning(f"Failed to initialize OntologySkillMatcher: {e}")
@@ -183,6 +213,40 @@ class BatchProcessor:
         # 7.5).
         self.negative_selector = None
 
+        # ── Ontology-matcher injection seam (additive; no-op default) ──
+        # A non-career domain may supply its own ontology matcher instead of the
+        # ESCO ``OntologySkillMatcher`` built above. Both the ontology negative
+        # selection path and ORCA's per-negative feature capture consult the
+        # *effective* matcher (see ``_effective_skill_matcher``), so a domain that
+        # injects one gets a real five-scalar ontology decomposition rather than
+        # falling back to the single blended ``career_distances`` proxy.
+        #
+        # Why this seam is needed at all: ``_compute_negative_ontology_features``
+        # is the only producer of ORCA's ``d_esco``/``d_isco``/``d_ot``/``s_esco``/
+        # ``s_isco`` vector, and it was hardcoded to ESCO on both paths — the
+        # matcher itself, and ``_isco_distance``'s ESCO-occupations lookup table.
+        # The existing ``set_negative_selector`` seam bypasses negative
+        # *selection* but not feature *capture*, so without this the ontology
+        # ablations (ORCA-NoOntology and friends) cannot be run on a second
+        # domain.
+        #
+        # Both default to ``None``, which restores the exact pre-existing lookups,
+        # so the career and CVE paths are byte-identical while unset.
+        self.ontology_matcher_override = None
+        self.coarse_distance_fn = None
+
+        # ── Domain-level negative selector (additive; no-op default) ──
+        # Distinct from ``negative_selector`` above, and deliberately so. That one
+        # is the ORCA seam: the phase orchestrator owns it, installs it for Phase 4
+        # only when the variant enables adaptive sampling, and CLEARS it
+        # (``set_selector(None)``) otherwise. A non-career domain whose negatives
+        # must come from its own pool needs a selector that survives the whole run
+        # regardless of ORCA variant, so it gets its own slot with its own
+        # lifetime. Sharing the ORCA slot meant the ORCA-Denominator orchestrator
+        # silently wiped the domain selector at the start of joint training and the
+        # phase fell back to random in-batch negatives.
+        self.domain_negative_selector = None
+
     def set_cve_negative_selector(
         self,
         selector: 'CVENegativeSelector',
@@ -238,6 +302,66 @@ class BatchProcessor:
         logger.info(
             "BatchProcessor: ORCA negative selector %s",
             "set" if selector is not None else "cleared")
+
+    def set_domain_negative_selector(self, selector) -> None:
+        """Inject (or clear) a domain-level negative selector.
+
+        Unlike :meth:`set_negative_selector` (the ORCA seam, whose lifetime the
+        phase orchestrator controls and which it clears for non-adaptive
+        variants), a selector set here persists for the whole run. Use this for a
+        domain whose negatives must come from its own pool irrespective of the
+        ORCA variant in play.
+
+        Consulted *after* an active ORCA selector, so an adaptive-sampling variant
+        still overrides it during Phase 4 — adaptive sampling is the experimental
+        variable in those runs and must win.
+
+        Purely additive: ``None`` (the default, and the only state on the career
+        and CVE paths) leaves negative selection unchanged.
+        """
+        self.domain_negative_selector = selector
+        logger.info(
+            "BatchProcessor: domain negative selector %s",
+            "set" if selector is not None else "cleared")
+
+    def set_ontology_matcher(self, matcher, coarse_distance_fn=None) -> None:
+        """Inject (or clear) a domain ontology matcher, replacing the ESCO one.
+
+        Purely additive: while ``matcher`` is ``None`` (the default, and the only
+        state on the career and CVE paths) every ontology lookup resolves exactly
+        as before. This module never imports the injecting domain package — the
+        matcher is duck-typed.
+
+        Args:
+            matcher: A duck-typed ontology matcher exposing the same surface as
+                ``OntologySkillMatcher``: ``ontology_set_similarity(A, B) -> float``
+                and, for the optional optimal-transport feature,
+                ``ot_distance(A, B) -> Optional[float]``. Pass ``None`` to clear.
+            coarse_distance_fn: Optional ``(anchor_uris, candidate_uris) -> float``
+                returning a coarse hierarchy distance in ``[0, 1]``. This replaces
+                :meth:`_isco_distance` when computing ``d_isco``. It takes URI
+                *lists* rather than the two scalar occupation URIs ISCO uses,
+                because a non-career entity generally has no single primary
+                category — a clinical trial carries several MeSH descriptors, and
+                52% of MeSH descriptors are themselves polyhierarchical. When
+                ``None``, ``d_isco`` falls back to the ESCO/ISCO lookup.
+        """
+        self.ontology_matcher_override = matcher
+        self.coarse_distance_fn = coarse_distance_fn
+        logger.info(
+            "BatchProcessor: ontology matcher override %s (coarse_distance_fn=%s)",
+            "set" if matcher is not None else "cleared",
+            "set" if coarse_distance_fn is not None else "unset")
+
+    def _effective_skill_matcher(self):
+        """The ontology matcher in force: the injected override, else ESCO's.
+
+        Single resolution point so the negative-selection path and ORCA's feature
+        capture can never disagree about which ontology is active.
+        """
+        if self.ontology_matcher_override is not None:
+            return self.ontology_matcher_override
+        return self.skill_matcher
 
     def build_rejection_index(self, dataset_path: str) -> None:
         """Build index of rejected resumes per job from the training data.
@@ -422,7 +546,7 @@ class BatchProcessor:
         ``career_distances`` proxy. Missing per-pair signals degrade to neutral
         values (Req 9.3) rather than raising.
         """
-        matcher = self.skill_matcher
+        matcher = self._effective_skill_matcher()
         if matcher is None:
             return None
 
@@ -433,6 +557,8 @@ class BatchProcessor:
 
         resume_occ = anchor_sample.metadata.get('resume_occupation_uri', '') \
             or resume.get('occupation_uri', '')
+        # Coarse (``d_isco``-analogue) input for an injected domain matcher.
+        anchor_coarse = resume.get(COARSE_URIS_KEY, []) if isinstance(resume, dict) else []
         capture_ot = getattr(self.config, 'orca_capture_ot_distance', False)
 
         features: List[Dict[str, float]] = []
@@ -449,12 +575,23 @@ class BatchProcessor:
                 s_esco = 0.0  # neutral: no ontology signal for this negative
             d_esco = 1.0 - s_esco
 
-            # ISCO occupation-hierarchy distance → d_isco / s_isco.
-            job_occ = job.get('occupation_uri', '') if isinstance(job, dict) else ''
-            if self.use_isco_negatives and resume_occ and job_occ:
-                d_isco = float(self._isco_distance(resume_occ, job_occ))
+            # Coarse hierarchy distance → d_isco / s_isco. An injected
+            # ``coarse_distance_fn`` (non-career domain) takes precedence and
+            # receives the two coarse URI *lists*; otherwise the career path's
+            # ESCO/ISCO scalar occupation lookup is used exactly as before. A
+            # failure degrades to the neutral 0.5 rather than raising (Req 9.3).
+            if self.coarse_distance_fn is not None:
+                job_coarse = job.get(COARSE_URIS_KEY, []) if isinstance(job, dict) else []
+                try:
+                    d_isco = float(self.coarse_distance_fn(anchor_coarse, job_coarse))
+                except Exception:
+                    d_isco = 0.5
             else:
-                d_isco = 0.5  # neutral when ISCO data is unavailable
+                job_occ = job.get('occupation_uri', '') if isinstance(job, dict) else ''
+                if self.use_isco_negatives and resume_occ and job_occ:
+                    d_isco = float(self._isco_distance(resume_occ, job_occ))
+                else:
+                    d_isco = 0.5  # neutral when ISCO data is unavailable
             s_isco = 1.0 - d_isco
 
             # Optimal-transport distance (expensive; opt-in).
@@ -565,8 +702,9 @@ class BatchProcessor:
         anchor_sample: TrainingSample,
         candidate_negatives: List[Dict[str, Any]],
         max_negatives: int,
+        selector=None,
     ) -> Optional[tuple[List[Dict[str, Any]], List[float]]]:
-        """Route negative selection through an injected ORCA selector, if usable.
+        """Route negative selection through an injected selector, if usable.
 
         The injected selector is duck-typed. It is used only if it exposes a
         batch-level ``select_batch_negatives(anchor_sample, candidate_negatives,
@@ -585,12 +723,17 @@ class BatchProcessor:
             anchor_sample: The anchor (positive) sample.
             candidate_negatives: The candidate negative job dicts.
             max_negatives: The maximum number of negatives to select.
+            selector: The selector to consult. Defaults to the ORCA-seam selector
+                (``self.negative_selector``); the domain-selector call site passes
+                ``self.domain_negative_selector`` instead.
 
         Returns:
             A ``(negatives, career_distances)`` tuple when the selector produced
             a selection, otherwise ``None`` to signal a fallback to OSCAR logic.
         """
-        select = getattr(self.negative_selector, "select_batch_negatives", None)
+        if selector is None:
+            selector = self.negative_selector
+        select = getattr(selector, "select_batch_negatives", None)
         if not callable(select):
             # Not a batch-dict-level selector (e.g. a tensor-level sampler that
             # operates after embedding). Fall back to OSCAR bucket selection.
@@ -646,6 +789,27 @@ class BatchProcessor:
         # None), so the career negative-selection behavior below is unchanged.
         if self.cve_negative_selector is not None:
             return self._select_cve_negatives(anchor_sample)
+
+        # ── Domain-level negative selection (additive) ──
+        # Runs HERE, alongside the CVE branch, and not further down with the ORCA
+        # selector. A domain selector supplies its own candidate pool, so it must
+        # not depend on the in-batch/global candidate machinery below — and
+        # critically it must run BEFORE the "no candidate negatives" dummy
+        # fallback. On a domain whose records all share a null job_applicant_id
+        # and a positive label (e.g. trials: every record is a topic paired with an
+        # eligible trial), the in-batch branch skips every sample, the candidate
+        # list comes back empty, and the dummy-negative early return fires — so a
+        # selector consulted after that point is never reached and training silently
+        # runs on placeholder text.
+        #
+        # Skipped while an ORCA selector is active: adaptive sampling is the
+        # experimental variable in those variants and must take precedence.
+        if self.domain_negative_selector is not None and self.negative_selector is None:
+            selected = self._select_with_injected_selector(
+                anchor_sample, [], self.max_negatives_per_anchor,
+                selector=self.domain_negative_selector)
+            if selected is not None:
+                return selected
 
         # Choose negative candidate source
         if self.use_in_batch_negatives:
@@ -714,8 +878,20 @@ class BatchProcessor:
             if injected is not None:
                 return injected
 
-        # Check if pathway-aware negative selection is enabled
-        if not self.use_pathway_negatives:
+        # (The domain-level selector is consulted near the top of this method,
+        # before the candidate pool is built — see the comment there for why.)
+
+        # Check whether ANY structured negative selection is enabled.
+        #
+        # This gate used to test ``use_pathway_negatives`` alone, which made
+        # ``ontology_guided_negatives`` a no-op: the constructor built the skill
+        # matcher, but control returned here and sampled at random before the
+        # matcher was ever consulted. A config setting ontology_guided_negatives=True
+        # with use_pathway_negatives=False therefore trained identically to the
+        # baseline while appearing to be an ontology arm — a silent null, not a
+        # crash. Both flags now open the gate; the branch below picks the mechanism.
+        if not self.use_pathway_negatives and not getattr(
+                self, 'ontology_guided_negatives', False):
             # Use simple random negative sampling
             selected_negatives = random.sample(
                 candidate_negatives, min(max_negatives, len(candidate_negatives)))
@@ -727,13 +903,18 @@ class BatchProcessor:
             return selected_negatives, career_distances
 
         # ── Skill-level ontology selection (preferred when available) ──
-        if self.skill_matcher:
+        # Resolves to the injected domain matcher when one is set, else ESCO's.
+        if self._effective_skill_matcher():
             try:
                 resume_uris = anchor_sample.resume.get('skill_uris', [])
                 if resume_uris:
                     anchor_occ = anchor_sample.job.get('occupation_uri', '')
                     return self._select_ontology_negatives(
-                        resume_uris, candidate_negatives, max_negatives, anchor_occ_uri=anchor_occ)
+                        resume_uris, candidate_negatives, max_negatives,
+                        anchor_occ_uri=anchor_occ,
+                        anchor_coarse_uris=anchor_sample.resume.get(
+                            COARSE_URIS_KEY, []),
+                    )
             except Exception as e:
                 logger.warning(f"Ontology negative selection failed: {e}")
 
@@ -939,6 +1120,7 @@ class BatchProcessor:
         candidate_negatives: List[Dict[str, Any]],
         max_negatives: int,
         anchor_occ_uri: str = '',
+        anchor_coarse_uris: Optional[List[str]] = None,
     ) -> tuple[List[Dict[str, Any]], List[float]]:
         """
         Select negatives based on skill-level ontology distance to the resume,
@@ -967,13 +1149,24 @@ class BatchProcessor:
             else:
                 job_uris = job.get('skill_uris', [])
                 if job_uris and resume_skill_uris:
-                    sim = self.skill_matcher.ontology_set_similarity(resume_skill_uris, job_uris)
+                    sim = self._effective_skill_matcher().ontology_set_similarity(
+                        resume_skill_uris, job_uris)
                     skill_distance = 1.0 - sim
                 else:
                     skill_distance = 0.5
 
-            # Blend with ISCO distance if enabled
-            if self.use_isco_negatives and anchor_occ_uri:
+            # Blend with the coarse hierarchy distance if enabled. An injected
+            # ``coarse_distance_fn`` takes precedence over the ESCO/ISCO lookup and
+            # is fed the anchor's and candidate's coarse URI lists; the career path
+            # keeps using the two scalar occupation URIs exactly as before.
+            if self.coarse_distance_fn is not None:
+                coarse = self.coarse_distance_fn(
+                    anchor_coarse_uris or [],
+                    job.get(COARSE_URIS_KEY, []),
+                )
+                w = self.isco_weight if self.use_isco_negatives else 0.5
+                distance = (1.0 - w) * skill_distance + w * coarse
+            elif self.use_isco_negatives and anchor_occ_uri:
                 job_occ = job.get('occupation_uri', '')
                 isco_dist = self._isco_distance(anchor_occ_uri, job_occ)
                 w = self.isco_weight

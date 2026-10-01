@@ -1,0 +1,84 @@
+{
+  "_description": "TRIALS arm A: baseline for the shared-table learning curve. Negatives are drawn at random from the topic's own GRADED qrels pool, with no MeSH involvement. Paired with config/lc_trials_ontneg_only.json, which tiers that same pool by MeSH distance.",
+
+  "_why_this_differs_from_the_label_budget_study": "The earlier trials arms (low_random / low_ontology in trials_domain/label_budget_runner.py) drew negatives from the UNJUDGED corpus and discarded the graded pool entirely. That answers a different question — can an ontology replace relevance judgments — and it is not comparable to the career learning curve, which keeps all its graded negatives and only toggles whether the ontology guides selection. These two configs mirror the career design instead: subsample records across ALL grades proportionally, keep the graded negatives, and vary only ontology-guided tiering. The corpus-negative study remains a separate contribution with its own table.",
+
+  "_paired_with": "config/lc_career_ontneg_only.json / lc_career_baseline.json — same single mechanism over ESCO instead of MeSH.",
+
+  "domain_adapter": "trials",
+
+  "batch_size": 64,
+  "learning_rate": 0.000085,
+  "num_epochs": 15,
+  "temperature": 0.07,
+  "negative_sampling_ratio": 0.7,
+  "shuffle_data": true,
+  "checkpoint_frequency": 500,
+  "log_frequency": 10,
+
+  "text_encoder_model": "sentence-transformers/all-mpnet-base-v2",
+  "text_encoder_device": null,
+  "freeze_text_encoder": true,
+  "projection_dim": 128,
+  "projection_dropout": 0.3,
+  "training_phase": "self_supervised",
+
+  "_comment_cache": "Dedicated path. The shared default is content-hash keyed, so one file would mix career and trials vectors.",
+  "embedding_cache_path": "embedding_cache/trials_text_embeddings.pt",
+  "embedding_cache_size": 30000,
+  "enable_embedding_preload": true,
+  "clear_cache_between_epochs": false,
+
+  "_comment_augmentation": "Off: the career augmenter rewrites role/title text with career transformation rules, which would produce clinically meaningless text from a patient narrative. Both slots already carry a pre-serialized encoder_view.",
+  "use_view_augmentation": false,
+  "max_resume_views": 1,
+  "max_job_views": 1,
+  "fallback_on_augmentation_failure": true,
+
+  "_comment_the_factor": "THE ONE THING THAT VARIES, here switched OFF. With trials_mesh_tiered_negatives=false the graded selector samples uniformly from the topic's ineligible+not_relevant pools rather than tiering them by MeSH distance.",
+  "trials_mesh_tiered_negatives": false,
+
+  "_comment_no_matcher": "No MeSH matcher is attached in this arm, so career_distances stay neutral and no ontology signal reaches training.",
+  "mesh_descriptor_path": "trec-clinical-trials/raw/ontology/desc2021.gz",
+  "mesh_index_cache": "embedding_cache/mesh2021_index.pkl",
+  "mesh_alpha": 0.5,
+  "mesh_max_hops": 12,
+
+  "ontology_weight": 0.0,
+  "use_ot_distance": false,
+  "use_pathway_negatives": false,
+  "pathway_weight": 0.0,
+  "use_isco_negatives": false,
+  "use_reuse_weighting": false,
+  "esco_graph_path": null,
+  "esco_kg_path": null,
+  "esco_occupations_path": null,
+  "esco_skills_path": null,
+
+  "_comment_negatives": "Negatives come from the topic's own graded qrels pool via TrialsNegativeSelector, subsampled with the positives so the label budget is honest. Global pooling is off because pooling across topics would defeat the per-topic graded pool.",
+  "global_negative_sampling": false,
+  "use_in_batch_negatives": false,
+  "max_negatives_per_anchor": 7,
+  "hard_negative_max_distance": 2.0,
+  "medium_negative_max_distance": 4.0,
+
+  "_comment_curriculum": "Grade-1 (ineligible) share of negatives, ramped across training. Identical in both arms so it cannot confound the contrast.",
+  "trials_start_hard_ratio": 0.2,
+  "trials_end_hard_ratio": 0.6,
+  "trials_mesh_score_cap": 100,
+
+  "trials_split_dir": "preprocess/trec_ct_splits",
+  "trials_converted_dir": "preprocess/trec_ct",
+
+  "loss_type": "infonce",
+  "ws2_weight": 0.0,
+  "ot_distance_scale": 10.0,
+
+  "validate_every_n_epochs": 1,
+  "fixed_validation_negatives": true,
+  "validation_negative_epoch": 14,
+  "validation_negative_seed": 1729,
+  "training_seed": 42,
+
+  "orca_enabled": false
+}
