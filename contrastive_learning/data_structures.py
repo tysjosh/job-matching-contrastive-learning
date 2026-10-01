@@ -248,6 +248,32 @@ class TrainingConfig:
     ordinal_fixed_m1: bool = False        # If True, L₂ uses fixed margin (ordinal_m2) instead of φ-guided m₁=α·(1−φ)
     ordinal_curriculum_switch: float = 0.3 # Fraction of epochs before enabling L₂ + L₃ (0.3 = 30%)
 
+    # Source of the level-0 (no_fit) floor in the ordinal margins L₃.
+    #   False (legacy): every sampled InfoNCE negative is treated as no_fit for the
+    #       query resume. Those jobs are unjudged for that resume, so the floor rests
+    #       on an assumption rather than a label.
+    #   True: only the query resume's own judged no_fit records (same resume, same
+    #       batch) are level 0. Sampled negatives still drive InfoNCE (L₁) but no
+    #       longer enter the margins, so every ordinal comparison uses real labels.
+    ordinal_judged_floor: bool = False
+
+    # Random tie-break inside rank-tier ontology negative selection. Without it
+    # equal-distance candidates keep global-pool order, so the hard/medium/easy
+    # cut is decided by pool position for tied distances (pervasive for ISCO,
+    # which has only five distance values). Default False keeps earlier runs
+    # reproducible.
+    ontology_rank_tie_break: bool = False
+
+    # Where φ for the φ-guided L₂ margin m₁ = α·(1 − φ) comes from. Ignored when
+    # ordinal_fixed_m1 is True.
+    #   "precomputed" (legacy): metadata.phi on the anchor record, one value per
+    #       query. Career v7 records carry no phi, so this silently becomes the
+    #       constant 0.5 (m₁ = 0.25) -- a fixed margin in practice.
+    #   "on_the_fly": φ(resume, potential_job) computed per level-1 candidate with
+    #       the ESCO skill matcher (exact URI = 1.0, ≤2 hops = 0.5), giving each
+    #       good/potential pair its own margin.
+    ordinal_phi_source: str = "precomputed"
+
     # Resume-grouped batching: keep same-resume records in one batch so the
     # query-anchored ordinal loss sees graded siblings.
     #   None  -> auto (enabled when loss_type == "ordinal")
@@ -501,6 +527,11 @@ class TrainingConfig:
     # Additive MeSH decomposition controls. Defaults preserve historical runs.
     trials_mesh_facet: str = "all"  # "all" or source-annotated "disease"
     trials_mesh_tier_scope: str = "both"  # "both", "ineligible", "not_relevant"
+    # V2 full-pool sampling; empty preserves the original study exactly.
+    trials_soft_guidance: str = ""  # uniform, text, mesh, hybrid
+    trials_soft_mix: float = 0.5
+    trials_soft_temperature: float = 0.2
+    trials_common_validation: bool = False
     # Subsample of the unjudged corpus used only by the separate
     # judgment-substitution study, not by the learning curve.
     trials_corpus_pool_size: int = 2000
@@ -617,6 +648,11 @@ class TrainingConfig:
 
         if self.max_negatives_per_anchor <= 0:
             raise ValueError("Max negatives per anchor must be positive")
+
+        if self.ordinal_phi_source not in ("precomputed", "on_the_fly"):
+            raise ValueError(
+                "ordinal_phi_source must be 'precomputed' or 'on_the_fly', "
+                f"got: {self.ordinal_phi_source!r}")
         
         # NEW: Validate 2-phase training configuration
         self._validate_training_phase_config()

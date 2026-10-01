@@ -338,10 +338,12 @@ def evaluate_phase1_embeddings(model: nn.Module,
     # built rather than of the model. Collected alongside — never instead of — the
     # binary labels, so the pooled metric is unchanged.
     all_grades = []
+    all_topic_ids = []
 
     with torch.no_grad():
         for batch in data_loader:
             resumes = batch['resume']
+            all_topic_ids.extend(r.get('topic_id') for r in resumes)
             jobs = batch['job']
             labels = batch['label'].numpy()
             all_grades.extend(_batch_grades(jobs, len(labels)))
@@ -422,6 +424,9 @@ def evaluate_phase1_embeddings(model: nn.Module,
     # results file without changing this function's return signature, which other
     # callers depend on.
     evaluate_phase1_embeddings.last_per_grade = graded
+    from trials_domain.patient_metrics import patient_report
+    evaluate_phase1_embeddings.last_per_patient = patient_report(
+        all_topic_ids, all_similarities, all_grades)
 
     return predictions, probabilities, true_labels
 
@@ -666,6 +671,9 @@ def main():
 
     # Additive: graded relevance breakdown, present only for datasets that carry
     # per-candidate grades. Pooled auc_roc above is untouched.
+    per_patient = getattr(evaluate_phase1_embeddings, 'last_per_patient', None)
+    if per_patient:
+        results['per_patient'] = per_patient
     per_grade = getattr(evaluate_phase1_embeddings, 'last_per_grade', None)
     if per_grade:
         results['per_grade'] = per_grade

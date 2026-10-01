@@ -113,6 +113,9 @@ class TrialsNegativeSelector:
         tier_window_frac: float = 0.34,
         mesh_facet: str = "all",
         mesh_tier_scope: str = "both",
+        soft_guidance: str = "",
+        soft_mix: float = 0.5,
+        soft_temperature: float = 0.2,
     ) -> None:
         self.pools = pools
         self.views = views
@@ -126,6 +129,15 @@ class TrialsNegativeSelector:
         self.tier_window_frac = float(tier_window_frac)
         self.mesh_facet = str(mesh_facet)
         self.mesh_tier_scope = str(mesh_tier_scope)
+        if soft_guidance not in {"", "uniform", "text", "mesh", "hybrid"}:
+            raise ValueError(f"unknown soft guidance: {soft_guidance}")
+        if not 0 <= soft_mix < 1 or soft_temperature <= 0:
+            raise ValueError("invalid soft sampler mix/temperature")
+        self.soft_guidance = soft_guidance
+        self.soft_mix = soft_mix
+        self.soft_temperature = soft_temperature
+        self.common_validation_topics = set()
+        self.text_scores = {}
         if self.mesh_facet not in {"all", "disease"}:
             raise ValueError(f"unknown Trials mesh_facet={self.mesh_facet!r}")
         if self.mesh_tier_scope not in {"both", "ineligible", "not_relevant"}:
@@ -221,6 +233,9 @@ class TrialsNegativeSelector:
                 getattr(config, "trials_tier_window_frac", 0.34)),
             mesh_facet=str(getattr(config, "trials_mesh_facet", "all")),
             mesh_tier_scope=str(getattr(config, "trials_mesh_tier_scope", "both")),
+            soft_guidance=str(getattr(config, "trials_soft_guidance", "")),
+            soft_mix=float(getattr(config, "trials_soft_mix", 0.5)),
+            soft_temperature=float(getattr(config, "trials_soft_temperature", 0.2)),
         )
 
     # -------------------------------------------------------------- curriculum
@@ -294,7 +309,36 @@ class TrialsNegativeSelector:
             elif len(easy_pool) > want_easy:
                 want_easy += min(deficit, len(easy_pool) - want_easy)
 
-        if (self.tier_sampling == "random_window" or
+        if self.soft_guidance:
+            from trials_domain.soft_sampling import sample
+
+            guidance = ("uniform" if topic_id in self.common_validation_topics
+                        else self.soft_guidance)
+            signals = []
+            if guidance in {"text", "hybrid"}:
+                if topic_id not in self.text_scores:
+                    raise RuntimeError("prepare frozen text mining scores before training")
+                signals.append(self.text_scores[topic_id])
+            if guidance in {"mesh", "hybrid"}:
+                if self.matcher is None:
+                    raise RuntimeError("MeSH soft sampler requires a matcher")
+                signals.append({n: (1 - self._ontology_distance(anchor_uris, self.views[n])
+                                    if anchor_uris and self.views[n].get(facet_key)
+                                    else None) for n in easy_pool})
+            # Independent tier streams keep the ineligible draw identical in
+            # every arm. Positive identity avoids replaying the same seven
+            # negatives for every eligible trial of a topic within an epoch.
+            positive = getattr(anchor_sample, "job", {}).get("nct_id", "")
+            chosen = []
+            for tier, candidates, count, grade, scores in (
+                    ("ineligible", hard_pool, want_hard, 1, []),
+                    ("not_relevant", easy_pool, want_easy, 0, signals)):
+                tier_rng = _seeded_rng(self.training_seed, e,
+                                       f"{topic_id}|{tier}|{positive}")
+                chosen.extend((n, grade) for n in sample(
+                    candidates, count, tier_rng, scores,
+                    self.soft_mix, self.soft_temperature))
+        elif (self.tier_sampling == "random_window" or
                 (self.mesh_facet != "all" and self.mesh_tiered and
                  self.tier_sampling == "stochastic" and not mesh_active)):
             # Compute the grade allocation from the full pools above, then apply
