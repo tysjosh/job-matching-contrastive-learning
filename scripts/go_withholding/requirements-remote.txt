@@ -1,0 +1,18 @@
+# Pinned environment for the GO/PPI withholding grid on a remote CUDA machine
+# (REMOTE_RUN_GO_PPI.md). Versions are the ones the study code was developed and
+# tested with (local .venv, Python 3.13.5). torch is installed separately from the
+# CUDA wheel index first:
+#   pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+numpy==2.3.2
+scipy==1.16.1
+scikit-learn==1.7.1
+pandas==2.3.2
+networkx==3.5
+PyYAML==6.0.2
+tqdm==4.67.1
+sentence-transformers==5.1.0
+transformers==4.55.4
+tokenizers==0.21.4
+huggingface-hub==0.34.4
+safetensors==0.6.2
+pytest==8.4.2

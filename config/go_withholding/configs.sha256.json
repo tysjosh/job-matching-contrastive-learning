@@ -1,0 +1,6 @@
+{
+  "baseline.json": "de18a898958ca92811b539da4ab85cfcf89bbfe55faa751e3fe72cda50a8315c",
+  "both.json": "c463dc860e236e0ed995dfd58cdc3e3100a890a2ad029fbd6301525252caa46b",
+  "loss_only.json": "c963378c34aab76bc7044c8b40062f972d70952056729abb52ea9924f9f12246",
+  "neg_only.json": "d723e844ba35bdf7619bbe5f94f1cc3250d82eef76c1200f42e010fe44e5363a"
+}

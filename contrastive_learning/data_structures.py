@@ -239,6 +239,11 @@ class TrainingConfig:
     go_ordinal_margin_high_weak: float = 0.1
     go_ordinal_margin_weak_unobserved: float = 0.05
     go_ordinal_rank_temperature: float = 0.1
+    # GO relation-preservation term (withholding study). 0.0 = off, byte-identical to every
+    # existing config. When > 0 requires domain_adapter="go_ppi" and loss_type in
+    # {"go_ordinal","infonce"}. The GoRelationTable is attached to the LOSS ENGINE only, never
+    # to the batch processor, so it cannot open GO-tiered negative selection.
+    go_ontology_loss_weight: float = 0.0
 
     # Ordinal contrastive loss (OCL) configuration
     ordinal_alpha: float = 0.5            # φ-guided margin scale: m₁(φ) = α·(1 − φ)
@@ -603,6 +608,16 @@ class TrainingConfig:
     # that isolates the ontology effect.
     go_ppi_tier_sampling: str = "deterministic"
     go_ppi_tier_window_frac: float = 0.34
+    # Withholding study (review v3 finding 1). True: anchors with no annotation in a
+    # GO-tiered cell use the random_window path (same draws as the control) instead of
+    # the uniform full-pool fallback. False (default) = today's behaviour, byte-identical
+    # for every existing config. Set True in all four study configs (a shared field).
+    go_ppi_unannotated_anchor_window: bool = False
+    # Withholding study, remote GPU execution (user decision B). Read ONLY by
+    # scripts/run_learning_curve_point.py (CLI --device overrides it): "auto" (default)
+    # = today's behaviour (CUDA when available, else CPU), "cuda" = require CUDA for
+    # the frozen encoder and the projection head, "cpu" = force CPU.
+    training_device: str = "auto"
 
     def __post_init__(self):
         """Validate configuration parameters."""

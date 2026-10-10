@@ -82,6 +82,22 @@ class ContrastiveLossEngine:
                 raise ValueError('GO ordinal weights and margins must be finite and nonnegative')
             if not 0 < self.go_ordinal_rank_temperature < float('inf'):
                 raise ValueError('GO ordinal ranking temperature must be finite and positive')
+        # GO relation-preservation term (withholding study). Off (0.0) by default:
+        # _with_go_relation then returns the base loss object unchanged.
+        self.go_ontology_loss_weight = float(getattr(config, 'go_ontology_loss_weight', 0.0))
+        if not 0.0 <= self.go_ontology_loss_weight < float('inf'):
+            raise ValueError('go_ontology_loss_weight must be finite and nonnegative')
+        if self.go_ontology_loss_weight > 0:
+            if getattr(config, 'domain_adapter', None) != 'go_ppi':
+                raise ValueError('go_ontology_loss_weight requires domain_adapter="go_ppi"')
+            if self.loss_type not in ('go_ordinal', 'infonce'):
+                raise ValueError('go_ontology_loss_weight supports loss_type go_ordinal or infonce')
+        self.go_relation_table = None
+        self.go_relation_seen_ids: set = set()
+        self.go_relation_missing_ids = 0
+        self.go_relation_skipped_batches = 0
+        self.go_relation_applied_batches = 0
+        self._diagnostic_mode = False
 
         # Ordinal contrastive loss (OCL) parameters
         self.ordinal_alpha = getattr(config, 'ordinal_alpha', 0.5)
@@ -201,7 +217,7 @@ class ContrastiveLossEngine:
             return self._compute_ordinal_loss(triplets, embeddings)
 
         if self.loss_type == 'go_ordinal':
-            return self._compute_go_ordinal_loss(triplets, embeddings)
+            return self._with_go_relation(self._compute_go_ordinal_loss(triplets, embeddings), triplets, embeddings)
 
         # InfoNCE: per-triplet loss averaged
         losses = []
@@ -220,9 +236,104 @@ class ContrastiveLossEngine:
             return torch.tensor(0.0, device=self.device, requires_grad=True)
 
         if len(losses) == 1:
-            return losses[0]
+            return self._with_go_relation(losses[0], triplets, embeddings)
         else:
-            return torch.stack(losses).mean()
+            return self._with_go_relation(torch.stack(losses).mean(), triplets, embeddings)
+
+    # ── GO relation-preservation term (withholding study, additive) ──
+    def set_go_relation_table(self, table) -> None:
+        """Attach the loss-only GoRelationTable (never a matcher)."""
+        self.go_relation_table = table
+
+    def _go_relation_loss(self, triplets: List[ContrastiveTriplet],
+                          embeddings: Dict[str, torch.Tensor]) -> Optional[torch.Tensor]:
+        """Unweighted L_GO on the attached table; counters only on real training steps."""
+        from go_ppi_domain.go_relation import go_relation_loss
+        term, ids, n_missing = go_relation_loss(
+            self.go_relation_table, triplets, embeddings,
+            self._get_content_key, self.device)
+        if torch.is_grad_enabled() and not self._diagnostic_mode:
+            self.go_relation_seen_ids.update(ids)
+            self.go_relation_missing_ids += n_missing
+            if term is None:
+                self.go_relation_skipped_batches += 1
+                logger.debug("L_GO skipped: < 2 annotated table proteins in batch")
+            else:
+                self.go_relation_applied_batches += 1
+        return term
+
+    def _with_go_relation(self, total: torch.Tensor, triplets: List[ContrastiveTriplet],
+                          embeddings: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """``total`` itself when the weight is 0, else ``total + weight * L_GO``."""
+        if self.go_ontology_loss_weight == 0:
+            return total
+        if self.go_relation_table is None:
+            raise RuntimeError("go_ontology_loss_weight>0 but no GoRelationTable attached")
+        term = self._go_relation_loss(triplets, embeddings)
+        if term is None:
+            return total
+        return total + self.go_ontology_loss_weight * term
+
+    def go_ordinal_components(self, triplets: List[ContrastiveTriplet],
+                              embeddings: Dict[str, torch.Tensor],
+                              relation_table=None) -> Dict[str, Optional[torch.Tensor]]:
+        """The go_ordinal loss split into its parts (diagnostics; never touches counters).
+
+        Re-implements the ``_compute_go_ordinal_loss`` loop and returns
+        ``{"infonce", "ranking", "base_total", "go_relation"}`` where
+        ``base_total`` equals ``_compute_go_ordinal_loss`` and ``go_relation`` is
+        the unweighted L_GO on ``relation_table`` (``None`` without a table or
+        with < 2 annotated proteins).
+        """
+        bases, rankings, totals = [], [], []
+        temp = self.go_ordinal_rank_temperature
+        for triplet in triplets:
+            base = self._compute_triplet_loss(triplet, embeddings)
+            if base is None:
+                continue
+            anchor = embeddings[self._get_content_key(triplet.anchor)].to(self.device)
+            positive = embeddings[self._get_content_key(triplet.positive)].to(self.device)
+            high_score = torch.sum(anchor * positive, dim=-1)
+            weak_scores, unobserved_scores = [], []
+            for negative in triplet.negatives:
+                key = self._get_content_key(negative)
+                if key not in embeddings:
+                    continue
+                if negative.get('job_id') == 'dummy_negative':
+                    continue
+                grade = negative.get('grade')
+                if grade not in (0, 1):
+                    raise ValueError(f'GO ordinal negative requires grade 0 or 1, got {grade!r}')
+                score = torch.sum(anchor * embeddings[key].to(self.device), dim=-1)
+                (weak_scores if grade == 1 else unobserved_scores).append(score)
+            ranking = high_score.new_zeros(())
+            if weak_scores and self.go_ordinal_lambda_high_weak:
+                weak = torch.stack(weak_scores)
+                gap = high_score - weak
+                penalty = F.softplus((self.go_ordinal_margin_high_weak - gap) / temp) * temp
+                ranking = ranking + self.go_ordinal_lambda_high_weak * penalty.mean()
+            if (weak_scores and unobserved_scores
+                    and self.go_ordinal_lambda_weak_unobserved):
+                weak = torch.stack(weak_scores)
+                unobserved = torch.stack(unobserved_scores)
+                gap = weak[:, None] - unobserved[None, :]
+                penalty = F.softplus(
+                    (self.go_ordinal_margin_weak_unobserved - gap) / temp) * temp
+                ranking = ranking + self.go_ordinal_lambda_weak_unobserved * penalty.mean()
+            bases.append(base)
+            rankings.append(ranking)
+            totals.append(base + ranking)
+        if not totals:
+            raise ValueError('GO ordinal loss received no triplets with embeddings')
+        go_relation = None
+        if relation_table is not None:
+            from go_ppi_domain.go_relation import go_relation_loss
+            go_relation, _ids, _missing = go_relation_loss(
+                relation_table, triplets, embeddings, self._get_content_key, self.device)
+        return {"infonce": torch.stack(bases).mean(),
+                "ranking": torch.stack(rankings).mean(),
+                "base_total": torch.stack(totals).mean(),
+                "go_relation": go_relation}
 
     def _compute_go_ordinal_loss(self, triplets: List[ContrastiveTriplet],
                                  embeddings: Dict[str, torch.Tensor]) -> torch.Tensor:

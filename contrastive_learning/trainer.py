@@ -818,6 +818,11 @@ class ContrastiveLearningTrainer:
                 self.structured_logger.logger.warning(
                     f"Epoch diagnostic error: {diagnostic_error}")
 
+        epoch_stats = {"epoch": self.current_epoch, "failed_batches": failed_batches,
+                       "ok_batches": len(epoch_losses), "avg_loss": avg_epoch_loss}
+        for callback in getattr(self, 'epoch_end_callbacks', ()):
+            callback(self, self.current_epoch, epoch_stats)
+
         return avg_epoch_loss
 
     def _validate_epoch(self, validation_path: Path) -> float:

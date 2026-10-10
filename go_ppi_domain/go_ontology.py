@@ -63,6 +63,7 @@ from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -162,18 +163,85 @@ def parse_obo(path: Path) -> Tuple[Dict[str, Set[str]], Dict[str, str], Dict[str
     return parents, namespace, alt_to_main, name
 
 
+def uniprot_accession(token: str) -> Optional[str]:
+    """``"UniProtKB:P12345-2"`` -> ``"P12345"``; ``None`` for any other prefix."""
+    if not token.startswith("UniProtKB:"):
+        return None
+    acc = token[len("UniProtKB:"):].split(":", 1)[0]
+    head, sep, tail = acc.rpartition("-")
+    if sep and head and tail.isdigit():
+        acc = head
+    return acc or None
+
+
+def with_from_names_other_protein(with_from: str, symbol: str,
+                                  symbol_map: Dict[str, str]) -> bool:
+    """True when a ``|``/``,``-separated col-8 UniProtKB token maps to a symbol != ``symbol``."""
+    if not with_from:
+        return False
+    for token in with_from.replace(",", "|").split("|"):
+        acc = uniprot_accession(token.strip())
+        if acc is None:
+            continue
+        other = symbol_map.get(acc)
+        if other is not None and other != symbol:
+            return True
+    return False
+
+
+def obo_descendants(parents: Dict[str, Set[str]], root: str) -> FrozenSet[str]:
+    """Strict descendants of ``root`` over ``parse_obo`` parents (is_a + part_of)."""
+    children: Dict[str, Set[str]] = defaultdict(set)
+    for t, ps in parents.items():
+        for p in ps:
+            children[p].add(t)
+    out: Set[str] = set()
+    stack = [root]
+    while stack:
+        for ch in children.get(stack.pop(), ()):
+            if ch not in out:
+                out.add(ch)
+                stack.append(ch)
+    out.discard(root)
+    return frozenset(out)
+
+
 def parse_gaf(
     path: Path,
     aspect: str,
     excluded_evidence: Iterable[str] = DEFAULT_EXCLUDED_EVIDENCE,
     excluded_terms: Iterable[str] = DEFAULT_EXCLUDED_TERMS,
     taxon: str = "taxon:9606",
+    *,
+    with_from_symbol_map: Optional[Dict[str, str]] = None,
+    drop_with_from_human_protein: bool = False,
+    excluded_term_roots: Iterable[str] = (),
+    descendants_of: Optional[Callable[[str], FrozenSet[str]]] = None,
 ) -> Tuple[Dict[str, Set[str]], Dict[str, int]]:
     """Parse a GAF into ``{gene_symbol: {direct GO terms}}`` plus drop counters."""
     excluded_evidence = frozenset(excluded_evidence)
     excluded_terms = frozenset(excluded_terms)
     direct: Dict[str, Set[str]] = defaultdict(set)
     stats: Dict[str, int] = defaultdict(int)
+    # Leak-pruning options (withholding study, design 1.2). All default off; with
+    # the defaults no extra counter is created and the output is unchanged.
+    #   drop_with_from_human_protein: drop a row when any col-8 ``UniProtKB:``
+    #     token (isoform suffix stripped) maps through ``with_from_symbol_map`` to
+    #     a symbol other than col 3. Self-references are kept.
+    #   excluded_term_roots: drop a row whose GO id is a root or one of its
+    #     descendants, ``descendants_of(root)`` giving the strict descendants.
+    excluded_term_roots = tuple(excluded_term_roots)
+    if drop_with_from_human_protein and with_from_symbol_map is None:
+        raise ValueError("drop_with_from_human_protein requires with_from_symbol_map")
+    if excluded_term_roots and descendants_of is None:
+        raise ValueError("excluded_term_roots requires descendants_of")
+    excluded_root_terms: FrozenSet[str] = frozenset().union(
+        *({r} | set(descendants_of(r)) for r in excluded_term_roots)) \
+        if excluded_term_roots else frozenset()
+    if drop_with_from_human_protein:
+        stats["drop_with_from_human_protein"] = 0
+    if excluded_term_roots:
+        stats["drop_excluded_root_descendant"] = 0
 
     opener = gzip.open if str(path).endswith(".gz") else open
     with opener(path, "rt", encoding="utf-8", errors="replace") as fh:
@@ -199,6 +267,13 @@ def parse_gaf(
                 continue
             if not tax.startswith(taxon):
                 stats["drop_taxon"] += 1
+                continue
+            if drop_with_from_human_protein and with_from_names_other_protein(
+                    c[7], symbol, with_from_symbol_map):
+                stats["drop_with_from_human_protein"] += 1
+                continue
+            if go_id in excluded_root_terms:
+                stats["drop_excluded_root_descendant"] += 1
                 continue
             direct[symbol].add(go_id)
             stats["kept"] += 1
@@ -265,7 +340,21 @@ class GoIndex:
         excluded_evidence: Iterable[str] = DEFAULT_EXCLUDED_EVIDENCE,
         excluded_terms: Iterable[str] = DEFAULT_EXCLUDED_TERMS,
         coarse_max_depth: int = DEFAULT_COARSE_MAX_DEPTH,
+        *,
+        leak_pruning: Optional[Dict[str, Any]] = None,
+        with_from_symbol_map: Optional[Dict[str, str]] = None,
     ) -> "GoIndex":
+        # Leak pruning (withholding study, design 1.2): keys
+        # "with_from_human_protein" (bool) and "excluded_term_roots" (list).
+        # ``None`` keeps today's build exactly; meta then has no "leak_pruning".
+        if leak_pruning is not None:
+            leak_pruning = {
+                "with_from_human_protein": bool(
+                    leak_pruning.get("with_from_human_protein", False)),
+                "excluded_term_roots": list(leak_pruning.get("excluded_term_roots", ())),
+            }
+            if leak_pruning["with_from_human_protein"] and with_from_symbol_map is None:
+                raise ValueError("leak_pruning requires with_from_symbol_map")
         obo_path, gaf_path = Path(obo_path), Path(gaf_path)
         if not obo_path.exists():
             raise GoOntologyError(f"GO OBO not found: {obo_path}")
@@ -314,6 +403,16 @@ class GoIndex:
 
         direct_raw, gaf_stats = parse_gaf(
             gaf_path, aspect, excluded_evidence, excluded_terms)
+        if leak_pruning is not None:
+            # Re-parse with the pruning filters (kept as a separate call so the
+            # default path above stays byte-identical). Descendants come from
+            # the full, all-namespace OBO parents, not the aspect-restricted ones.
+            direct_raw, gaf_stats = parse_gaf(
+                gaf_path, aspect, excluded_evidence, excluded_terms,
+                with_from_symbol_map=with_from_symbol_map,
+                drop_with_from_human_protein=leak_pruning["with_from_human_protein"],
+                excluded_term_roots=leak_pruning["excluded_term_roots"],
+                descendants_of=lambda root: obo_descendants(parents, root))
 
         direct: Dict[str, FrozenSet[str]] = {}
         closure: Dict[str, FrozenSet[str]] = {}
@@ -360,6 +459,13 @@ class GoIndex:
             "gaf_stats": gaf_stats,
             "unmapped_terms": len(unmapped),
         }
+        if leak_pruning is not None:
+            meta["leak_pruning"] = {
+                "with_from_human_protein": leak_pruning["with_from_human_protein"],
+                "excluded_term_roots": leak_pruning["excluded_term_roots"],
+                "accession_map_size": len(with_from_symbol_map or {}),
+                "gaf_stats": gaf_stats,
+            }
         logger.info(
             "GoIndex built: aspect=%s, %d terms, %d genes, median closure %d terms",
             aspect, len(ancestors), len(closure),
