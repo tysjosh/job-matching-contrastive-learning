@@ -99,12 +99,30 @@ class ContrastiveLossEngine:
         # good_fit=3 (strong positive), potential_fit=1 (weak positive), no_fit=0 (negative)
         self.relevance_scores = {'good_fit': 3.0, 'potential_fit': 1.0, 'no_fit': 0.0}
 
-        # Skill matcher for on-the-fly φ(resume_p, job_α) in ordinal L₂
+        # Ordinal floor / margin sources (see TrainingConfig for the semantics).
+        self.ordinal_judged_floor = bool(getattr(config, 'ordinal_judged_floor', False))
+        self.ordinal_phi_source = getattr(config, 'ordinal_phi_source', 'precomputed')
+        self._warned_missing_phi = False
+
+        # Skill matcher: used for φ(resume, potential_job) in L₂ when
+        # ordinal_phi_source == "on_the_fly".
         self.skill_matcher = skill_matcher
-        if skill_matcher and self.loss_type == 'ordinal' and not self.ordinal_fixed_m1:
-            logger.info("OntologySkillMatcher available — L₂ will compute φ(resume_p, job_α) on the fly")
-        elif self.loss_type == 'ordinal' and not self.ordinal_fixed_m1 and not skill_matcher:
-            logger.warning("No skill_matcher provided — L₂ will fall back to precomputed φ(resume_p, job_p)")
+        if self.loss_type == 'ordinal':
+            if self.ordinal_fixed_m1:
+                logger.info("Ordinal L₂ margin: FIXED m₁ = m₂ = %.3f", self.ordinal_m2)
+            elif self.ordinal_phi_source == 'on_the_fly':
+                if skill_matcher is None:
+                    raise ValueError(
+                        "ordinal_phi_source='on_the_fly' requires a skill matcher, "
+                        "but none was provided to the loss engine.")
+                logger.info("Ordinal L₂ margin: per-pair m₁ = α·(1 − φ(resume, potential_job)), "
+                            "φ computed on the fly (α=%.3f)", self.ordinal_alpha)
+            else:
+                logger.info("Ordinal L₂ margin: m₁ = α·(1 − metadata.phi) per query "
+                            "(precomputed; falls back to φ=0.5 when the record has no phi)")
+            logger.info("Ordinal L₃ floor: %s",
+                        "judged same-resume no_fit records" if self.ordinal_judged_floor
+                        else "sampled InfoNCE negatives (unjudged for the query)")
 
         # ── Enhanced φ: essential/optional skill weighting ──
         self.phi_use_weighted = getattr(config, 'phi_use_weighted', False)
@@ -632,6 +650,23 @@ class ContrastiveLossEngine:
         decay = 1.0 - self.margin_anneal_rate * epoch_ratio
         return self.ordinal_lambda1 * max(0.0, decay)
 
+    def _phi_for(self, resume_key: str, resume_uris: List[str],
+                 job_key: str, job: Dict[str, Any]) -> Optional[float]:
+        """Memoised φ(resume, job) for the on-the-fly L₂ margin.
+
+        φ depends only on the two skill-URI sets, so it is constant across
+        epochs; caching it keeps the per-batch cost to a dictionary lookup after
+        the first epoch.
+        """
+        cache = getattr(self, '_phi_cache', None)
+        if cache is None:
+            cache = self._phi_cache = {}
+        k = (resume_key, job_key)
+        if k not in cache:
+            cache[k] = self._compute_phi_on_the_fly(
+                resume_uris, job.get('skill_uris', []) or [])
+        return cache[k]
+
     def _compute_phi_on_the_fly(self, resume_skill_uris: List[str],
                                 job_skill_uris: List[str]) -> Optional[float]:
         """
@@ -758,8 +793,8 @@ class ContrastiveLossEngine:
         # Every comparison is anchored on ONE resume r (the query). We rank the
         # jobs seen for r by their fit level using the CORRECT similarity
         # sim(r, job). Jobs and their levels come from two sources:
-        #   Source A (true labels): positive jobs of every triplet that shares
-        #     this resume_id — genuine good_fit / potential_fit supervision.
+        #   Source A (true labels): each triplet's good_fit job plus its
+        #     same-resume potential_fit candidates (binary-negative records).
         #   Negatives: treated as the no_fit floor (level 0).
         # This removes the previous cross-query leakage and the degenerate
         # s_n == s_alpha bug (negatives now enter via sim(r, neg_job)).
@@ -767,8 +802,33 @@ class ContrastiveLossEngine:
         LEVEL = {'good_fit': 2, 'potential_fit': 1, 'no_fit': 0}
         tier_weights = {'A': 1.0, 'B': 0.9, 'C': 0.75, 'D': 0.6, 'F': 0.5}
 
-        # Group jobs per query resume_id: rid -> {r_emb, tier, phi, jobs:[(emb,level)]}
+        # Group jobs per query resume_id:
+        #   rid -> {r_emb, tier, phi, resume_uris, jobs:[(emb, level)], job_phi:[φ or None]}
+        # job_phi holds the per-candidate φ used by the on-the-fly L₂ margin; it
+        # is only meaningful for level-1 entries.
+        on_the_fly_phi = (not self.ordinal_fixed_m1
+                          and self.ordinal_phi_source == 'on_the_fly')
         groups: Dict[str, Dict[str, Any]] = {}
+
+        def _add_job(g, key, level, job=None):
+            """Append one graded job to a query group.
+
+            In judged-floor mode every (job, level) enters a group once. Without
+            de-duplication a resume with k good_fit anchors in the batch would
+            repeat each sibling k times, weighting potential/floor pairs k-fold
+            relative to good/floor pairs.
+            """
+            if self.ordinal_judged_floor:
+                tag = (key, level)
+                if tag in g['seen']:
+                    return
+                g['seen'].add(tag)
+            phi = None
+            if level == 1 and on_the_fly_phi and job is not None:
+                phi = self._phi_for(g['resume_key'], g['resume_uris'], key, job)
+            g['jobs'].append((embeddings[key].to(self.device), level))
+            g['job_phi'].append(phi)
+
         for triplet in triplets:
             resume_key = self._get_content_key(triplet.anchor)
             pos_key = self._get_content_key(triplet.positive)
@@ -779,11 +839,25 @@ class ContrastiveLossEngine:
             rid = vm.get('resume_id') or resume_key
             g = groups.get(rid)
             if g is None:
+                raw_phi = vm.get('phi')
+                if (raw_phi is None and not self.ordinal_fixed_m1
+                        and self.ordinal_phi_source == 'precomputed'
+                        and not self._warned_missing_phi):
+                    logger.warning(
+                        "Ordinal L₂: record has no metadata.phi; precomputed mode "
+                        "falls back to φ=0.5, i.e. a constant m₁=%.3f. Use "
+                        "ordinal_phi_source='on_the_fly' or ordinal_fixed_m1=True "
+                        "to make the margin explicit.", self.ordinal_alpha * 0.5)
+                    self._warned_missing_phi = True
                 g = {
                     'r_emb': embeddings[resume_key].to(self.device),
                     'tier': vm.get('quality_tier', 'F'),
-                    'phi': vm.get('phi') if vm.get('phi') is not None else 0.5,
+                    'phi': raw_phi if raw_phi is not None else 0.5,
+                    'resume_key': resume_key,
+                    'resume_uris': triplet.anchor.get('skill_uris', []) or [],
                     'jobs': [],
+                    'job_phi': [],
+                    'seen': set(),
                 }
                 groups[rid] = g
 
@@ -798,6 +872,7 @@ class ContrastiveLossEngine:
                 anchor_rank = self._cve_band_rank(cve_anchor_band)
                 pos_level = self._cve_band_level(anchor_rank, vm.get('cve_positive_band'))
                 g['jobs'].append((embeddings[pos_key].to(self.device), pos_level))
+                g['job_phi'].append(None)
                 neg_bands = vm.get('cve_negative_bands') or []
                 for i, negative in enumerate(triplet.negatives):
                     neg_key = self._get_content_key(negative)
@@ -806,16 +881,28 @@ class ContrastiveLossEngine:
                         g['jobs'].append(
                             (embeddings[neg_key].to(self.device),
                              self._cve_band_level(anchor_rank, band)))
+                        g['job_phi'].append(None)
             else:
                 # Positive job with its TRUE label (describes (r, j⁺)).
                 pos_level = LEVEL.get(vm.get('positive_original_label', 'good_fit'), 2)
-                g['jobs'].append((embeddings[pos_key].to(self.device), pos_level))
+                _add_job(g, pos_key, pos_level)
 
-                # Negatives: sampled non-matches for r → no_fit floor (level 0).
-                for negative in triplet.negatives:
-                    neg_key = self._get_content_key(negative)
-                    if neg_key in embeddings:
-                        g['jobs'].append((embeddings[neg_key].to(self.device), 0))
+                # Binary-negative potential_fit siblings are ordinal level 1,
+                # not additional InfoNCE positives or no_fit negatives.
+                for candidate in vm.get('ordinal_candidates', []):
+                    candidate_key = self._get_content_key(candidate)
+                    if candidate_key in embeddings:
+                        _add_job(g, candidate_key, 1, candidate)
+
+                # Level-0 floor.
+                #   judged: the resume's own labelled no_fit records only.
+                #   legacy: sampled InfoNCE negatives, assumed no_fit for r.
+                floor = (vm.get('ordinal_floor', []) if self.ordinal_judged_floor
+                         else triplet.negatives)
+                for floor_job in floor:
+                    floor_key = self._get_content_key(floor_job)
+                    if floor_key in embeddings:
+                        _add_job(g, floor_key, 0)
 
         # ── Compute per-query ordinal margins (vectorized, no .item()) ──
         effective_lambda1 = self._get_effective_lambda1()
@@ -841,9 +928,21 @@ class ContrastiveLossEngine:
             li = levels.unsqueeze(1)
             lj = levels.unsqueeze(0)
 
-            # φ-guided margin for the good(2) > potential(1) step.
+            # Margin for the good(2) > potential(1) step.
+            #   fixed:       m₁ = m₂ for every pair
+            #   precomputed: one m₁ per query from the anchor's metadata.phi
+            #   on_the_fly:  one m₁ per potential candidate j, from φ(r, job_j);
+            #                broadcast over rows so pair (i, j) uses m₁(j).
             if self.ordinal_fixed_m1:
                 m1 = self.ordinal_m2
+            elif on_the_fly_phi:
+                m1_cols = [
+                    self.ordinal_m2 if (p is None or p >= self.phi_gate_threshold)
+                    else self.ordinal_alpha * (1.0 - p)
+                    for p in g['job_phi']
+                ]
+                m1 = torch.tensor(m1_cols, dtype=torch.float32,
+                                  device=self.device).unsqueeze(0)   # [1, K]
             else:
                 phi_q = g['phi']
                 if phi_q is None or phi_q >= self.phi_gate_threshold:
