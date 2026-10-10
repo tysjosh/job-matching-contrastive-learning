@@ -1,0 +1,27 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "NIT",
+      "title": "Amendment-row test (a) reads the live protocol and breaks once a real AM1 is recorded",
+      "where": "design §14 test_sweep_driver.py 'Amendment rows' case (a)",
+      "fix": "Use a fixture copy of the v6 §13 section (header only) for the AM1 refusal; separately assert parse_amendment_rows(PROTOCOL) succeeds on the real file."
+    },
+    {
+      "id": 2,
+      "severity": "NIT",
+      "title": "A '|' inside a cause/fix cell makes the whole amendments table unparseable",
+      "where": "design §1.3 parse_amendment_rows; protocol §13 row rules",
+      "fix": "Split cells on (?<!\\\\)\\| and unescape \\| to |; state in protocol §13 that a literal | is written \\|; add a §14 case."
+    },
+    {
+      "id": 3,
+      "severity": "NIT",
+      "title": "rescore writes DONE.json from the current lc_manifest.json without checking it is unchanged since training",
+      "where": "design §12.3 evaluation-only failure branch and rescore",
+      "fix": "Record lc_manifest_sha256 in eval-stage FAILED.json; rescore refuses (exit 2, lc_manifest_changed_after_failure) on mismatch; add §15 cell and §14 case."
+    }
+  ],
+  "reviewDoc": "/Users/olukotunjosh/Downloads/CDCL/.agents/tasks/ontology-withholding-feasibility/design_review.md"
+}

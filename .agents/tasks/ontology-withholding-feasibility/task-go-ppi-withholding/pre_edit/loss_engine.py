@@ -1,0 +1,1523 @@
+"""
+Contrastive loss engine for pathway-aware contrastive learning.
+
+This module implements the ContrastiveLossEngine that computes contrastive loss
+with temperature scaling, pathway weighting, and support for multiple view combinations.
+"""
+
+import torch
+import logging
+from typing import List, Dict, Any, Optional
+
+try:
+    import torch
+    import torch.nn.functional as F
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+from .data_structures import ContrastiveTriplet, TrainingConfig
+
+logger = logging.getLogger(__name__)
+
+
+class ContrastiveLossEngine:
+    """
+    Computes pathway-weighted contrastive loss for resume-job matching.
+
+    This engine implements contrastive loss with temperature scaling and pathway-aware
+    weighting that gives higher importance to career-relevant distinctions. It supports
+    multiple view combinations and includes numerical stability checks.
+    """
+
+    def __init__(self, config: TrainingConfig, skill_matcher=None):
+        """
+        Initialize the contrastive loss engine.
+
+        Args:
+            config: Training configuration containing temperature, pathway_weight, etc.
+            skill_matcher: Optional OntologySkillMatcher for on-the-fly φ computation
+                          in ordinal loss L₂. If None, falls back to precomputed φ.
+
+        Raises:
+            ImportError: If PyTorch is not available
+        """
+        if not TORCH_AVAILABLE:
+            raise ImportError(
+                "PyTorch is required for ContrastiveLossEngine. "
+                "Install with: pip install torch"
+            )
+
+        self.config = config
+        self.temperature = config.temperature
+        self.device = torch.device(
+            'cuda' if torch.cuda.is_available() else 'cpu')
+
+        # Numerical stability parameters
+        self.eps = 1e-8
+        self.max_exp = 50.0  # Prevent overflow in exp
+        self.gradient_clip_value = 1.0
+
+        # Sample-level weighting: quality tier + ontology coverage
+        self.ontology_weight = getattr(config, 'ontology_weight', 0.3)
+        self.ot_distance_scale = getattr(config, 'ot_distance_scale', 10.0)
+        self.use_ot_distance = getattr(config, 'use_ot_distance', True)
+
+        # Loss function selection: "infonce", "wasserstein", "hybrid", or "ordinal"
+        self.loss_type = getattr(config, 'loss_type', 'infonce')
+        self.ws2_weight = getattr(config, 'ws2_weight', 0.3)
+        self.go_ordinal_lambda_high_weak = getattr(config, 'go_ordinal_lambda_high_weak', 1.0)
+        self.go_ordinal_lambda_weak_unobserved = getattr(config, 'go_ordinal_lambda_weak_unobserved', 0.1)
+        self.go_ordinal_margin_high_weak = getattr(config, 'go_ordinal_margin_high_weak', 0.1)
+        self.go_ordinal_margin_weak_unobserved = getattr(config, 'go_ordinal_margin_weak_unobserved', 0.05)
+        self.go_ordinal_rank_temperature = getattr(config, 'go_ordinal_rank_temperature', 0.1)
+        if self.loss_type == 'go_ordinal':
+            if getattr(config, 'domain_adapter', None) != 'go_ppi':
+                raise ValueError('go_ordinal loss requires domain_adapter="go_ppi"')
+            weights = (self.go_ordinal_lambda_high_weak,
+                       self.go_ordinal_lambda_weak_unobserved)
+            margins = (self.go_ordinal_margin_high_weak,
+                       self.go_ordinal_margin_weak_unobserved)
+            if any(not 0 <= x < float('inf') for x in (*weights, *margins)):
+                raise ValueError('GO ordinal weights and margins must be finite and nonnegative')
+            if not 0 < self.go_ordinal_rank_temperature < float('inf'):
+                raise ValueError('GO ordinal ranking temperature must be finite and positive')
+
+        # Ordinal contrastive loss (OCL) parameters
+        self.ordinal_alpha = getattr(config, 'ordinal_alpha', 0.5)
+        self.ordinal_lambda1 = getattr(config, 'ordinal_lambda1', 1.0)
+        self.ordinal_lambda2 = getattr(config, 'ordinal_lambda2', 1.0)
+        self.ordinal_m2 = getattr(config, 'ordinal_m2', 0.3)
+        self.ordinal_curriculum_switch = getattr(config, 'ordinal_curriculum_switch', 0.3)
+        self.ordinal_fixed_m1 = getattr(config, 'ordinal_fixed_m1', False)
+
+        # Curriculum learning state (set by trainer each epoch)
+        self.current_epoch = 0
+        self.total_epochs = getattr(config, 'num_epochs', 15)
+
+        # Graduated relevance scores for Wasserstein loss
+        # good_fit=3 (strong positive), potential_fit=1 (weak positive), no_fit=0 (negative)
+        self.relevance_scores = {'good_fit': 3.0, 'potential_fit': 1.0, 'no_fit': 0.0}
+
+        # Ordinal floor / margin sources (see TrainingConfig for the semantics).
+        self.ordinal_judged_floor = bool(getattr(config, 'ordinal_judged_floor', False))
+        self.ordinal_phi_source = getattr(config, 'ordinal_phi_source', 'precomputed')
+        self._warned_missing_phi = False
+
+        # Skill matcher: used for φ(resume, potential_job) in L₂ when
+        # ordinal_phi_source == "on_the_fly".
+        self.skill_matcher = skill_matcher
+        if self.loss_type == 'ordinal':
+            if self.ordinal_fixed_m1:
+                logger.info("Ordinal L₂ margin: FIXED m₁ = m₂ = %.3f", self.ordinal_m2)
+            elif self.ordinal_phi_source == 'on_the_fly':
+                if skill_matcher is None:
+                    raise ValueError(
+                        "ordinal_phi_source='on_the_fly' requires a skill matcher, "
+                        "but none was provided to the loss engine.")
+                logger.info("Ordinal L₂ margin: per-pair m₁ = α·(1 − φ(resume, potential_job)), "
+                            "φ computed on the fly (α=%.3f)", self.ordinal_alpha)
+            else:
+                logger.info("Ordinal L₂ margin: m₁ = α·(1 − metadata.phi) per query "
+                            "(precomputed; falls back to φ=0.5 when the record has no phi)")
+            logger.info("Ordinal L₃ floor: %s",
+                        "judged same-resume no_fit records" if self.ordinal_judged_floor
+                        else "sampled InfoNCE negatives (unjudged for the query)")
+
+        # ── Enhanced φ: essential/optional skill weighting ──
+        self.phi_use_weighted = getattr(config, 'phi_use_weighted', False)
+        self.phi_essential_weight = getattr(config, 'phi_essential_weight', 1.0)
+        self.phi_optional_weight = getattr(config, 'phi_optional_weight', 0.5)
+        self.essential_skills = {}  # occupation_uri -> set of essential skill URIs
+        self.optional_skills = {}   # occupation_uri -> set of optional skill URIs
+
+        if self.phi_use_weighted:
+            esco_relations_path = getattr(config, 'esco_relations_path', None)
+            if esco_relations_path:
+                self._load_essential_optional_skills(esco_relations_path)
+            else:
+                logger.warning("phi_use_weighted=True but no esco_relations_path — falling back to uniform weighting")
+                self.phi_use_weighted = False
+
+        # ── Adaptive margin annealing ──
+        self.margin_anneal = getattr(config, 'margin_anneal', False)
+        self.margin_anneal_rate = getattr(config, 'margin_anneal_rate', 1.0)
+
+        # ── Confidence-gated margins ──
+        self.phi_gate_threshold = getattr(config, 'phi_gate_threshold', 1.0)
+
+        # ── ISCO proximity for loss weighting ──
+        self.isco_loss_weight = getattr(config, 'isco_loss_weight', False)
+
+        # ── Symmetric loss (ConFit-inspired) ──
+        self.use_symmetric_loss = getattr(config, 'use_symmetric_loss', False)
+        self.occ_to_isco = {}
+        if self.isco_loss_weight:
+            esco_occ_path = getattr(config, 'esco_occupations_path', None)
+            if esco_occ_path:
+                self._load_isco_codes(esco_occ_path)
+            else:
+                logger.warning("isco_loss_weight=True but no esco_occupations_path")
+                self.isco_loss_weight = False
+
+        logger.info(f"Initialized ContrastiveLossEngine with temperature={self.temperature}, "
+                    f"loss_type={self.loss_type}, ws2_weight={self.ws2_weight}, "
+                    f"ontology_weight={self.ontology_weight}, use_ot_distance={self.use_ot_distance}, "
+                    f"ordinal_alpha={self.ordinal_alpha}, ordinal_m2={self.ordinal_m2}, "
+                    f"device={self.device}")
+
+    def compute_loss(self, triplets: List[ContrastiveTriplet],
+                     embeddings: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Compute contrastive loss for a batch of triplets.
+
+        For InfoNCE: computes per-triplet loss and averages.
+        For Wasserstein: collects all triplets into a batch matrix and computes
+        2-Wasserstein distance once (following SyCL's batch-level approach).
+
+        Args:
+            triplets: List of ContrastiveTriplet objects
+            embeddings: Dictionary mapping content to embeddings
+
+        Returns:
+            torch.Tensor: Computed contrastive loss
+
+        Raises:
+            ValueError: If triplets is empty or embeddings are missing
+        """
+        if not triplets:
+            raise ValueError("Cannot compute loss for empty triplets list")
+
+        if not embeddings:
+            raise ValueError("Embeddings dictionary cannot be empty")
+
+        if self.loss_type == 'wasserstein':
+            return self._compute_batch_wasserstein_loss(triplets, embeddings)
+
+        if self.loss_type == 'hybrid':
+            return self._compute_hybrid_loss(triplets, embeddings)
+
+        if self.loss_type == 'ordinal':
+            return self._compute_ordinal_loss(triplets, embeddings)
+
+        if self.loss_type == 'go_ordinal':
+            return self._compute_go_ordinal_loss(triplets, embeddings)
+
+        # InfoNCE: per-triplet loss averaged
+        losses = []
+        
+        for triplet in triplets:
+            try:
+                triplet_loss = self._compute_triplet_loss(triplet, embeddings)
+                if triplet_loss is not None:
+                    losses.append(triplet_loss)
+            except Exception as e:
+                logger.warning(f"Failed to compute loss for triplet: {e}")
+                continue
+
+        if not losses:
+            logger.warning("No valid triplets found for loss computation")
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+
+        if len(losses) == 1:
+            return losses[0]
+        else:
+            return torch.stack(losses).mean()
+
+    def _compute_go_ordinal_loss(self, triplets: List[ContrastiveTriplet],
+                                 embeddings: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """InfoNCE plus same-anchor high>weak and weak>unobserved ranking.
+
+        Each comparison is averaged within its evidence tier before the batch
+        mean, so the number of grade-0 candidates cannot drown out grade 1.
+        The weak>unobserved term is intentionally downweighted because an
+        unrecorded STRING edge is not a confirmed non-interaction.
+        """
+        losses = []
+        temp = self.go_ordinal_rank_temperature
+        for triplet in triplets:
+            base = self._compute_triplet_loss(triplet, embeddings)
+            if base is None:
+                continue
+            anchor_key = self._get_content_key(triplet.anchor)
+            positive_key = self._get_content_key(triplet.positive)
+            anchor = embeddings[anchor_key].to(self.device)
+            positive = embeddings[positive_key].to(self.device)
+            high_score = torch.sum(anchor * positive, dim=-1)
+            weak_scores, unobserved_scores = [], []
+            for negative in triplet.negatives:
+                key = self._get_content_key(negative)
+                if key not in embeddings:
+                    continue
+                # Some validation anchors have no graded pool and the shared
+                # batch processor supplies this placeholder. Keep its ordinary
+                # InfoNCE contribution, but it has no evidence rank to compare.
+                if negative.get('job_id') == 'dummy_negative':
+                    continue
+                grade = negative.get('grade')
+                if grade not in (0, 1):
+                    raise ValueError(f'GO ordinal negative requires grade 0 or 1, got {grade!r}')
+                score = torch.sum(anchor * embeddings[key].to(self.device), dim=-1)
+                (weak_scores if grade == 1 else unobserved_scores).append(score)
+
+            ranking = high_score.new_zeros(())
+            if weak_scores and self.go_ordinal_lambda_high_weak:
+                weak = torch.stack(weak_scores)
+                gap = high_score - weak
+                penalty = F.softplus((self.go_ordinal_margin_high_weak - gap) / temp) * temp
+                ranking = ranking + self.go_ordinal_lambda_high_weak * penalty.mean()
+            if (weak_scores and unobserved_scores
+                    and self.go_ordinal_lambda_weak_unobserved):
+                weak = torch.stack(weak_scores)
+                unobserved = torch.stack(unobserved_scores)
+                gap = weak[:, None] - unobserved[None, :]
+                penalty = F.softplus(
+                    (self.go_ordinal_margin_weak_unobserved - gap) / temp) * temp
+                ranking = ranking + self.go_ordinal_lambda_weak_unobserved * penalty.mean()
+            losses.append(base + ranking)
+
+        if not losses:
+            raise ValueError('GO ordinal loss received no triplets with embeddings')
+        return torch.stack(losses).mean()
+
+    def _compute_triplet_loss(self, triplet: ContrastiveTriplet,
+                              embeddings: Dict[str, torch.Tensor]) -> Optional[torch.Tensor]:
+        """
+        Compute contrastive loss for a single triplet.
+
+        Applies ontology-aware positive weighting when scores are available
+        in view_metadata (from precomputed ESCO enrichment).
+
+        Args:
+            triplet: ContrastiveTriplet containing anchor, positive, and negatives
+            embeddings: Dictionary mapping content to embeddings
+
+        Returns:
+            torch.Tensor: Loss for this triplet, or None if computation fails
+        """
+        try:
+            # Get embeddings for anchor (resume), positive (job), and negatives
+            anchor_key = self._get_content_key(triplet.anchor)
+            positive_key = self._get_content_key(triplet.positive)
+
+            if anchor_key not in embeddings or positive_key not in embeddings:
+                logger.warning("Missing embeddings for anchor or positive")
+                return None
+
+            anchor_emb = embeddings[anchor_key]
+            positive_emb = embeddings[positive_key]
+
+            # Get negative embeddings
+            negative_embs = []
+
+            for i, negative in enumerate(triplet.negatives):
+                negative_key = self._get_content_key(negative)
+                if negative_key in embeddings:
+                    negative_embs.append(embeddings[negative_key])
+
+            if not negative_embs:
+                logger.warning("No valid negative embeddings found")
+                return None
+
+            # Dispatch to selected loss function
+            if self.loss_type == 'wasserstein':
+                # Pure Wasserstein: per-triplet EMD fallback
+                neg_labels = triplet.view_metadata.get('negative_original_labels', [])
+                pos_label = triplet.view_metadata.get('positive_original_label', 'good_fit')
+                loss = self._wasserstein_loss(
+                    anchor_emb, positive_emb, negative_embs, pos_label, neg_labels)
+            else:
+                # InfoNCE for both "infonce" and "hybrid" modes
+                # (hybrid's WS2 component is computed at batch level in _compute_hybrid_loss)
+                loss = self._infonce_loss(anchor_emb, positive_emb, negative_embs)
+
+                # Symmetric loss: also compute job→resume direction with resume negatives
+                if self.use_symmetric_loss:
+                    # Get resume negatives from view_metadata (populated by batch processor)
+                    resume_negatives = triplet.view_metadata.get('resume_negatives', [])
+                    if resume_negatives:
+                        # Use actual resume negatives for the reverse direction
+                        resume_neg_embs = []
+                        for resume_neg in resume_negatives:
+                            neg_key = self._get_content_key(resume_neg)
+                            if neg_key in embeddings:
+                                resume_neg_embs.append(embeddings[neg_key])
+                        if resume_neg_embs:
+                            reverse_loss = self._infonce_loss(positive_emb, anchor_emb, resume_neg_embs)
+                            if reverse_loss is not None:
+                                loss = (loss + reverse_loss) / 2.0
+                    else:
+                        # Fallback: use job negatives (old behavior, semantically wrong)
+                        reverse_loss = self._infonce_loss(positive_emb, anchor_emb, negative_embs)
+                        if reverse_loss is not None:
+                            loss = (loss + reverse_loss) / 2.0
+
+            if loss is None:
+                return None
+
+            # Apply sample-level ontology weight (label confidence + data quality)
+            ont_weight = self._compute_ontology_weight(triplet.view_metadata)
+            loss = loss * ont_weight
+
+            return loss
+
+        except Exception as e:
+            logger.error(f"Error computing triplet loss: {e}")
+            return None
+
+    def _compute_ontology_weight(self, view_metadata: Dict[str, Any]) -> float:
+        """
+        Compute a sample-level weight based on precomputed ontology scores.
+
+        Uses ontology_similarity and ot_distance from ESCO enrichment to
+        upweight samples where the ontology confirms the label signal,
+        and downweight samples with weak/missing ontology evidence.
+
+        Args:
+            view_metadata: Triplet metadata containing ontology scores
+
+        Returns:
+            float: Multiplicative weight for this sample's loss (0.5 to 1.5)
+        """
+        if self.ontology_weight == 0.0:
+            return 1.0
+
+        ont_sim = view_metadata.get('ontology_similarity')
+        ot_dist = view_metadata.get('ot_distance') if self.use_ot_distance else None
+        tier = view_metadata.get('quality_tier', 'F')
+
+        # Base weight from quality tier
+        tier_weights = {'A': 1.0, 'B': 0.9, 'C': 0.75, 'D': 0.6, 'F': 0.5}
+        base = tier_weights.get(tier, 0.5)
+
+        if ont_sim is None and ot_dist is None:
+            return base
+
+        # Ontology signal: blend similarity and normalized OT distance
+        ont_signal = 0.0
+        count = 0
+        if ont_sim is not None:
+            ont_signal += ont_sim  # 0-1, higher = more similar
+            count += 1
+        if ot_dist is not None:
+            # Normalize OT distance to 0-1 (inverted: lower distance = higher signal)
+            normalized_ot = max(0.0, 1.0 - ot_dist / self.ot_distance_scale)
+            ont_signal += normalized_ot
+            count += 1
+
+        if count > 0:
+            ont_signal /= count  # average of available signals, 0-1
+
+        # Add ISCO proximity signal if enabled
+        if self.isco_loss_weight:
+            # Get occupation URIs from the triplet's positive job
+            # The anchor is a resume, positive is the matched job
+            # ISCO proximity measures how well the job's occupation aligns
+            job_occ = view_metadata.get('job_occupation_uri', '')
+            resume_occ = view_metadata.get('resume_occupation_uri', '')
+            if job_occ and resume_occ:
+                isco_prox = self._isco_proximity(job_occ, resume_occ)
+                ont_signal = (ont_signal * count + isco_prox) / (count + 1)
+                count += 1
+
+        # Final weight: base ± ontology adjustment
+        weight = base * (1.0 + self.ontology_weight * (2.0 * ont_signal - 1.0))
+
+        # Clamp to reasonable range
+        return max(0.5, min(1.5, weight))
+
+    def _infonce_loss(self, anchor: torch.Tensor, positive: torch.Tensor,
+                      negatives: List[torch.Tensor]) -> torch.Tensor:
+        """
+        Compute standard InfoNCE contrastive loss.
+
+        Negative difficulty is handled by the selection strategy (ontology-based
+        bucketing with curriculum learning), not by per-negative weighting.
+
+        Args:
+            anchor: Anchor embedding (resume), L2-normalized
+            positive: Positive embedding (matching job), L2-normalized
+            negatives: List of negative embeddings (non-matching jobs), L2-normalized
+
+        Returns:
+            torch.Tensor: InfoNCE loss
+        """
+        # Ensure all tensors are on the same device
+        anchor = anchor.to(self.device)
+        positive = positive.to(self.device)
+        negatives = [neg.to(self.device) for neg in negatives]
+
+        # Compute similarities (dot product on normalized vectors = cosine similarity)
+        pos_sim = torch.sum(anchor * positive, dim=-1) / self.temperature
+
+        neg_sims = []
+        for neg_emb in negatives:
+            neg_sim = torch.sum(anchor * neg_emb, dim=-1) / self.temperature
+            neg_sims.append(neg_sim)
+
+        # Clamp similarities to prevent overflow
+        pos_sim = torch.clamp(pos_sim, max=self.max_exp)
+        neg_sims = [torch.clamp(sim, max=self.max_exp) for sim in neg_sims]
+
+        # Standard InfoNCE: -log(exp(pos) / (exp(pos) + sum(exp(neg_i))))
+        pos_exp = torch.exp(pos_sim)
+        neg_exps = torch.stack([torch.exp(s) for s in neg_sims])
+        denominator = pos_exp + torch.sum(neg_exps)
+
+        # Numerical stability
+        denominator = torch.clamp(denominator, min=self.eps, max=1e10)
+        ratio = pos_exp / denominator
+        ratio = torch.clamp(ratio, min=self.eps, max=1.0)
+        loss = -torch.log(ratio)
+
+        if torch.isnan(loss) or torch.isinf(loss):
+            logger.warning("NaN or infinite loss detected, returning zero loss")
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+
+        return loss
+
+    def _wasserstein_loss(self, anchor: torch.Tensor, positive: torch.Tensor,
+                          negatives: List[torch.Tensor],
+                          positive_label: str,
+                          negative_labels: List[str]) -> torch.Tensor:
+        """
+        Compute Wasserstein-based contrastive loss with graduated relevance.
+
+        Per-triplet fallback used when batch-level WS2 fails or for single triplets.
+        Uses 1-Wasserstein (EMD) as a simpler alternative.
+
+        Args:
+            anchor: Anchor embedding (resume), L2-normalized
+            positive: Positive embedding (matching job), L2-normalized
+            negatives: List of negative embeddings, L2-normalized
+            positive_label: Original label of the positive (good_fit/potential_fit)
+            negative_labels: Original labels of each negative
+
+        Returns:
+            torch.Tensor: Wasserstein loss (scalar)
+        """
+        anchor = anchor.to(self.device)
+        positive = positive.to(self.device)
+        negatives = [neg.to(self.device) for neg in negatives]
+
+        # Build similarity logits: [positive, neg_0, neg_1, ...]
+        pos_sim = torch.sum(anchor * positive, dim=-1, keepdim=True) / self.temperature
+        neg_sims = [torch.sum(anchor * neg, dim=-1, keepdim=True) / self.temperature for neg in negatives]
+        logits = torch.cat([pos_sim] + neg_sims, dim=-1)
+        logits = torch.clamp(logits, max=self.max_exp)
+
+        # Build target relevance scores
+        pos_score = self.relevance_scores.get(positive_label, 3.0)
+        neg_scores = []
+        for i, neg_emb in enumerate(negatives):
+            label = negative_labels[i] if i < len(negative_labels) else 'no_fit'
+            neg_scores.append(self.relevance_scores.get(label, 0.0))
+
+        target_scores = torch.tensor(
+            [pos_score] + neg_scores, dtype=torch.float64, device=self.device
+        )
+
+        # Convert to distributions and compute EMD
+        pred_dist = F.softmax(logits.double(), dim=-1)
+        target_dist = F.softmax(target_scores, dim=-1)
+
+        sorted_indices = torch.argsort(target_scores, descending=True)
+        pred_sorted = pred_dist[sorted_indices]
+        target_sorted = target_dist[sorted_indices]
+
+        pred_cdf = torch.cumsum(pred_sorted, dim=-1)
+        target_cdf = torch.cumsum(target_sorted, dim=-1)
+        emd = torch.sum(torch.abs(pred_cdf - target_cdf))
+
+        loss = emd.float()
+
+        if torch.isnan(loss) or torch.isinf(loss):
+            logger.warning("NaN/Inf in Wasserstein loss, returning zero")
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+
+        return loss
+
+    def set_epoch(self, epoch: int) -> None:
+        """Set current epoch for curriculum learning in ordinal loss."""
+        self.current_epoch = epoch
+
+    def _load_isco_codes(self, csv_path: str) -> None:
+        """Load occupation_uri -> ISCO code mapping."""
+        import csv
+        with open(csv_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                uri = row.get('conceptUri', '')
+                isco = row.get('iscoGroup', '')
+                if uri and isco:
+                    self.occ_to_isco[uri] = isco
+        logger.info(f"Loaded {len(self.occ_to_isco)} ISCO codes for loss weighting")
+
+    def _isco_proximity(self, occ_uri_a: str, occ_uri_b: str) -> float:
+        """ISCO proximity score (0-1, higher = closer occupations). 5-level hierarchy."""
+        isco_a = self.occ_to_isco.get(occ_uri_a, '')
+        isco_b = self.occ_to_isco.get(occ_uri_b, '')
+        if not isco_a or not isco_b:
+            return 0.5
+        if isco_a == isco_b:
+            return 1.0
+        if len(isco_a) >= 3 and len(isco_b) >= 3 and isco_a[:3] == isco_b[:3]:
+            return 0.8
+        if len(isco_a) >= 2 and len(isco_b) >= 2 and isco_a[:2] == isco_b[:2]:
+            return 0.6
+        if isco_a[:1] == isco_b[:1]:
+            return 0.3
+        return 0.0
+
+    def _load_essential_optional_skills(self, csv_path: str) -> None:
+        """Load essential/optional skill sets per occupation from ESCO relations CSV."""
+        import csv
+        count = 0
+        with open(csv_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                occ_uri = row['occupationUri']
+                skill_uri = row['skillUri']
+                rel_type = row['relationType']
+                if rel_type == 'essential':
+                    self.essential_skills.setdefault(occ_uri, set()).add(skill_uri)
+                elif rel_type == 'optional':
+                    self.optional_skills.setdefault(occ_uri, set()).add(skill_uri)
+                count += 1
+        logger.info(f"Loaded {count} ESCO skill-occupation relations "
+                    f"({len(self.essential_skills)} occupations with essential skills)")
+
+    def _compute_phi_weighted(self, resume_skill_uris: List[str],
+                               job_skill_uris: List[str],
+                               job_occupation_uri: Optional[str] = None) -> Optional[float]:
+        """
+        Compute weighted φ where essential skills count more than optional.
+
+        Each job skill's contribution to the denominator is weighted:
+          - essential skill: phi_essential_weight (default 1.0)
+          - optional skill:  phi_optional_weight (default 0.5)
+          - unknown:         1.0 (fallback)
+
+        Numerator credit per skill uses the same Strategy D as before.
+        """
+        if not self.skill_matcher:
+            return None
+
+        job_skills = list(set(job_skill_uris))
+        resume_skills = list(set(resume_skill_uris))
+
+        if not job_skills:
+            return None
+        if not resume_skills:
+            return 0.0
+
+        # Look up essential/optional sets for this occupation
+        ess_set = self.essential_skills.get(job_occupation_uri, set()) if job_occupation_uri else set()
+        opt_set = self.optional_skills.get(job_occupation_uri, set()) if job_occupation_uri else set()
+
+        total_credit = 0.0
+        total_weight = 0.0
+        for j_uri in job_skills:
+            # Determine weight for this skill
+            if j_uri in ess_set:
+                w = self.phi_essential_weight
+            elif j_uri in opt_set:
+                w = self.phi_optional_weight
+            else:
+                w = 1.0  # unknown relation — treat as essential
+
+            # Compute credit (Strategy D)
+            best_credit = 0.0
+            for r_uri in resume_skills:
+                d = self.skill_matcher.skill_distance(j_uri, r_uri)
+                if d is not None:
+                    if d == 0:
+                        best_credit = 1.0
+                        break
+                    elif d <= 2 and best_credit < 0.5:
+                        best_credit = 0.5
+
+            total_credit += w * best_credit
+            total_weight += w
+
+        return total_credit / total_weight if total_weight > 0 else 0.0
+
+    def _get_effective_lambda1(self) -> float:
+        """Get λ₁ with optional adaptive annealing: λ₁(t) = λ₁ · (1 − rate · t/T)."""
+        if not self.margin_anneal:
+            return self.ordinal_lambda1
+        epoch_ratio = self.current_epoch / max(1, self.total_epochs)
+        decay = 1.0 - self.margin_anneal_rate * epoch_ratio
+        return self.ordinal_lambda1 * max(0.0, decay)
+
+    def _phi_for(self, resume_key: str, resume_uris: List[str],
+                 job_key: str, job: Dict[str, Any]) -> Optional[float]:
+        """Memoised φ(resume, job) for the on-the-fly L₂ margin.
+
+        φ depends only on the two skill-URI sets, so it is constant across
+        epochs; caching it keeps the per-batch cost to a dictionary lookup after
+        the first epoch.
+        """
+        cache = getattr(self, '_phi_cache', None)
+        if cache is None:
+            cache = self._phi_cache = {}
+        k = (resume_key, job_key)
+        if k not in cache:
+            cache[k] = self._compute_phi_on_the_fly(
+                resume_uris, job.get('skill_uris', []) or [])
+        return cache[k]
+
+    def _compute_phi_on_the_fly(self, resume_skill_uris: List[str],
+                                job_skill_uris: List[str]) -> Optional[float]:
+        """
+        Compute φ(resume, job) on the fly using Strategy D.
+
+        This computes skill coverage of resume against a SPECIFIC job,
+        fixing the bug where precomputed φ used the candidate's own job
+        instead of the anchor's job.
+
+        Strategy D (tight + reduced credit):
+          - Exact URI match:     credit = 1.0
+          - Within 2 graph hops: credit = 0.5
+          - No match:            credit = 0.0
+
+        Args:
+            resume_skill_uris: Skill URIs from the candidate's resume
+            job_skill_uris: Skill URIs from the TARGET job (anchor's job)
+
+        Returns:
+            φ score (0.0 to 1.0), or None if job has no skill URIs
+        """
+        if not self.skill_matcher:
+            return None
+
+        job_skills = list(set(job_skill_uris))
+        resume_skills = list(set(resume_skill_uris))
+
+        if not job_skills:
+            return None
+        if not resume_skills:
+            return 0.0
+
+        total_credit = 0.0
+        for j_uri in job_skills:
+            best_credit = 0.0
+            for r_uri in resume_skills:
+                d = self.skill_matcher.skill_distance(j_uri, r_uri)
+                if d is not None:
+                    if d == 0:
+                        best_credit = 1.0
+                        break  # exact match, no need to check further
+                    elif d <= 2 and best_credit < 0.5:
+                        best_credit = 0.5
+            total_credit += best_credit
+
+        return total_credit / len(job_skills)
+
+    def _cve_band_rank(self, band):
+        """Ordinal rank of a CVE ``priority_band`` from ``config.cve_band_order``.
+
+        Returns an int rank (lowest→highest severity) or ``None`` when the band is
+        absent / not in the configured order. Career runs never call this (their
+        triplets carry no ``cve_anchor_band``), so the career path is unaffected.
+        """
+        m = getattr(self, "_cve_band_rank_map", None)
+        if m is None:
+            order = getattr(self.config, "cve_band_order", None) or [
+                "watch", "low", "medium", "high", "critical"]
+            m = {str(b).strip().lower(): i for i, b in enumerate(order)}
+            self._cve_band_rank_map = m
+        if band is None:
+            return None
+        return m.get(str(band).strip().lower())
+
+    def _cve_band_level(self, anchor_rank, cand_band) -> int:
+        """Graded relevance (2/1/0) from band proximity to the anchor's band.
+
+        Same band → 2 (good), adjacent band → 1 (potential), distant or unknown
+        band → 0 (no_fit floor). Mirrors the career good/potential/no levels.
+        """
+        if anchor_rank is None:
+            return 0
+        cand_rank = self._cve_band_rank(cand_band)
+        if cand_rank is None:
+            return 0
+        d = abs(anchor_rank - cand_rank)
+        if d == 0:
+            return 2
+        if d == 1:
+            return 1
+        return 0
+
+    def _compute_ordinal_loss(self, triplets: List[ContrastiveTriplet],
+                               embeddings: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Compute ordinal contrastive loss (OCL) = InfoNCE + ordinal margins.
+
+        L₁ = per-triplet InfoNCE (existing pipeline with 7 ontology-selected negatives)
+        L₂ = max(0, m₁(φₚ) − (sᵅ − sₚ))  — good_fit above potential_fit (φ-guided)
+        L₃ = max(0, m₂ − (sₚ − sₙ))       — potential_fit above no_fit (fixed margin)
+
+        Curriculum: easy phase (L₁ + λ₂·L₃), full phase (L₁ + λ₁·L₂ + λ₂·L₃).
+        Strategy B: in-batch selection for cₚ (hardest potential_fit) and cₙ (clearest no_fit).
+
+        Args:
+            triplets: List of ContrastiveTriplet objects
+            embeddings: Dictionary mapping content to embeddings
+
+        Returns:
+            torch.Tensor: Combined ordinal loss
+        """
+        # ── L₁: per-triplet InfoNCE (proven, ontology-selected negatives) ──
+        infonce_losses = []
+        for triplet in triplets:
+            try:
+                tl = self._compute_triplet_loss(triplet, embeddings)
+                if tl is not None:
+                    infonce_losses.append(tl)
+            except Exception:
+                continue
+
+        if not infonce_losses:
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+
+        l1_mean = torch.stack(infonce_losses).mean()
+
+        # ── Determine curriculum phase ──
+        epoch_ratio = self.current_epoch / max(1, self.total_epochs)
+        is_full_phase = epoch_ratio >= self.ordinal_curriculum_switch
+
+        # ─────────────────────────────────────────────────────────────
+        # QUERY-ANCHORED ordinal margins.
+        #
+        # Every comparison is anchored on ONE resume r (the query). We rank the
+        # jobs seen for r by their fit level using the CORRECT similarity
+        # sim(r, job). Jobs and their levels come from two sources:
+        #   Source A (true labels): each triplet's good_fit job plus its
+        #     same-resume potential_fit candidates (binary-negative records).
+        #   Negatives: treated as the no_fit floor (level 0).
+        # This removes the previous cross-query leakage and the degenerate
+        # s_n == s_alpha bug (negatives now enter via sim(r, neg_job)).
+        # ─────────────────────────────────────────────────────────────
+        LEVEL = {'good_fit': 2, 'potential_fit': 1, 'no_fit': 0}
+        tier_weights = {'A': 1.0, 'B': 0.9, 'C': 0.75, 'D': 0.6, 'F': 0.5}
+
+        # Group jobs per query resume_id:
+        #   rid -> {r_emb, tier, phi, resume_uris, jobs:[(emb, level)], job_phi:[φ or None]}
+        # job_phi holds the per-candidate φ used by the on-the-fly L₂ margin; it
+        # is only meaningful for level-1 entries.
+        on_the_fly_phi = (not self.ordinal_fixed_m1
+                          and self.ordinal_phi_source == 'on_the_fly')
+        groups: Dict[str, Dict[str, Any]] = {}
+
+        def _add_job(g, key, level, job=None):
+            """Append one graded job to a query group.
+
+            In judged-floor mode every (job, level) enters a group once. Without
+            de-duplication a resume with k good_fit anchors in the batch would
+            repeat each sibling k times, weighting potential/floor pairs k-fold
+            relative to good/floor pairs.
+            """
+            if self.ordinal_judged_floor:
+                tag = (key, level)
+                if tag in g['seen']:
+                    return
+                g['seen'].add(tag)
+            phi = None
+            if level == 1 and on_the_fly_phi and job is not None:
+                phi = self._phi_for(g['resume_key'], g['resume_uris'], key, job)
+            g['jobs'].append((embeddings[key].to(self.device), level))
+            g['job_phi'].append(phi)
+
+        for triplet in triplets:
+            resume_key = self._get_content_key(triplet.anchor)
+            pos_key = self._get_content_key(triplet.positive)
+            if resume_key not in embeddings or pos_key not in embeddings:
+                continue
+
+            vm = triplet.view_metadata
+            rid = vm.get('resume_id') or resume_key
+            g = groups.get(rid)
+            if g is None:
+                raw_phi = vm.get('phi')
+                if (raw_phi is None and not self.ordinal_fixed_m1
+                        and self.ordinal_phi_source == 'precomputed'
+                        and not self._warned_missing_phi):
+                    logger.warning(
+                        "Ordinal L₂: record has no metadata.phi; precomputed mode "
+                        "falls back to φ=0.5, i.e. a constant m₁=%.3f. Use "
+                        "ordinal_phi_source='on_the_fly' or ordinal_fixed_m1=True "
+                        "to make the margin explicit.", self.ordinal_alpha * 0.5)
+                    self._warned_missing_phi = True
+                g = {
+                    'r_emb': embeddings[resume_key].to(self.device),
+                    'tier': vm.get('quality_tier', 'F'),
+                    'phi': raw_phi if raw_phi is not None else 0.5,
+                    'resume_key': resume_key,
+                    'resume_uris': triplet.anchor.get('skill_uris', []) or [],
+                    'jobs': [],
+                    'job_phi': [],
+                    'seen': set(),
+                }
+                groups[rid] = g
+
+            cve_anchor_band = vm.get('cve_anchor_band')
+            if cve_anchor_band is not None:
+                # CVE ordinal Stage 1: grade EVERY candidate (positive + each
+                # negative) by priority_band proximity to the anchor's band
+                # (same=2, adjacent=1, distant/unknown=0). This is the CVE analogue
+                # of good_fit/potential_fit/no_fit and is the only place the CVE
+                # band ordinal signal enters Stage 1. Career triplets never carry
+                # 'cve_anchor_band', so they take the unchanged branch below.
+                anchor_rank = self._cve_band_rank(cve_anchor_band)
+                pos_level = self._cve_band_level(anchor_rank, vm.get('cve_positive_band'))
+                g['jobs'].append((embeddings[pos_key].to(self.device), pos_level))
+                g['job_phi'].append(None)
+                neg_bands = vm.get('cve_negative_bands') or []
+                for i, negative in enumerate(triplet.negatives):
+                    neg_key = self._get_content_key(negative)
+                    if neg_key in embeddings:
+                        band = neg_bands[i] if i < len(neg_bands) else None
+                        g['jobs'].append(
+                            (embeddings[neg_key].to(self.device),
+                             self._cve_band_level(anchor_rank, band)))
+                        g['job_phi'].append(None)
+            else:
+                # Positive job with its TRUE label (describes (r, j⁺)).
+                pos_level = LEVEL.get(vm.get('positive_original_label', 'good_fit'), 2)
+                _add_job(g, pos_key, pos_level)
+
+                # Binary-negative potential_fit siblings are ordinal level 1,
+                # not additional InfoNCE positives or no_fit negatives.
+                for candidate in vm.get('ordinal_candidates', []):
+                    candidate_key = self._get_content_key(candidate)
+                    if candidate_key in embeddings:
+                        _add_job(g, candidate_key, 1, candidate)
+
+                # Level-0 floor.
+                #   judged: the resume's own labelled no_fit records only.
+                #   legacy: sampled InfoNCE negatives, assumed no_fit for r.
+                floor = (vm.get('ordinal_floor', []) if self.ordinal_judged_floor
+                         else triplet.negatives)
+                for floor_job in floor:
+                    floor_key = self._get_content_key(floor_job)
+                    if floor_key in embeddings:
+                        _add_job(g, floor_key, 0)
+
+        # ── Compute per-query ordinal margins (vectorized, no .item()) ──
+        effective_lambda1 = self._get_effective_lambda1()
+        margin_losses = []
+
+        for g in groups.values():
+            jobs = g['jobs']
+            if len(jobs) < 2:
+                continue
+
+            levels = torch.tensor([lv for _, lv in jobs],
+                                  dtype=torch.float32, device=self.device)
+            # Need at least two distinct levels to form an ordinal pair.
+            if float(levels.max() - levels.min()) < 0.5:
+                continue
+
+            J = torch.stack([e for e, _ in jobs]).to(self.device)   # [K, d]
+            r = g['r_emb']                                          # [d]
+            sims = J @ r                                            # [K] = sim(r, job_k)
+
+            # Pairwise differences and level ordering (broadcast, single kernel).
+            diff = sims.unsqueeze(1) - sims.unsqueeze(0)           # [K,K]: s_i - s_j
+            li = levels.unsqueeze(1)
+            lj = levels.unsqueeze(0)
+
+            # Margin for the good(2) > potential(1) step.
+            #   fixed:       m₁ = m₂ for every pair
+            #   precomputed: one m₁ per query from the anchor's metadata.phi
+            #   on_the_fly:  one m₁ per potential candidate j, from φ(r, job_j);
+            #                broadcast over rows so pair (i, j) uses m₁(j).
+            if self.ordinal_fixed_m1:
+                m1 = self.ordinal_m2
+            elif on_the_fly_phi:
+                m1_cols = [
+                    self.ordinal_m2 if (p is None or p >= self.phi_gate_threshold)
+                    else self.ordinal_alpha * (1.0 - p)
+                    for p in g['job_phi']
+                ]
+                m1 = torch.tensor(m1_cols, dtype=torch.float32,
+                                  device=self.device).unsqueeze(0)   # [1, K]
+            else:
+                phi_q = g['phi']
+                if phi_q is None or phi_q >= self.phi_gate_threshold:
+                    m1 = self.ordinal_m2
+                else:
+                    m1 = self.ordinal_alpha * (1.0 - phi_q)
+
+            w_q = tier_weights.get(g['tier'], 0.5)
+            pair_loss = torch.tensor(0.0, device=self.device)
+
+            # L₃ (both phases): every higher level above the no_fit floor.
+            mask_vs_nofit = ((li > lj) & (lj == 0)).float()
+            if mask_vs_nofit.sum() > 0:
+                viol = F.relu(self.ordinal_m2 - diff) * mask_vs_nofit
+                pair_loss = pair_loss + self.ordinal_lambda2 * (
+                    viol.sum() / mask_vs_nofit.sum())
+
+            # L₂ (full phase only): good(2) above potential(1).
+            if is_full_phase:
+                mask_good_pot = ((li == 2) & (lj == 1)).float()
+                if mask_good_pot.sum() > 0:
+                    viol = F.relu(m1 - diff) * mask_good_pot
+                    pair_loss = pair_loss + effective_lambda1 * (
+                        viol.sum() / mask_good_pot.sum())
+
+            margin_losses.append(w_q * pair_loss)
+
+        if not margin_losses:
+            # No query had ≥2 ordinal levels this batch → InfoNCE only.
+            return l1_mean
+
+        ordinal_margin = torch.stack(margin_losses).mean()
+        return l1_mean + ordinal_margin
+
+    def _compute_hybrid_loss(self, triplets: List[ContrastiveTriplet],
+                              embeddings: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Compute hybrid InfoNCE + WS2 loss.
+
+        Combines the contrastive separation signal from InfoNCE with the
+        ordinal awareness from 2-Wasserstein distance:
+            loss = infonce_loss + ws2_weight * ws2_loss
+
+        InfoNCE ensures positive/negative separation in the embedding space.
+        WS2 adds graduated relevance awareness (good_fit > potential_fit > no_fit).
+
+        Args:
+            triplets: List of ContrastiveTriplet objects
+            embeddings: Dictionary mapping content keys to embeddings
+
+        Returns:
+            torch.Tensor: Combined hybrid loss
+        """
+        # Compute InfoNCE component (per-triplet, averaged)
+        infonce_losses = []
+        for triplet in triplets:
+            try:
+                triplet_loss = self._compute_triplet_loss(triplet, embeddings)
+                if triplet_loss is not None:
+                    infonce_losses.append(triplet_loss)
+            except Exception as e:
+                logger.warning(f"Failed InfoNCE for triplet: {e}")
+                continue
+
+        if not infonce_losses:
+            logger.warning("No valid InfoNCE losses, falling back to WS2 only")
+            return self._compute_batch_wasserstein_loss(triplets, embeddings)
+
+        infonce_loss = torch.stack(infonce_losses).mean()
+
+        # Compute WS2 component (batch-level)
+        try:
+            ws2_loss = self._compute_batch_wasserstein_loss(triplets, embeddings)
+        except Exception as e:
+            logger.warning(f"WS2 computation failed, using InfoNCE only: {e}")
+            return infonce_loss
+
+        if torch.isnan(ws2_loss) or torch.isinf(ws2_loss):
+            logger.warning("Invalid WS2 loss, using InfoNCE only")
+            return infonce_loss
+
+        # Combine: InfoNCE for separation + WS2 for ordinal awareness
+        hybrid_loss = infonce_loss + self.ws2_weight * ws2_loss
+
+        return hybrid_loss
+
+    def _compute_batch_wasserstein_loss(self, triplets: List[ContrastiveTriplet],
+                                         embeddings: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Compute 2-Wasserstein loss at batch level following SyCL (2503.23239).
+
+        Collects all triplets into a batch logits matrix [batch_size, num_items]
+        and a corresponding label matrix, then computes the 2-Wasserstein distance
+        between the predicted and target distributions across the entire batch.
+
+        The batch-level computation captures cross-sample covariance structure
+        that per-triplet computation misses.
+
+        Args:
+            triplets: List of ContrastiveTriplet objects
+            embeddings: Dictionary mapping content keys to embeddings
+
+        Returns:
+            torch.Tensor: Batch-level 2-Wasserstein loss
+        """
+        logit_rows = []
+        label_rows = []
+        ont_weights = []
+
+        for triplet in triplets:
+            try:
+                anchor_key = self._get_content_key(triplet.anchor)
+                positive_key = self._get_content_key(triplet.positive)
+
+                if anchor_key not in embeddings or positive_key not in embeddings:
+                    continue
+
+                anchor_emb = embeddings[anchor_key]
+                positive_emb = embeddings[positive_key]
+
+                neg_embs = []
+                neg_labels_list = triplet.view_metadata.get('negative_original_labels', [])
+                valid_neg_labels = []
+
+                for i, negative in enumerate(triplet.negatives):
+                    neg_key = self._get_content_key(negative)
+                    if neg_key in embeddings:
+                        neg_embs.append(embeddings[neg_key])
+                        label = neg_labels_list[i] if i < len(neg_labels_list) else 'no_fit'
+                        valid_neg_labels.append(label)
+
+                if not neg_embs:
+                    continue
+
+                # Compute similarity logits: [pos_sim, neg_0_sim, neg_1_sim, ...]
+                pos_sim = torch.sum(anchor_emb * positive_emb, dim=-1) / self.temperature
+                neg_sims = [torch.sum(anchor_emb * neg, dim=-1) / self.temperature for neg in neg_embs]
+                row_logits = torch.stack([pos_sim] + neg_sims)
+                row_logits = torch.clamp(row_logits, max=self.max_exp)
+
+                # Build target relevance row
+                pos_label = triplet.view_metadata.get('positive_original_label', 'good_fit')
+                pos_score = self.relevance_scores.get(pos_label, 3.0)
+                neg_scores = [self.relevance_scores.get(l, 0.0) for l in valid_neg_labels]
+                row_labels = torch.tensor([pos_score] + neg_scores, dtype=torch.float64, device=self.device)
+
+                logit_rows.append(row_logits)
+                label_rows.append(row_labels)
+                ont_weights.append(self._compute_ontology_weight(triplet.view_metadata))
+
+            except Exception as e:
+                logger.warning(f"Failed to process triplet for batch WS2: {e}")
+                continue
+
+        if not logit_rows:
+            logger.warning("No valid triplets for batch Wasserstein loss")
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+
+        # Pad rows to same length (triplets may have different negative counts)
+        max_len = max(row.shape[0] for row in logit_rows)
+
+        padded_logits = []
+        padded_labels = []
+        for logits_row, labels_row in zip(logit_rows, label_rows):
+            pad_size = max_len - logits_row.shape[0]
+            if pad_size > 0:
+                # Pad with large negative logit (will get ~0 probability after softmax)
+                logits_row = torch.cat([logits_row, torch.full((pad_size,), -50.0, device=self.device)])
+                # Pad labels with 0 (no_fit)
+                labels_row = torch.cat([labels_row, torch.zeros(pad_size, dtype=torch.float64, device=self.device)])
+            padded_logits.append(logits_row)
+            padded_labels.append(labels_row)
+
+        # Stack into batch matrices [batch_size, num_items]
+        logits_matrix = torch.stack(padded_logits)
+        labels_matrix = torch.stack(padded_labels)
+
+        # Apply ontology weights: scale each row's logits by its weight
+        # This integrates sample-level quality weighting into the batch loss
+        weight_tensor = torch.tensor(ont_weights, dtype=torch.float32, device=self.device)
+        avg_weight = weight_tensor.mean()
+
+        # Compute softmax distributions (following SyCL exactly)
+        # Note: logits already divided by temperature during per-triplet computation,
+        # so we don't divide again here (SyCL divides once in forward())
+        preds = F.softmax(logits_matrix.double(), dim=1)
+        targets = F.softmax(labels_matrix, dim=1)
+
+        # Compute 2-Wasserstein distance between batch distributions
+        ws2_loss = self._ws2_distance(preds, targets)
+
+        # Scale by average ontology weight
+        ws2_loss = ws2_loss.float() * avg_weight
+
+        if torch.isnan(ws2_loss) or torch.isinf(ws2_loss):
+            logger.warning("NaN/Inf in batch WS2 loss, falling back to per-triplet")
+            # Fall back to per-triplet 1-Wasserstein
+            losses = []
+            for triplet in triplets:
+                try:
+                    loss = self._compute_triplet_loss(triplet, embeddings)
+                    if loss is not None:
+                        losses.append(loss)
+                except Exception:
+                    continue
+            if losses:
+                return torch.stack(losses).mean()
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+
+        return ws2_loss
+
+    def _ws2_distance(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+        """
+        Compute 2-Wasserstein distance between two batch distributions.
+
+        Follows the SyCL implementation: treats rows as samples from multivariate
+        Gaussian distributions and computes the closed-form W2 distance using
+        mean difference and covariance trace terms.
+
+        d(P_X, P_Y) = |mu_X - mu_Y|^2 + Tr(cov_X + cov_Y - 2*(cov_X @ cov_Y)^{1/2})
+
+        Fast eigenvalue method from: https://arxiv.org/pdf/2009.14075.pdf
+
+        Args:
+            X: Predicted distributions [batch_size, num_items] (float64)
+            Y: Target distributions [batch_size, num_items] (float64)
+
+        Returns:
+            torch.Tensor: 2-Wasserstein distance (scalar, float64)
+        """
+        import torch.linalg as linalg
+        import math
+
+        # Transpose to [num_items, batch_size] for covariance computation
+        X = X.transpose(0, 1).double()
+        Y = Y.transpose(0, 1).double()
+
+        mu_X = torch.mean(X, dim=1, keepdim=True)
+        mu_Y = torch.mean(Y, dim=1, keepdim=True)
+
+        _, b = X.shape
+        fact = 1.0 if b < 2 else 1.0 / (b - 1)
+        fact_sqrt = math.sqrt(fact)
+
+        # Covariance matrices
+        E_X = X - mu_X
+        E_Y = Y - mu_Y
+        cov_X = torch.matmul(E_X, E_X.t()) * fact
+        cov_Y = torch.matmul(E_Y, E_Y.t()) * fact
+
+        # Tr((cov_X @ cov_Y)^{1/2}) via eigenvalue decomposition
+        C_X = E_X * fact_sqrt
+        C_Y = E_Y * fact_sqrt
+        M_l = torch.matmul(C_X.t(), C_Y)
+        M_r = torch.matmul(C_Y.t(), C_X)
+        M = torch.matmul(M_l, M_r)
+        S = linalg.eigvals(M) + 1e-15
+        sq_tr_cov = S.sqrt().abs().sum()
+
+        trace_term = torch.trace(cov_X + cov_Y) - 2.0 * sq_tr_cov
+
+        # Mean difference term
+        diff = mu_X - mu_Y
+        mean_term = torch.sum(torch.mul(diff, diff))
+
+        return (trace_term + mean_term).real
+
+    def compute_view_combinations_loss(self, triplets: List[ContrastiveTriplet],
+                                       resume_embeddings: Dict[str, torch.Tensor],
+                                       job_embeddings: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Compute contrastive loss across multiple view combinations.
+
+        This method handles cases where we have multiple views of resumes and jobs,
+        computing loss across all valid combinations as specified in Requirement 4.2.
+
+        Args:
+            triplets: List of ContrastiveTriplet objects with view metadata
+            resume_embeddings: Embeddings for different resume views
+            job_embeddings: Embeddings for different job views
+
+        Returns:
+            torch.Tensor: Combined loss across all view combinations
+        """
+        if not triplets:
+            raise ValueError("Cannot compute loss for empty triplets list")
+
+        total_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
+        total_combinations = 0
+
+        for triplet in triplets:
+            # Get view combinations from metadata
+            view_combinations = triplet.view_metadata.get(
+                'view_combinations', [])
+
+            if not view_combinations:
+                # Fallback to original embeddings
+                all_embeddings = {**resume_embeddings, **job_embeddings}
+                triplet_loss = self._compute_triplet_loss(
+                    triplet, all_embeddings)
+                if triplet_loss is not None:
+                    total_loss = total_loss + triplet_loss
+                    total_combinations += 1
+            else:
+                # Compute loss for each view combination
+                for combo in view_combinations:
+                    try:
+                        combo_loss = self._compute_view_combination_loss(
+                            triplet, combo, resume_embeddings, job_embeddings
+                        )
+                        if combo_loss is not None:
+                            total_loss = total_loss + combo_loss
+                            total_combinations += 1
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to compute loss for view combination: {e}")
+                        continue
+
+        if total_combinations == 0:
+            logger.warning(
+                "No valid view combinations found for loss computation")
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+
+        # Average loss across all combinations
+        avg_loss = total_loss / total_combinations
+
+        return avg_loss
+
+    def _compute_view_combination_loss(self, triplet: ContrastiveTriplet,
+                                       view_combination: Dict[str, Any],
+                                       resume_embeddings: Dict[str, torch.Tensor],
+                                       job_embeddings: Dict[str, torch.Tensor]) -> Optional[torch.Tensor]:
+        """
+        Compute loss for a specific view combination.
+
+        Args:
+            triplet: ContrastiveTriplet object
+            view_combination: Dictionary specifying which views to use
+            resume_embeddings: Resume view embeddings
+            job_embeddings: Job view embeddings
+
+        Returns:
+            torch.Tensor: Loss for this view combination, or None if computation fails
+        """
+        try:
+            # Extract view keys from combination
+            resume_view_key = view_combination.get('resume_view_key')
+            positive_view_key = view_combination.get('positive_view_key')
+            negative_view_keys = view_combination.get('negative_view_keys', [])
+
+            # Get embeddings
+            if resume_view_key not in resume_embeddings:
+                return None
+            if positive_view_key not in job_embeddings:
+                return None
+
+            anchor_emb = resume_embeddings[resume_view_key]
+            positive_emb = job_embeddings[positive_view_key]
+
+            # Get negative embeddings
+            negative_embs = []
+
+            for i, neg_key in enumerate(negative_view_keys):
+                if neg_key in job_embeddings and i < len(triplet.career_distances):
+                    negative_embs.append(job_embeddings[neg_key])
+
+            if not negative_embs:
+                return None
+
+            return self._infonce_loss(
+                anchor_emb, positive_emb, negative_embs
+            )
+
+        except Exception as e:
+            logger.error(f"Error computing view combination loss: {e}")
+            return None
+
+    def _get_content_key(self, content: Dict[str, Any]) -> str:
+        """
+        Generate a consistent key for content to look up embeddings.
+        
+        Uses the same key generation method as EmbeddingCache for consistency.
+
+        Args:
+            content: Resume or job content dictionary
+
+        Returns:
+            str: Key for embedding lookup
+        """
+        # Use the same key generation as EmbeddingCache for consistency
+        import hashlib
+        import json
+        try:
+            # Create a normalized representation for consistent hashing
+            normalized_content = self._normalize_content_for_hashing(content)
+            content_str = json.dumps(normalized_content, sort_keys=True, default=str)
+            
+            # Use SHA-256 for better collision resistance than hash()
+            return hashlib.sha256(content_str.encode('utf-8')).hexdigest()[:16]
+        except (TypeError, ValueError) as e:
+            logger.warning(f"Error creating content key: {e}")
+            # Fallback to string representation
+            content_str = str(sorted(content.items()))
+            return hashlib.md5(content_str.encode('utf-8')).hexdigest()[:16]
+    
+    def _normalize_content_for_hashing(self, content: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Normalize content for consistent hashing by removing non-essential fields.
+        
+        Args:
+            content: Original content dictionary
+            
+        Returns:
+            Dict: Normalized content for hashing
+        """
+        # Create a copy and remove metadata that doesn't affect embeddings
+        normalized = {}
+        
+        # Essential fields that affect text encoding. `encoder_view` / `cve`
+        # (CVE domain, spec cve-vulnerability-ranking) are additive: career
+        # records never carry these keys, so their normalized hash is byte-for-byte
+        # unchanged, while CVE slots {cve, encoder_view} hash distinctly instead of
+        # collapsing to a single empty-normalized key.
+        essential_fields = {
+            'experience', 'role', 'experience_level', 'skills', 'keywords',
+            'title', 'jobtitle', 'description', 'jobdescription',
+            'encoder_view', 'cve'
+        }
+        
+        for key, value in content.items():
+            if key in essential_fields:
+                if isinstance(value, (dict, list)):
+                    # Recursively normalize nested structures
+                    normalized[key] = self._normalize_nested_structure(value)
+                else:
+                    normalized[key] = value
+        
+        return normalized
+    
+    def _normalize_nested_structure(self, obj: Any) -> Any:
+        """Recursively normalize nested dictionaries and lists."""
+        if isinstance(obj, dict):
+            return {k: self._normalize_nested_structure(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._normalize_nested_structure(item) for item in obj]
+        else:
+            return obj
+
+    def validate_gradients(self, loss: torch.Tensor, parameters: List[torch.Tensor] = None) -> bool:
+        """
+        Validate that gradients are well-behaved (no NaN or infinite values).
+
+        Args:
+            loss: Loss tensor to validate
+            parameters: List of parameters to check gradients for (optional)
+
+        Returns:
+            bool: True if gradients are valid, False otherwise
+        """
+        if not loss.requires_grad:
+            return True
+
+        try:
+            # For testing purposes, just check if the loss tensor itself is valid
+            if torch.isnan(loss) or torch.isinf(loss):
+                logger.warning("Invalid loss value detected")
+                return False
+
+            # If parameters are provided, check their gradients
+            if parameters:
+                # Compute gradients
+                loss.backward(retain_graph=True)
+
+                for param in parameters:
+                    if param.grad is not None:
+                        if torch.isnan(param.grad).any() or torch.isinf(param.grad).any():
+                            logger.warning(
+                                "Invalid gradients detected in parameters")
+                            return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating gradients: {e}")
+            return False
+
+    def get_loss_components(self, triplets: List[ContrastiveTriplet],
+                            embeddings: Dict[str, torch.Tensor]) -> Dict[str, float]:
+        """
+        Get detailed loss components for analysis and debugging.
+
+        Args:
+            triplets: List of ContrastiveTriplet objects
+            embeddings: Dictionary mapping content to embeddings
+
+        Returns:
+            Dict[str, float]: Dictionary containing loss components and statistics
+        """
+        components = {
+            'total_loss': 0.0,
+            'avg_positive_similarity': 0.0,
+            'avg_negative_similarity': 0.0,
+            'avg_ontology_weight': 0.0,
+            'valid_triplets': 0,
+            'failed_triplets': 0
+        }
+
+        total_pos_sim = 0.0
+        total_neg_sim = 0.0
+        total_ontology_weight = 0.0
+        total_negatives = 0
+
+        for triplet in triplets:
+            try:
+                # Get embeddings
+                anchor_key = self._get_content_key(triplet.anchor)
+                positive_key = self._get_content_key(triplet.positive)
+
+                if anchor_key not in embeddings or positive_key not in embeddings:
+                    components['failed_triplets'] += 1
+                    continue
+
+                # Embeddings are already normalized by the model
+                anchor_emb = embeddings[anchor_key]
+                positive_emb = embeddings[positive_key]
+
+                # Compute positive similarity
+                pos_sim = torch.sum(anchor_emb * positive_emb, dim=-1).item()
+                total_pos_sim += pos_sim
+
+                # Track ontology weight
+                ontology_weight = self._compute_ontology_weight(triplet.view_metadata)
+                total_ontology_weight += ontology_weight
+
+                # Compute negative similarities
+                for i, negative in enumerate(triplet.negatives):
+                    negative_key = self._get_content_key(negative)
+                    if negative_key in embeddings:
+                        neg_emb = embeddings[negative_key]
+                        neg_sim = torch.sum(
+                            anchor_emb * neg_emb, dim=-1).item()
+                        total_neg_sim += neg_sim
+                        total_negatives += 1
+
+                components['valid_triplets'] += 1
+
+            except Exception as e:
+                logger.warning(f"Error analyzing triplet: {e}")
+                components['failed_triplets'] += 1
+
+        # Compute averages
+        if components['valid_triplets'] > 0:
+            components['avg_positive_similarity'] = total_pos_sim / \
+                components['valid_triplets']
+            components['avg_ontology_weight'] = total_ontology_weight / \
+                components['valid_triplets']
+
+        if total_negatives > 0:
+            components['avg_negative_similarity'] = total_neg_sim / \
+                total_negatives
+
+        # Compute total loss
+        total_loss = self.compute_loss(triplets, embeddings)
+        components['total_loss'] = total_loss.item(
+        ) if total_loss.requires_grad else 0.0
+
+        return components
+
+    def clip_gradients(self, parameters: List[torch.Tensor]) -> None:
+        """
+        Apply gradient clipping to model parameters.
+
+        Args:
+            parameters: List of model parameters to clip gradients for
+        """
+        if parameters:
+            torch.nn.utils.clip_grad_value_(
+                parameters, self.gradient_clip_value)

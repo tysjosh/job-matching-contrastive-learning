@@ -1,0 +1,32 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": "R7",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "check": 3,
+      "title": "Residual rename race between overlapping invocations",
+      "detail": "sweep.execute_run now rechecks run_state before os.replace (R5 fixed), but the recheck and the rename are still two separate steps. REMOTE_RUN section 6 acknowledges this and requires disjoint shards for concurrent invocations.",
+      "action": "None required; keep the disjoint-shard rule."
+    },
+    {
+      "id": "R8",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "check": 3,
+      "title": "Local absolute path in design prose",
+      "detail": "Line 3 of design_go_ppi.md cites the protocol by an absolute /Users/... path. It is document prose, not a config, manifest, condition file or pin, so portability is unaffected.",
+      "action": "Optionally make it repo-relative the next time the design is edited."
+    }
+  ],
+  "checksPassed": {
+    "1_amendment_and_counts": "Unchanged from pass 1: the AM1 dated row is in protocol section 13 with the escaping rule and is mirrored in the design. Counts are 24/121/2,420 (20/101/2,020) everywhere, and the denominator stays 720.",
+    "2_singleton_packing": "Unchanged: singleton_packs keeps only the per-target cap and the retention check. There are no pack-mate constraints, no slot cycling and no 24->20 packing fallback.",
+    "3_device_shard_resume_paths": "R1 fixed: test paths come from __file__, and the no-machine-path test covers go_ppi_domain/tests. A relocated-copy G0 run passed 335 tests with 3 skipped, and the slow suite passed 3. R2-R6 are fixed: fences pair, /300 is excluded, the crashed-host recovery is documented, execute_run rechecks before the rename, and the make_conditions guard is 5 GB. The sweep keeps its 3 GB guard per 100-run invocation, with a design note.",
+    "4_additive": "check_additive.py exit 0 is recorded after the fix pass. The fix pass did not touch the shared contrastive_learning files.",
+    "5_weight_zero_identity": "Unchanged: torch.equal tests on the loss and all gradients, against the field being absent and against the pre-edit engine.",
+    "6_protected_and_uncommitted": "Spot-check: all 11 protected files match protected_sha256.txt. HEAD is still c911188, nothing was committed, and no study artifacts or pins exist."
+  },
+  "reviewDoc": "/Users/olukotunjosh/Downloads/CDCL/.agents/tasks/ontology-withholding-feasibility/task-go-ppi-withholding/../review_go_ppi.md"
+}

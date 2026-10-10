@@ -1,0 +1,93 @@
+diff --git a/contrastive_learning/trainer.py b/contrastive_learning/trainer.py
+index f3260ff..24a2cd1 100644
+--- a/contrastive_learning/trainer.py
++++ b/contrastive_learning/trainer.py
+@@ -122,7 +122,7 @@ class ContrastiveLearningTrainer:
+         self.batch_processor = BatchProcessor(
+             config, esco_graph_path=final_esco_path)
+         self.loss_engine = ContrastiveLossEngine(
+-            config, skill_matcher=self.batch_processor.skill_matcher)
++            config, skill_matcher=self._loss_skill_matcher(config))
+ 
+         # Initialize semantic text encoder from config
+         self.text_encoder = SentenceTransformer(config.text_encoder_model)
+@@ -344,6 +344,44 @@ class ContrastiveLearningTrainer:
+                                                 memory_info["system_memory_mb"] or 0,
+                                                 memory_info["gpu_memory_mb"])
+ 
++    def _loss_skill_matcher(self, config: TrainingConfig):
++        """Skill matcher handed to the LOSS engine only.
++
++        Reuses the batch processor's matcher when it already built one (ontology
++        negative-selection arms). Otherwise, when the ordinal loss needs φ on the
++        fly, builds a separate matcher that is never attached to the batch
++        processor. Attaching it there would be a silent confound: with
++        ``use_pathway_negatives=True`` the negative-selection gate is open, and
++        the mere presence of a matcher switches random negatives to ESCO-tiered
++        ones, turning a baseline arm into an ontology-negative arm.
++        """
++        existing = self.batch_processor.skill_matcher
++        needs_phi = (getattr(config, 'loss_type', None) == 'ordinal'
++                     and not getattr(config, 'ordinal_fixed_m1', False)
++                     and getattr(config, 'ordinal_phi_source', 'precomputed') == 'on_the_fly')
++        if existing is not None or not needs_phi:
++            return existing
++
++        import os
++        from .ontology_skill_matcher import OntologySkillMatcher
++
++        kg_path = getattr(config, 'esco_kg_path', None) or config.esco_graph_path
++        if not kg_path or not os.path.exists(kg_path):
++            raise FileNotFoundError(
++                f"ordinal_phi_source='on_the_fly' needs the ESCO KG for the skill "
++                f"matcher, but esco_kg_path={kg_path!r} does not exist.")
++        matcher = OntologySkillMatcher(kg_path)
++        cache = getattr(config, 'skill_distance_cache_path', None)
++        if cache and os.path.exists(cache):
++            matcher.load_precomputed_distances(cache)
++        else:
++            logger.warning(
++                "Skill-distance cache %r not found; on-the-fly φ will fall back to "
++                "graph shortest paths (correct, but slow).", cache)
++        logger.info("Built a loss-only OntologySkillMatcher for on-the-fly φ "
++                    "(negative selection is unaffected).")
++        return matcher
++
+     # ------------------------------------------------------------------ ORCA seams
+     # Purely additive dependency-inverted injection points. This module never
+     # imports the ``orca`` package; an external orchestrator passes duck-typed
+@@ -1065,6 +1103,13 @@ class ContrastiveLearningTrainer:
+                         content_key_to_type[negative_key] = (negative, 'job')
+                         ordered_keys.append(negative_key)
+ 
++                for candidate in (triplet.view_metadata.get('ordinal_candidates', [])
++                                  + triplet.view_metadata.get('ordinal_floor', [])):
++                    candidate_key = self.embedding_cache.get_content_key(candidate)
++                    if candidate_key not in content_key_to_type:
++                        content_key_to_type[candidate_key] = (candidate, 'job')
++                        ordered_keys.append(candidate_key)
++
+                 # Also collect resume negatives for symmetric loss
+                 for resume_neg in triplet.view_metadata.get('resume_negatives', []):
+                     rn_key = self.embedding_cache.get_content_key(resume_neg)
+@@ -1142,6 +1187,8 @@ class ContrastiveLearningTrainer:
+             for content, ctype in (
+                 [(triplet.anchor, 'resume'), (triplet.positive, 'job')]
+                 + [(neg, 'job') for neg in triplet.negatives]
++                + [(candidate, 'job') for candidate in triplet.view_metadata.get('ordinal_candidates', [])]
++                + [(floor_job, 'job') for floor_job in triplet.view_metadata.get('ordinal_floor', [])]
+                 + [(rn, 'resume') for rn in triplet.view_metadata.get('resume_negatives', [])]
+             ):
+                 key = self.embedding_cache.get_content_key(content)
+@@ -1375,6 +1422,11 @@ class ContrastiveLearningTrainer:
+                     negative_key = self._get_content_key(negative)
+                     all_content[negative_key] = ('job', negative)
+ 
++                for candidate in (triplet.view_metadata.get('ordinal_candidates', [])
++                                  + triplet.view_metadata.get('ordinal_floor', [])):
++                    candidate_key = self._get_content_key(candidate)
++                    all_content[candidate_key] = ('job', candidate)
++
+                 # Add resume negatives for symmetric loss
+                 for resume_neg in triplet.view_metadata.get('resume_negatives', []):
+                     rn_key = self._get_content_key(resume_neg)
