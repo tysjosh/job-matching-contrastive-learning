@@ -1,0 +1,2083 @@
+"""
+ContrastiveLearningTrainer - Main orchestrator for contrastive learning training.
+
+This module implements the main training orchestrator that coordinates all components
+of the contrastive learning system including data loading, batch processing, loss
+computation, and model updates with checkpoint management and progress logging.
+"""
+
+import json
+import time
+import logging
+from pathlib import Path
+from typing import Dict, List, Any, Optional, Union
+from dataclasses import asdict
+import signal
+
+try:
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    import torch.optim as optim
+    from sentence_transformers import SentenceTransformer
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+import random
+import numpy as np
+
+from .data_structures import TrainingConfig, TrainingResults, TrainingSample, ContrastiveTriplet
+from .data_loader import DataLoader
+from .batch_processor import BatchProcessor
+from .loss_engine import ContrastiveLossEngine
+from .embedding_cache import EmbeddingCache, BatchEfficientEncoder
+from .logging_utils import (
+    BatchMetrics, EpochMetrics, MemoryMonitor,
+    timed_operation, setup_training_logger
+)
+from .structured_features import (
+    StructuredFeatureExtractor, 
+    EnhancedContrastiveModel,
+    extract_structured_features_batch
+)
+logger = logging.getLogger(__name__)
+# Import diagnostic integration
+try:
+    from diagnostic.training_integration import create_training_integration, DiagnosticTriggerConfig
+    DIAGNOSTICS_AVAILABLE = True
+except ImportError:
+    DIAGNOSTICS_AVAILABLE = False
+    logger.warning("Diagnostic integration not available")
+
+
+class TrainingInterruptedException(Exception):
+    """Exception raised when training is interrupted by user signal."""
+    pass
+
+
+def _set_seed(seed: int = 42):
+    """Set all random seeds for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    if TORCH_AVAILABLE:
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+
+class ContrastiveLearningTrainer:
+    """
+    Main orchestrator for contrastive learning training.
+
+    Coordinates all components including data loading, batch processing, loss computation,
+    and model updates. Provides checkpoint management, progress logging, and training
+    interruption/resumption support.
+    """
+
+    def __init__(self, config: TrainingConfig, model: Optional[nn.Module] = None,
+                 output_dir: str = "training_output", esco_graph_path: Optional[str] = None):
+        """
+        Initialize the ContrastiveLearningTrainer.
+
+        Args:
+            config: Training configuration
+            model: Optional PyTorch model (if None, creates a dummy model for testing)
+            output_dir: Directory for saving checkpoints and logs
+            esco_graph_path: Optional path to ESCO graph file (overrides config.esco_graph_path)
+
+        Raises:
+            ImportError: If PyTorch is not available
+        """
+        if not TORCH_AVAILABLE:
+            raise ImportError(
+                "PyTorch is required for ContrastiveLearningTrainer. "
+                "Install with: pip install torch"
+            )
+
+        self.config = config
+        # Seed before constructing the projection head (and any other component
+        # that may initialize randomly). Seeding only in train() is too late:
+        # runs with the same training_seed could start from different weights.
+        _set_seed(int(getattr(config, 'training_seed', 42)))
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialize structured logging
+        self.structured_logger = setup_training_logger(
+            name="contrastive_training",
+            log_dir=self.output_dir / "logs",
+            log_level=logging.INFO
+        )
+        self.memory_monitor = MemoryMonitor()
+
+        # Initialize components
+        self.data_loader = DataLoader(config)
+
+        # Determine ESCO graph path (parameter overrides config)
+        final_esco_path = esco_graph_path or config.esco_graph_path
+
+        # Initialize BatchProcessor with proper ESCO graph path
+        self.batch_processor = BatchProcessor(
+            config, esco_graph_path=final_esco_path)
+        self.loss_engine = ContrastiveLossEngine(
+            config, skill_matcher=self._loss_skill_matcher(config))
+
+        # Initialize semantic text encoder from config
+        self.text_encoder = SentenceTransformer(config.text_encoder_model)
+        self.text_encoder.max_seq_length = 512
+
+        # Set device for BOTH text encoder and main model consistently
+        self.device = torch.device(
+            'cuda' if torch.cuda.is_available() else 'cpu')
+
+        # Move text encoder to device with comprehensive device setting
+        self.text_encoder.to(self.device)
+
+        # Ensure ALL components of SentenceTransformer are on the correct device
+        for module in self.text_encoder.modules():
+            if hasattr(module, 'to'):
+                module.to(self.device)
+
+        # Set the device for the underlying transformers model
+        if hasattr(self.text_encoder, '_modules'):
+            for name, module in self.text_encoder._modules.items():
+                if module is not None and hasattr(module, 'to'):
+                    module.to(self.device)
+
+        # Model and optimizer setup
+        # Get the text encoder's embedding dimension dynamically
+        text_encoder_dim = self.text_encoder.get_sentence_embedding_dimension()
+        
+        # Check if structured features are enabled
+        self.use_structured_features = getattr(config, 'use_structured_features', False)
+        
+        if self.use_structured_features:
+            # Initialize structured feature extractor
+            self.feature_extractor = StructuredFeatureExtractor()
+            structured_feature_dim = getattr(config, 'structured_feature_dim', 32)
+
+            # Create enhanced model with structured features
+            self.model = model or EnhancedContrastiveModel(
+                text_embed_dim=text_encoder_dim,
+                structured_feature_dim=structured_feature_dim,
+                projection_dim=getattr(config, 'projection_dim', 128),
+                dropout=getattr(config, 'projection_dropout', 0.1),
+                use_structured_features=True
+            )
+            logger.info(f"✅ Using EnhancedContrastiveModel with structured features "
+                       f"(text_dim={text_encoder_dim}, structured_dim={structured_feature_dim})")
+        else:
+            self.feature_extractor = None
+            self.model = model or self._create_dual_encoder_model(
+                input_dim=text_encoder_dim)
+            logger.info(f"Using standard CareerAwareContrastiveModel (text_dim={text_encoder_dim})")
+
+        # RESEARCH-GRADE SETUP: Freeze SentenceTransformer to avoid catastrophic forgetting
+        weight_decay = getattr(config, 'weight_decay', 0.0)
+        self.freeze_text_encoder = getattr(config, 'freeze_text_encoder', True)
+        if self.freeze_text_encoder:
+            for param in self.text_encoder.parameters():
+                param.requires_grad = False
+            
+            # Only train the minimal projection head (prevents overfitting)
+            self.optimizer = optim.Adam(
+                self.model.parameters(), 
+                lr=config.learning_rate,
+                weight_decay=weight_decay
+            )
+            
+            logger.info("✅ SentenceTransformer FROZEN - avoiding catastrophic forgetting")
+            logger.info(f"📊 Trainable parameters: {sum(p.numel() for p in self.model.parameters() if p.requires_grad):,}")
+            logger.info(f"📊 Frozen parameters: {sum(p.numel() for p in self.text_encoder.parameters()):,}")
+            logger.info(f"📊 Weight decay (L2 regularization): {weight_decay}")
+        else:
+            # Legacy mode: train both models (not recommended for research)
+            import itertools
+            all_parameters = itertools.chain(
+                self.model.parameters(),
+                self.text_encoder.parameters()
+            )
+            self.optimizer = optim.Adam(
+                all_parameters, 
+                lr=config.learning_rate,
+                weight_decay=weight_decay
+            )
+            logger.warning("⚠️ Training both models - encoder will be fine-tuned "
+                           "(gradient-preserving encoding, embedding cache bypassed)")
+            logger.info(f"📊 Trainable parameters: "
+                        f"{sum(p.numel() for p in self.model.parameters() if p.requires_grad) + sum(p.numel() for p in self.text_encoder.parameters() if p.requires_grad):,}")
+
+            # Enable gradient checkpointing to cut activation memory during
+            # encoder fine-tuning (trades extra compute for much lower memory).
+            try:
+                hf_model = self.text_encoder[0].auto_model
+                hf_model.gradient_checkpointing_enable()
+                if hasattr(hf_model, "config"):
+                    hf_model.config.use_cache = False
+                logger.info("📉 Gradient checkpointing enabled on encoder (memory-saving)")
+            except Exception as e:
+                logger.warning(f"Could not enable gradient checkpointing: {e}")
+
+        self.model.to(self.device)
+
+        # Unified encoder sequence-length cap. Applies in BOTH frozen and
+        # unfrozen modes so the seq-length confound can be controlled
+        # independently of the freeze setting.
+        #   - encoder_max_seq_length (if set) takes precedence and applies in
+        #     either mode. Used for the frozen-256 control experiment that
+        #     isolates input truncation from encoder unfreezing.
+        #   - otherwise, when fine-tuning, fall back to unfrozen_max_seq_length
+        #     (attention activations scale with seq_len^2 and are retained for
+        #     backprop, so long resume texts blow up GPU memory).
+        eff_cap = getattr(config, 'encoder_max_seq_length', None)
+        if eff_cap is None and not self.freeze_text_encoder:
+            eff_cap = getattr(config, 'unfrozen_max_seq_length', 256)
+        if eff_cap:
+            try:
+                prev = self.text_encoder.max_seq_length
+                self.text_encoder.max_seq_length = int(eff_cap)
+                mode = "frozen" if self.freeze_text_encoder else "fine-tuning"
+                logger.info(f"📏 Encoder max_seq_length capped {prev} -> "
+                            f"{eff_cap} ({mode}).")
+            except Exception as e:
+                logger.warning(f"Could not set max_seq_length: {e}")
+
+        # Initialize efficient embedding cache
+        cache_size = getattr(config, 'embedding_cache_size', 10000)  # Default 10k embeddings
+        self.embedding_cache = EmbeddingCache(
+            max_cache_size=cache_size,
+            device=self.device,
+            enable_stats=True
+        )
+        
+        # Initialize batch-efficient encoder
+        self.batch_encoder = BatchEfficientEncoder(
+            text_encoder=self.text_encoder,
+            model=self.model,
+            device=self.device,
+            use_structured_features=self.use_structured_features,
+            feature_extractor=self.feature_extractor
+        )
+
+        # Training state
+        self.current_epoch = 0
+        self.current_batch = 0
+        self.total_batches_processed = 0
+        self.training_interrupted = False
+        self.best_loss = float('inf')
+        self.best_val_loss = float('inf')  # Track best validation loss for checkpoint selection
+        
+        # Global negative sampling state
+        self.global_job_pool = None
+        self.global_resume_pool = None
+
+        # ── ORCA integration seams (additive; no-op unless explicitly injected) ──
+        # These optional hooks let an external phase orchestrator (living in the
+        # isolated top-level ``orca/`` package) inject an alternative negative
+        # selector and/or a replacement loss engine WITHOUT this module importing
+        # or referencing ``orca`` (Isolation constraint, Requirement 7.6). Both
+        # default to ``None`` and only take effect when ORCA is enabled AND
+        # something has been injected, so the pre-ORCA career path stays
+        # byte-identical (Requirement 7.5). See ``active_loss_engine``.
+        self._orca_enabled = getattr(config, 'orca_enabled', False)
+        self.negative_selector = None
+        self._injected_loss_engine = None
+
+        # Metrics tracking
+        self.epoch_losses = []
+        self.validation_losses = []  # Track validation loss per epoch
+        self.batch_losses = []
+        self.training_metrics = {
+            'total_samples_processed': 0,
+            'total_triplets_created': 0,
+            'checkpoint_saves': 0,
+            'training_start_time': None,
+            'training_end_time': None
+        }
+
+        # Setup signal handlers for graceful interruption
+        self._setup_signal_handlers()
+
+        # Initialize diagnostic integration if available
+        self.diagnostic_integration = None
+        if DIAGNOSTICS_AVAILABLE:
+            try:
+                trigger_config = DiagnosticTriggerConfig(
+                    loss_stagnation_steps=100,
+                    gradient_explosion_threshold=10.0,
+                    periodic_check_frequency=500,
+                    quick_check_frequency=50,
+                    enable_async_diagnostics=True,
+                    max_diagnostic_overhead_ms=50.0
+                )
+
+                self.diagnostic_integration = create_training_integration(
+                    trigger_config=trigger_config,
+                    enable_async=True
+                )
+
+                # Add alert callback for handling training issues
+                self.diagnostic_integration.add_alert_callback(
+                    self._handle_diagnostic_alert)
+
+                self.structured_logger.logger.info(
+                    "Diagnostic integration enabled")
+            except Exception as e:
+                self.structured_logger.logger.warning(
+                    f"Failed to initialize diagnostics: {e}")
+                self.diagnostic_integration = None
+
+        # Log initialization
+        self.structured_logger.logger.info(
+            f"ContrastiveLearningTrainer initialized with config: {config}")
+        self.structured_logger.logger.info(
+            f"Output directory: {self.output_dir}")
+        self.structured_logger.logger.info(f"Device: {self.device}")
+        self.structured_logger.logger.info(
+            f"Model parameters: {sum(p.numel() for p in self.model.parameters())}")
+
+        # Log initial memory usage
+        memory_info = self.memory_monitor.get_memory_usage()
+        self.structured_logger.log_memory_usage("initialization",
+                                                memory_info["system_memory_mb"] or 0,
+                                                memory_info["gpu_memory_mb"])
+
+    def _loss_skill_matcher(self, config: TrainingConfig):
+        """Skill matcher handed to the LOSS engine only.
+
+        Reuses the batch processor's matcher when it already built one (ontology
+        negative-selection arms). Otherwise, when the ordinal loss needs φ on the
+        fly, builds a separate matcher that is never attached to the batch
+        processor. Attaching it there would be a silent confound: with
+        ``use_pathway_negatives=True`` the negative-selection gate is open, and
+        the mere presence of a matcher switches random negatives to ESCO-tiered
+        ones, turning a baseline arm into an ontology-negative arm.
+        """
+        existing = self.batch_processor.skill_matcher
+        needs_phi = (getattr(config, 'loss_type', None) == 'ordinal'
+                     and not getattr(config, 'ordinal_fixed_m1', False)
+                     and getattr(config, 'ordinal_phi_source', 'precomputed') == 'on_the_fly')
+        if existing is not None or not needs_phi:
+            return existing
+
+        import os
+        from .ontology_skill_matcher import OntologySkillMatcher
+
+        kg_path = getattr(config, 'esco_kg_path', None) or config.esco_graph_path
+        if not kg_path or not os.path.exists(kg_path):
+            raise FileNotFoundError(
+                f"ordinal_phi_source='on_the_fly' needs the ESCO KG for the skill "
+                f"matcher, but esco_kg_path={kg_path!r} does not exist.")
+        matcher = OntologySkillMatcher(kg_path)
+        cache = getattr(config, 'skill_distance_cache_path', None)
+        if cache and os.path.exists(cache):
+            matcher.load_precomputed_distances(cache)
+        else:
+            logger.warning(
+                "Skill-distance cache %r not found; on-the-fly φ will fall back to "
+                "graph shortest paths (correct, but slow).", cache)
+        logger.info("Built a loss-only OntologySkillMatcher for on-the-fly φ "
+                    "(negative selection is unaffected).")
+        return matcher
+
+    # ------------------------------------------------------------------ ORCA seams
+    # Purely additive dependency-inverted injection points. This module never
+    # imports the ``orca`` package; an external orchestrator passes duck-typed
+    # objects in. When ORCA is disabled or nothing is injected these are no-ops
+    # and every training/validation call site behaves byte-identically to the
+    # pre-ORCA career path (Requirements 7.5, 7.6).
+
+    def set_negative_selector(self, selector) -> None:
+        """Inject an alternative per-batch negative selector (ORCA seam).
+
+        No-op unless ``orca_enabled`` is true: when ORCA is off the injected
+        selector is ignored so the career negative-selection path stays
+        byte-identical. The selector is duck-typed and forwarded to the batch
+        processor only if it exposes a compatible ``set_negative_selector``
+        seam; otherwise it is simply held for callers to consult.
+
+        Passing ``None`` clears any previously injected selector.
+        """
+        if not self._orca_enabled:
+            return
+        self.negative_selector = selector
+        forward = getattr(self.batch_processor, 'set_negative_selector', None)
+        if callable(forward):
+            forward(selector)
+
+    def set_loss_engine(self, engine) -> None:
+        """Inject a replacement loss engine (ORCA seam).
+
+        No-op unless ``orca_enabled`` is true. When set (and ORCA is enabled),
+        :meth:`active_loss_engine` returns this engine so the training and
+        validation loops use it in place of the unchanged
+        ``ContrastiveLossEngine``. Passing ``None`` restores the original engine.
+        """
+        if not self._orca_enabled:
+            return
+        self._injected_loss_engine = engine
+
+    @property
+    def active_loss_engine(self):
+        """The loss engine currently in effect.
+
+        Returns the injected ORCA engine when one has been set and ORCA is
+        enabled; otherwise returns the unchanged ``ContrastiveLossEngine``. With
+        ORCA disabled (the default) this is always ``self.loss_engine``, keeping
+        the career path byte-identical.
+        """
+        if self._orca_enabled and self._injected_loss_engine is not None:
+            return self._injected_loss_engine
+        return self.loss_engine
+
+    def train(self, dataset_path: Union[str, Path]) -> TrainingResults:
+        """
+        Run the complete training process.
+
+        Args:
+            dataset_path: Path to training dataset (JSONL format)
+
+        Returns:
+            TrainingResults containing training metrics and checkpoint paths
+
+        Raises:
+            FileNotFoundError: If dataset file doesn't exist
+            TrainingInterruptedException: If training is interrupted
+        """
+        dataset_path = Path(dataset_path)
+        if not dataset_path.exists():
+            raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
+
+        # Set global seed for reproducibility
+        seed = self.config.training_seed if hasattr(self.config, 'training_seed') else 42
+        _set_seed(seed)
+        logger.info(f"Random seed set to {seed} for reproducibility")
+
+        # Start training session with comprehensive logging
+        session_id = self.structured_logger.start_training_session({
+            "config": asdict(self.config),
+            "dataset_path": str(dataset_path),
+            "model_parameters": sum(p.numel() for p in self.model.parameters()),
+            "device": str(self.device)
+        })
+
+        self.training_metrics['training_start_time'] = time.time()
+
+        try:
+            # Save initial configuration
+            self._save_config()
+            
+            # Load global job pool if enabled
+            if self.config.global_negative_sampling:
+                logger.info("Loading global job pool for consistent negative sampling...")
+                self.global_job_pool = self.data_loader.load_global_job_pool(
+                    dataset_path, max_jobs=self.config.global_negative_pool_size
+                )
+                logger.info(f"Global job pool loaded with {len(self.global_job_pool)} jobs")
+
+                # Load global resume pool for symmetric loss reverse direction
+                if getattr(self.config, 'use_symmetric_loss', False):
+                    logger.info("Loading global resume pool for symmetric loss...")
+                    self.global_resume_pool = self.data_loader.load_global_resume_pool(
+                        dataset_path, max_resumes=getattr(self.config, 'global_resume_pool_size', 1000)
+                    )
+                    logger.info(f"Global resume pool loaded with {len(self.global_resume_pool)} resumes")
+
+            # Build rejection index if enabled (ConFit-inspired hard negatives)
+            if getattr(self.config, 'use_rejection_hard_negatives', False):
+                logger.info("Building rejection index for hard negatives...")
+                self.batch_processor.build_rejection_index(str(dataset_path))
+            
+            # Preload embeddings if enabled. Skipped when fine-tuning the encoder:
+            # cached (detached) text embeddings would block gradients to the encoder.
+            if self.config.enable_embedding_preload and self.freeze_text_encoder:
+                logger.info("Preloading embeddings for efficient training...")
+                self.preload_dataset_embeddings(dataset_path)
+                
+                # Log cache stats after preloading
+                cache_stats = self.embedding_cache.get_cache_stats()
+                logger.info(f"Preloading complete - Cache size: {cache_stats['cache_size']}, "
+                           f"Memory usage: {cache_stats['memory_usage_mb']:.1f} MB")
+
+            # Run training epochs
+            for epoch in range(self.current_epoch, self.config.num_epochs):
+                if self.training_interrupted:
+                    self.structured_logger.log_training_interruption("User signal", {
+                        "epoch": epoch,
+                        "total_batches_processed": self.total_batches_processed
+                    })
+                    raise TrainingInterruptedException(
+                        "Training interrupted by user")
+
+                self.current_epoch = epoch
+
+                with timed_operation(self.structured_logger, f"epoch_{epoch}", {"epoch": epoch}):
+                    epoch_loss = self._train_epoch(dataset_path)
+                    self.epoch_losses.append(epoch_loss)
+
+                # Run validation if validation path is configured
+                if self.config.validation_path and (epoch + 1) % self.config.validate_every_n_epochs == 0:
+                    val_loss = self._validate_epoch(Path(self.config.validation_path))
+                    self.validation_losses.append(val_loss)
+                    self.structured_logger.logger.info(
+                        f"Epoch {epoch + 1}: train_loss={epoch_loss:.6f}, val_loss={val_loss:.6f}"
+                    )
+                    
+                    # Feed validation metrics to batch processor for adaptive schedulers
+                    scheduler_metrics = {'val_loss': val_loss}
+                    # Compute d(g,p) proxy from validation loss trend
+                    # Lower val_loss generally means better separation
+                    if len(self.validation_losses) >= 2:
+                        # d(g,p) proxy: inverse of val_loss (higher = better separation)
+                        scheduler_metrics['d_gp'] = 1.0 / max(0.01, val_loss)
+                        # Triplet accuracy proxy: improvement rate
+                        prev_loss = self.validation_losses[-2]
+                        improvement = (prev_loss - val_loss) / max(0.01, prev_loss)
+                        scheduler_metrics['triplet_accuracy'] = min(1.0, max(0.0, 0.5 + improvement * 5.0))
+                    else:
+                        scheduler_metrics['d_gp'] = 1.0 / max(0.01, val_loss)
+                        scheduler_metrics['triplet_accuracy'] = 0.3
+                    self.batch_processor.update_scheduler_metrics(scheduler_metrics)
+
+                    # Save best checkpoint based on validation loss
+                    if val_loss < self.best_val_loss:
+                        self.best_val_loss = val_loss
+                        self._save_best_checkpoint(epoch, val_loss)
+                        self.structured_logger.logger.info(
+                            f"New best validation loss: {val_loss:.6f} - saved best_checkpoint.pt"
+                        )
+
+                # Save checkpoint if needed
+                if self._should_save_checkpoint():
+                    checkpoint_path = self._save_checkpoint(epoch, epoch_loss)
+                    self.structured_logger.log_checkpoint_save(epoch, checkpoint_path, {
+                        "loss": epoch_loss,
+                        "best_loss": self.best_loss,
+                        "total_batches": self.total_batches_processed
+                    })
+
+            # Training completed successfully
+            self.training_metrics['training_end_time'] = time.time()
+            results = self._create_training_results()
+
+            # Save final results and end session
+            self._save_training_results(results)
+            
+            # Log final embedding cache statistics
+            cache_stats = self.embedding_cache.get_cache_stats()
+            logger.info(f"Final embedding cache stats - "
+                       f"Size: {cache_stats['cache_size']}, "
+                       f"Hit rate: {cache_stats['hit_rate']:.2%}, "
+                       f"Total encodings: {cache_stats['total_encodings']}, "
+                       f"Time saved: {cache_stats['time_saved_seconds']:.1f}s, "
+                       f"Memory usage: {cache_stats['memory_usage_mb']:.1f}MB")
+            
+            # Cleanup global job pool to free memory
+            self._cleanup_resources()
+            
+            self.structured_logger.end_training_session({
+                "final_loss": results.final_loss,
+                "best_loss": self.best_loss,
+                "total_samples": results.total_samples,
+                "total_batches": results.total_batches,
+                "cache_stats": cache_stats
+            })
+
+            self.structured_logger.logger.info(
+                "Training completed successfully")
+            return results
+
+        except TrainingInterruptedException:
+            self.structured_logger.logger.info(
+                "Training interrupted, saving checkpoint...")
+            checkpoint_path = self._save_checkpoint(self.current_epoch,
+                                                    self.epoch_losses[-1] if self.epoch_losses else float('inf'))
+            self.structured_logger.log_checkpoint_save(self.current_epoch, checkpoint_path, {
+                "interruption": True,
+                "total_batches": self.total_batches_processed
+            })
+
+            # End session with interruption
+            self.structured_logger.end_training_session({
+                "interrupted": True,
+                "final_loss": self.epoch_losses[-1] if self.epoch_losses else None
+            })
+            raise
+        except Exception as e:
+            self.structured_logger.logger.error(
+                f"Training failed with error: {e}")
+            # Save emergency checkpoint
+            try:
+                checkpoint_path = self._save_checkpoint(
+                    self.current_epoch, float('inf'), emergency=True)
+                self.structured_logger.log_checkpoint_save(self.current_epoch, checkpoint_path, {
+                    "emergency": True,
+                    "error": str(e)
+                })
+            except Exception as checkpoint_error:
+                self.structured_logger.logger.error(
+                    f"Failed to save emergency checkpoint: {checkpoint_error}")
+
+            # End session with error
+            self.structured_logger.end_training_session({
+                "error": str(e),
+                "final_loss": None
+            })
+            raise
+
+    def train_epoch(self, dataset_path: Union[str, Path], epoch: int = None) -> Dict[str, Any]:
+        """
+        Public interface for training a single epoch (for pipeline integration).
+
+        Args:
+            dataset_path: Path to training dataset
+            epoch: Optional epoch number (will use current_epoch if not provided)
+
+        Returns:
+            Dictionary containing training metrics for the epoch
+        """
+        if epoch is not None:
+            self.current_epoch = epoch
+
+        dataset_path = Path(dataset_path)
+        avg_loss = self._train_epoch(dataset_path)
+
+        # Return metrics in format expected by pipeline
+        return {
+            'average_loss': avg_loss,
+            'epoch': self.current_epoch,
+            'samples_processed': self.training_metrics.get('total_samples_processed', 0),
+            'total_batches': self.total_batches_processed
+        }
+
+    def _train_epoch(self, dataset_path: Path) -> float:
+        """
+        Train for one epoch.
+
+        Args:
+            dataset_path: Path to training dataset
+
+        Returns:
+            Average loss for the epoch
+        """
+        self.structured_logger.log_epoch_start(
+            self.current_epoch, self.config.num_epochs)
+
+        # Update batch processor with current epoch for curriculum negative selection
+        self.batch_processor.set_epoch(self.current_epoch)
+
+        # Update loss engine with current epoch for ordinal curriculum learning
+        self.loss_engine.set_epoch(self.current_epoch)
+
+        epoch_start_time = time.time()
+        epoch_losses = []
+        epoch_samples = 0
+        epoch_triplets = 0
+        failed_batches = 0
+        memory_peak = 0
+        gpu_memory_peak = 0
+
+        self.model.train()
+
+        try:
+            # Process batches
+            for batch_idx, batch in enumerate(self.data_loader.load_batches(dataset_path)):
+                if self.training_interrupted:
+                    break
+
+                self.current_batch = batch_idx
+
+                # Log batch start
+                self.structured_logger.log_batch_start(
+                    batch_idx, self.current_epoch, len(batch))
+
+                # Monitor memory at batch start
+                memory_info = self.memory_monitor.get_memory_usage()
+                if memory_info["system_memory_mb"]:
+                    memory_peak = max(
+                        memory_peak, memory_info["system_memory_mb"])
+                if memory_info["gpu_memory_mb"]:
+                    gpu_memory_peak = max(
+                        gpu_memory_peak, memory_info["gpu_memory_mb"])
+
+                try:
+                    batch_loss, batch_stats = self._train_batch(batch)
+
+                    if batch_loss is not None:
+                        epoch_losses.append(batch_loss)
+                        epoch_samples += batch_stats['samples_processed']
+                        epoch_triplets += batch_stats['triplets_created']
+
+                        # Create batch metrics
+                        batch_metrics = BatchMetrics(
+                            batch_id=batch_idx,
+                            epoch=self.current_epoch,
+                            samples_processed=batch_stats['samples_processed'],
+                            triplets_created=batch_stats['triplets_created'],
+                            view_combinations=batch_stats.get(
+                                'view_combinations', 0),
+                            processing_time=batch_stats['processing_time'],
+                            loss=batch_loss,
+                            memory_usage_mb=memory_info["system_memory_mb"],
+                            gpu_memory_mb=memory_info["gpu_memory_mb"]
+                        )
+
+                        # Log batch completion
+                        self.structured_logger.log_batch_completion(
+                            batch_metrics)
+
+                        # Log batch progress at specified frequency
+                        if (batch_idx + 1) % self.config.log_frequency == 0:
+                            self._log_batch_progress(
+                                batch_idx + 1, batch_loss, batch_stats)
+                    else:
+                        failed_batches += 1
+
+                except Exception as batch_error:
+                    failed_batches += 1
+                    self.structured_logger.log_batch_error(
+                        batch_idx, self.current_epoch, batch_error,
+                        {"batch_size": len(
+                            batch), "total_batches_processed": self.total_batches_processed}
+                    )
+
+                self.total_batches_processed += 1
+
+        except Exception as e:
+            self.structured_logger.logger.error(
+                f"Error during epoch {self.current_epoch}: {e}")
+            raise
+
+        # Calculate epoch metrics
+        avg_epoch_loss = sum(epoch_losses) / \
+            len(epoch_losses) if epoch_losses else float('inf')
+        min_epoch_loss = min(epoch_losses) if epoch_losses else float('inf')
+        max_epoch_loss = max(epoch_losses) if epoch_losses else float('inf')
+        epoch_time = time.time() - epoch_start_time
+        avg_batch_time = epoch_time / \
+            max(1, len(epoch_losses) + failed_batches)
+
+        # Update training metrics
+        self.training_metrics['total_samples_processed'] += epoch_samples
+        self.training_metrics['total_triplets_created'] += epoch_triplets
+
+        # Create epoch metrics
+        epoch_metrics = EpochMetrics(
+            epoch=self.current_epoch,
+            total_batches=len(epoch_losses) + failed_batches,
+            total_samples=epoch_samples,
+            total_triplets=epoch_triplets,
+            avg_loss=avg_epoch_loss,
+            min_loss=min_epoch_loss,
+            max_loss=max_epoch_loss,
+            epoch_time=epoch_time,
+            avg_batch_time=avg_batch_time,
+            memory_peak_mb=memory_peak if memory_peak > 0 else None,
+            gpu_memory_peak_mb=gpu_memory_peak if gpu_memory_peak > 0 else None,
+            failed_batches=failed_batches
+        )
+
+        # Log epoch completion
+        self.structured_logger.log_epoch_completion(epoch_metrics)
+
+        # Clear embedding cache between epochs to prevent memory leak (configurable)
+        clear_cache = getattr(self.config, 'clear_cache_between_epochs', True)
+        if clear_cache and hasattr(self, 'embedding_cache'):
+            cache_stats_before = self.embedding_cache.get_cache_stats()
+            memory_freed = cache_stats_before.get('memory_usage_mb', 0)
+            self.embedding_cache.clear_cache()
+            logger.info(f"Cleared embedding cache after epoch {self.current_epoch}. "
+                       f"Freed {memory_freed:.1f}MB, had {cache_stats_before.get('cache_size', 0)} embeddings")
+
+        # Diagnostic integration - epoch end
+        if self.diagnostic_integration:
+            try:
+                validation_metrics = {
+                    'avg_loss': avg_epoch_loss,
+                    'min_loss': min_epoch_loss,
+                    'max_loss': max_epoch_loss,
+                    'samples_processed': epoch_samples,
+                    'triplets_created': epoch_triplets,
+                    'failed_batches': failed_batches,
+                    'epoch_time': epoch_time
+                }
+
+                diagnostic_report = self.diagnostic_integration.on_epoch_end(
+                    epoch=self.current_epoch,
+                    model=self.model,
+                    validation_metrics=validation_metrics
+                )
+
+                if diagnostic_report:
+                    self.structured_logger.logger.info(
+                        f"Epoch {self.current_epoch} diagnostic report generated")
+
+            except Exception as diagnostic_error:
+                self.structured_logger.logger.warning(
+                    f"Epoch diagnostic error: {diagnostic_error}")
+
+        return avg_epoch_loss
+
+    def _validate_epoch(self, validation_path: Path) -> float:
+        """
+        Run validation on the validation dataset (no gradient updates).
+
+        Args:
+            validation_path: Path to validation dataset
+
+        Returns:
+            Average validation loss for the epoch
+        """
+        self.structured_logger.logger.info(f"Running validation on {validation_path}")
+        
+        self.model.eval()
+        validation_losses = []
+        validation_samples = 0
+        validation_triplets = 0
+        cache_size_before_validation = len(self.embedding_cache.cache)
+
+        # A curriculum is useful for training, but changing the validation
+        # negatives every epoch makes validation losses incomparable. Biomedical
+        # publication runs opt into a fixed, hard-target validation draw: the
+        # final curriculum tier mix and one dedicated seed are used at every
+        # epoch and for every training seed. Restore training state afterward.
+        fixed_validation = bool(getattr(
+            self.config, 'fixed_validation_negatives', False))
+        selector = getattr(self.batch_processor, 'domain_negative_selector', None)
+        train_negative_epoch = getattr(self.batch_processor, 'current_epoch', 0)
+        selector_training_seed = getattr(selector, 'training_seed', None)
+        if fixed_validation and selector is not None:
+            validation_epoch = getattr(
+                self.config, 'validation_negative_epoch', None)
+            if validation_epoch is None:
+                validation_epoch = max(0, int(self.config.num_epochs) - 1)
+            self.batch_processor.set_epoch(int(validation_epoch))
+            if selector_training_seed is not None:
+                selector.training_seed = int(getattr(
+                    self.config, 'validation_negative_seed', 1729))
+            self.structured_logger.logger.info(
+                "Fixed validation negatives: selector_epoch=%d, selector_seed=%d",
+                int(validation_epoch),
+                int(getattr(self.config, 'validation_negative_seed', 1729)))
+
+        # Create a validation-specific config that doesn't filter by augmentation
+        # This ensures we validate on ALL samples, not just augmented ones
+        from copy import deepcopy
+        val_config = deepcopy(self.config)
+        val_config.use_augmentation_labels_only = False  # Include all samples for validation
+        val_config.shuffle_data = False  # No need to shuffle validation data
+        
+        # Create a separate data loader for validation
+        val_data_loader = DataLoader(val_config)
+
+        try:
+            with torch.no_grad():
+                for batch_idx, batch in enumerate(val_data_loader.load_batches(validation_path)):
+                    try:
+                        # Process batch to create triplets (with optional global job pool)
+                        triplets = self.batch_processor.process_batch(batch, self.global_job_pool)
+                        
+                        if not triplets:
+                            continue
+
+                        # Generate embeddings for triplets
+                        embeddings = self._generate_embeddings(triplets)
+
+                        if not embeddings:
+                            continue
+
+                        # Compute loss (no backward pass). Uses the injected ORCA
+                        # engine when active, else the unchanged engine.
+                        loss = self.active_loss_engine.compute_loss(triplets, embeddings)
+
+                        if not torch.isnan(loss) and not torch.isinf(loss):
+                            validation_losses.append(loss.item())
+                            validation_samples += len(batch)
+                            validation_triplets += len(triplets)
+
+                    except Exception as batch_error:
+                        self.structured_logger.logger.warning(
+                            f"Validation batch {batch_idx} error: {batch_error}"
+                        )
+                        continue
+
+        except Exception as e:
+            self.structured_logger.logger.error(f"Error during validation: {e}")
+        finally:
+            if fixed_validation and selector is not None:
+                self.batch_processor.set_epoch(train_negative_epoch)
+                if selector_training_seed is not None:
+                    selector.training_seed = selector_training_seed
+            self.model.train()
+
+        # Validation can be the first place the frozen encoder sees held-out
+        # anchor/positive texts.  Persist those text embeddings when the cache
+        # grows so every seed does not pay the same encoding cost again.  This
+        # is a pure performance cache: the trainable projection is still run
+        # afresh for every batch, and no validation labels enter the encoder.
+        cache_path = getattr(self.config, 'embedding_cache_path', None)
+        if (self.freeze_text_encoder
+                and self.config.enable_embedding_preload
+                and cache_path
+                and len(self.embedding_cache.cache) > cache_size_before_validation):
+            try:
+                self.embedding_cache.save_to_disk(cache_path)
+            except Exception as cache_error:
+                self.structured_logger.logger.warning(
+                    f"Could not persist validation text cache: {cache_error}")
+
+        avg_val_loss = sum(validation_losses) / len(validation_losses) if validation_losses else float('inf')
+        
+        self.structured_logger.logger.info(
+            f"Validation complete: avg_loss={avg_val_loss:.6f}, "
+            f"samples={validation_samples}, triplets={validation_triplets}"
+        )
+
+        return avg_val_loss
+
+    def _train_batch(self, batch: List[TrainingSample]) -> tuple[Optional[float], Dict[str, Any]]:
+        """
+        Train on a single batch.
+
+        Args:
+            batch: List of training samples
+
+        Returns:
+            Tuple of (batch_loss, batch_statistics)
+        """
+        batch_stats = {
+            'samples_processed': len(batch),
+            'triplets_created': 0,
+            'view_combinations': 0,
+            'processing_time': 0
+        }
+
+        batch_start_time = time.time()
+
+        try:
+            # Process batch to create triplets (with optional global job pool)
+            triplets = self.batch_processor.process_batch(batch, self.global_job_pool, self.global_resume_pool)
+            batch_stats['triplets_created'] = len(triplets)
+
+            if not triplets:
+                logger.warning("No valid triplets created from batch")
+                return None, batch_stats
+
+            # Generate embeddings for triplets
+            embeddings = self._generate_embeddings(triplets)
+
+            if not embeddings:
+                logger.warning("No embeddings generated for batch")
+                return None, batch_stats
+
+            # Compute loss. ``active_loss_engine`` is the unchanged
+            # ContrastiveLossEngine unless an ORCA engine has been injected via
+            # the seam (byte-identical career path when ORCA is off).
+            loss = self.active_loss_engine.compute_loss(triplets, embeddings)
+
+            if torch.isnan(loss) or torch.isinf(loss):
+                logger.warning(f"Invalid loss detected: {loss.item()}, skipping batch")
+                logger.warning(f"Triplets count: {len(triplets)}, Embeddings count: {len(embeddings)}")
+                # Log some embedding statistics for debugging
+                if embeddings:
+                    sample_emb = next(iter(embeddings.values()))
+                    logger.warning(f"Sample embedding stats - mean: {sample_emb.mean().item():.4f}, "
+                                 f"std: {sample_emb.std().item():.4f}, "
+                                 f"min: {sample_emb.min().item():.4f}, "
+                                 f"max: {sample_emb.max().item():.4f}")
+                return None, batch_stats
+
+            # Store loss value before backward pass
+            loss_value = loss.item()
+
+            # Backward pass and optimization
+            self.optimizer.zero_grad()
+            try:
+                loss.backward()
+            except RuntimeError as e:
+                if "Trying to backward through the graph a second time" in str(e):
+                    logger.warning("Computational graph reuse detected, skipping batch")
+                    return None, batch_stats
+                else:
+                    raise e
+
+            # Gradient clipping for stability (configurable)
+            grad_clip_norm = getattr(self.config, 'gradient_clip_norm', 1.0)
+            
+            # Log gradient norm before clipping for debugging
+            total_norm = torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), max_norm=grad_clip_norm)
+            
+            if total_norm > grad_clip_norm * 2:  # Log if gradients are unusually large
+                logger.warning(f"Large gradient norm detected: {total_norm:.4f} (clipped to {grad_clip_norm})")
+
+            self.optimizer.step()
+
+            # Diagnostic integration - monitor training step
+            if self.diagnostic_integration:
+                try:
+                    # Prepare batch data for diagnostics (use detached embeddings)
+                    diagnostic_batch_data = {
+                        'triplets': triplets,
+                        'embeddings': {k: v.detach() for k, v in embeddings.items()},
+                        'samples_processed': batch_stats['samples_processed'],
+                        'triplets_created': batch_stats['triplets_created'],
+                        'batch_size': len(batch)
+                    }
+
+                    # Run diagnostic monitoring with detached loss value
+                    diagnostic_report = self.diagnostic_integration.on_training_step(
+                        step=self.total_batches_processed,
+                        loss=loss_value,
+                        model=self.model,
+                        batch_data=diagnostic_batch_data,
+                        optimizer=self.optimizer
+                    )
+
+                    # Handle critical diagnostic issues
+                    if diagnostic_report and diagnostic_report.severity_level == "critical":
+                        self.structured_logger.logger.critical(
+                            f"Critical diagnostic issues at step {self.total_batches_processed}: {diagnostic_report.summary}"
+                        )
+
+                except Exception as diagnostic_error:
+                    self.structured_logger.logger.warning(
+                        f"Diagnostic integration error: {diagnostic_error}")
+
+            batch_stats['processing_time'] = time.time() - batch_start_time
+
+            return loss_value, batch_stats
+
+        except Exception as e:
+            logger.error(f"Error processing batch: {e}")
+            batch_stats['processing_time'] = time.time() - batch_start_time
+            return None, batch_stats
+
+    def _generate_embeddings(self, triplets: List[ContrastiveTriplet]) -> Dict[str, torch.Tensor]:
+        """
+        Generate embeddings for all content in triplets using efficient caching.
+
+        Caches only the frozen SentenceTransformer text embeddings, then passes
+        them through the trainable projection model fresh each batch so gradients
+        can flow for backpropagation.
+
+        Args:
+            triplets: List of contrastive triplets
+
+        Returns:
+            Dictionary mapping content keys to final model embeddings (with grad)
+        """
+        # Fine-tuning path: encode WITH gradients (no cache, no torch.no_grad)
+        # so backprop reaches the encoder. Used only when freeze_text_encoder=False.
+        # NOT wrapped in the cached-fallback below: on error we must NOT silently
+        # fall back to detached embeddings (that would train only the head).
+        if not self.freeze_text_encoder:
+            self.model.to(self.device)
+            self.text_encoder.to(self.device)
+            return self._generate_embeddings_trainable_encoder(triplets)
+
+        try:
+            self.model.to(self.device)
+            self.text_encoder.to(self.device)
+
+            # Step 1: Collect unique content and get/cache TEXT embeddings only
+            content_key_to_type = {}  # key -> content_type
+            ordered_keys = []
+
+            for triplet in triplets:
+                anchor_key = self.embedding_cache.get_content_key(triplet.anchor)
+                if anchor_key not in content_key_to_type:
+                    content_key_to_type[anchor_key] = (triplet.anchor, 'resume')
+                    ordered_keys.append(anchor_key)
+
+                positive_key = self.embedding_cache.get_content_key(triplet.positive)
+                if positive_key not in content_key_to_type:
+                    content_key_to_type[positive_key] = (triplet.positive, 'job')
+                    ordered_keys.append(positive_key)
+
+                for negative in triplet.negatives:
+                    negative_key = self.embedding_cache.get_content_key(negative)
+                    if negative_key not in content_key_to_type:
+                        content_key_to_type[negative_key] = (negative, 'job')
+                        ordered_keys.append(negative_key)
+
+                for candidate in (triplet.view_metadata.get('ordinal_candidates', [])
+                                  + triplet.view_metadata.get('ordinal_floor', [])):
+                    candidate_key = self.embedding_cache.get_content_key(candidate)
+                    if candidate_key not in content_key_to_type:
+                        content_key_to_type[candidate_key] = (candidate, 'job')
+                        ordered_keys.append(candidate_key)
+
+                # Also collect resume negatives for symmetric loss
+                for resume_neg in triplet.view_metadata.get('resume_negatives', []):
+                    rn_key = self.embedding_cache.get_content_key(resume_neg)
+                    if rn_key not in content_key_to_type:
+                        content_key_to_type[rn_key] = (resume_neg, 'resume')
+                        ordered_keys.append(rn_key)
+
+            # Step 2: Get cached text embeddings or encode new ones
+            text_embeddings = {}
+            to_encode = []
+            to_encode_keys = []
+
+            for key in ordered_keys:
+                if key in self.embedding_cache.cache:
+                    text_embeddings[key] = self.embedding_cache.cache[key].detach().clone()
+                    self.embedding_cache._record_cache_access(key, hit=True)
+                else:
+                    content_data, content_type = content_key_to_type[key]
+                    to_encode.append((content_data, content_type))
+                    to_encode_keys.append(key)
+                    self.embedding_cache._record_cache_access(key, hit=False)
+
+            if to_encode:
+                texts = [self.batch_encoder._content_to_text(c, t) for c, t in to_encode]
+                with torch.no_grad():
+                    new_text_embs = self.text_encoder.encode(
+                        texts, convert_to_tensor=True, device=self.device,
+                        show_progress_bar=False, normalize_embeddings=False
+                    )
+                if new_text_embs.dim() == 1:
+                    new_text_embs = new_text_embs.unsqueeze(0)
+                for i, key in enumerate(to_encode_keys):
+                    emb = new_text_embs[i].detach().clone()
+                    text_embeddings[key] = emb
+                    self.embedding_cache._add_to_cache(key, emb, to_encode[i])
+
+            # Step 3: Pass ALL text embeddings through trainable model (creates grad graph)
+            self.model.train()
+            stacked = torch.stack([text_embeddings[k] for k in ordered_keys]).to(self.device)
+            final_embeddings = self.model(stacked)
+
+            embeddings = {}
+            for i, key in enumerate(ordered_keys):
+                embeddings[key] = final_embeddings[i]
+
+            # Log cache statistics periodically
+            if self.total_batches_processed % 50 == 0:
+                cache_stats = self.embedding_cache.get_cache_stats()
+                logger.info(f"Cache stats - Size: {cache_stats['cache_size']}, "
+                           f"Hit rate: {cache_stats['hit_rate']:.2%}, "
+                           f"Time saved: {cache_stats['time_saved_seconds']:.1f}s, "
+                           f"Memory: {cache_stats['memory_usage_mb']:.1f}MB")
+
+            return embeddings
+
+        except Exception as e:
+            logger.error(f"Error generating embeddings with cache: {e}")
+            return self._generate_embeddings_fallback(triplets)
+
+    def _generate_embeddings_trainable_encoder(
+            self, triplets: List[ContrastiveTriplet]) -> Dict[str, torch.Tensor]:
+        """
+        Gradient-preserving embedding generation for encoder fine-tuning.
+
+        Unlike the cached path, this runs the SentenceTransformer forward WITH
+        autograd (via tokenize + module forward, no torch.no_grad, no detach) so
+        gradients flow into the encoder. The embedding cache is intentionally
+        bypassed — cached detached tensors would sever the graph. Slower and more
+        memory-hungry, used only when freeze_text_encoder=False.
+        """
+        # Collect unique content across the batch (dedup by content key).
+        content_key_to_type = {}
+        ordered_keys = []
+        for triplet in triplets:
+            for content, ctype in (
+                [(triplet.anchor, 'resume'), (triplet.positive, 'job')]
+                + [(neg, 'job') for neg in triplet.negatives]
+                + [(candidate, 'job') for candidate in triplet.view_metadata.get('ordinal_candidates', [])]
+                + [(floor_job, 'job') for floor_job in triplet.view_metadata.get('ordinal_floor', [])]
+                + [(rn, 'resume') for rn in triplet.view_metadata.get('resume_negatives', [])]
+            ):
+                key = self.embedding_cache.get_content_key(content)
+                if key not in content_key_to_type:
+                    content_key_to_type[key] = (content, ctype)
+                    ordered_keys.append(key)
+
+        # Build texts in the same order.
+        texts = [self.batch_encoder._content_to_text(*content_key_to_type[k])
+                 for k in ordered_keys]
+
+        # Ensure encoder is in train mode so fine-tuning updates BN/dropout properly.
+        self.text_encoder.train()
+        self.model.train()
+
+        # Tokenize + forward THROUGH the SentenceTransformer with gradients.
+        features = self.text_encoder.tokenize(texts)
+        features = {k: (v.to(self.device) if hasattr(v, 'to') else v)
+                    for k, v in features.items()}
+        out = self.text_encoder(features)
+        text_embs = out['sentence_embedding']  # [N, text_dim], requires_grad
+
+        # Project through the trainable head; grad graph now spans encoder + head.
+        final_embeddings = self.model(text_embs)
+
+        return {key: final_embeddings[i] for i, key in enumerate(ordered_keys)}
+
+    def _encode_content_to_text_embedding(self, content: Dict[str, Any], content_type: str) -> torch.Tensor:
+        """
+        Convert structured resume/job data to text embeddings using frozen SentenceTransformer.
+
+        Prioritizes the most discriminative fields first to fit within
+        the SentenceTransformer's 256-token window.
+
+        Args:
+            content: Content dictionary with rich preprocessing data
+            content_type: 'resume' or 'job'
+
+        Returns:
+            SentenceTransformer embedding tensor (from frozen encoder)
+        """
+        # Domain_Adapter_Seam (CVE domain, spec cve-vulnerability-ranking):
+        # a content slot carrying a pre-serialized ``encoder_view`` (the CVE
+        # Profile_Text_View) is embedded verbatim. Additive and guarded on the
+        # key's presence, so career records take the resume/job path below
+        # byte-for-byte unchanged.
+        cve_view = content.get('encoder_view') if isinstance(content, dict) else None
+        if isinstance(cve_view, str) and cve_view.strip():
+            full_text = cve_view
+
+        elif content_type == 'resume':
+            text_parts = []
+
+            # 1. Role and experience level FIRST (most discriminative metadata)
+            role = content.get('role', '')
+            exp_level = content.get('experience_level', '')
+            if role and exp_level:
+                text_parts.append(f"Position: {exp_level} {role}")
+            elif role:
+                text_parts.append(f"Position: {role}")
+
+            # 2. Skills SECOND (key signal for matching, must always be included)
+            if 'skills' in content:
+                skill_names = []
+                for skill in content['skills']:
+                    if isinstance(skill, dict):
+                        skill_name = skill.get('name', '')
+                        if skill_name:
+                            skill_names.append(skill_name)
+                    elif isinstance(skill, str):
+                        skill_names.append(skill)
+                if skill_names:
+                    text_parts.append(f"Skills: {', '.join(skill_names)}")
+
+            # 3. Experience text LAST (truncated, fills remaining token budget)
+            if 'experience' in content:
+                experience = content['experience']
+                experience_text = ''
+                if isinstance(experience, list) and len(experience) > 0:
+                    if isinstance(experience[0], dict):
+                        desc_field = experience[0].get('description', '')
+                        if isinstance(desc_field, list) and len(desc_field) > 0:
+                            if isinstance(desc_field[0], dict):
+                                experience_text = desc_field[0].get('description', '')
+                            else:
+                                experience_text = str(desc_field[0])
+                        elif isinstance(desc_field, str):
+                            experience_text = desc_field
+                        else:
+                            experience_text = str(desc_field) if desc_field else ''
+                    else:
+                        experience_text = str(experience[0])
+                elif isinstance(experience, str):
+                    experience_text = experience
+
+                if experience_text:
+                    if len(experience_text) > 800:
+                        experience_text = experience_text[:800] + "..."
+                    text_parts.append(f"Profile: {experience_text}")
+
+            full_text = " [SEP] ".join(text_parts) if text_parts else "No resume information available"
+
+        elif content_type == 'job':
+            text_parts = []
+
+            # 1. Title FIRST
+            title = content.get('title', content.get('jobtitle', ''))
+            if title:
+                text_parts.append(f"Position: {title}")
+
+            # 2. Job skills SECOND (key signal for matching, must always be included)
+            skills = content.get('skills', [])
+            if skills:
+                skill_strings = []
+                if isinstance(skills, str):
+                    skill_strings.append(skills)
+                elif isinstance(skills, list):
+                    for skill in skills:
+                        if isinstance(skill, dict):
+                            skill_name = skill.get('name', skill.get('skill', ''))
+                            if skill_name:
+                                skill_strings.append(skill_name)
+                        elif isinstance(skill, str):
+                            if len(skill) <= 40 and '.' not in skill:
+                                skill_strings.append(skill)
+                            elif len(skill) <= 20:
+                                skill_strings.append(skill)
+                if skill_strings:
+                    text_parts.append(
+                        f"Required Skills: {', '.join(skill_strings)}")
+
+            # 3. Job description LAST (fills remaining token budget)
+            description = content.get(
+                'description', content.get('jobdescription', ''))
+            if description:
+                if isinstance(description, dict):
+                    desc_text = description.get('original', '')
+                elif isinstance(description, str):
+                    desc_text = description
+                else:
+                    desc_text = str(description)
+
+                if desc_text:
+                    if len(desc_text) > 800:
+                        desc_text = desc_text[:800] + "..."
+                    text_parts.append(f"Description: {desc_text}")
+
+            full_text = " [SEP] ".join(text_parts) if text_parts else "No job information available"
+
+        else:
+            full_text = str(content)
+
+        try:
+            with torch.no_grad():
+                embedding = self.text_encoder.encode(
+                    full_text,
+                    convert_to_tensor=True,
+                    device=self.device,
+                    show_progress_bar=False,
+                    normalize_embeddings=False
+                )
+
+            return embedding.clone().detach().requires_grad_(False)
+
+        except Exception as e:
+            logger.error(f"Error encoding content with frozen SentenceTransformer: {e}")
+            fallback_text = str(content)[:100]
+            try:
+                with torch.no_grad():
+                    embedding = self.text_encoder.encode(
+                        fallback_text,
+                        convert_to_tensor=True,
+                        device=self.device,
+                        show_progress_bar=False,
+                        normalize_embeddings=False
+                    )
+                embedding = embedding.clone().detach().requires_grad_(False)
+            except Exception as fallback_error:
+                logger.error(f"Fallback encoding also failed: {fallback_error}")
+                embedding_dim = self.text_encoder.get_sentence_embedding_dimension()
+                embedding = torch.zeros(embedding_dim, device=self.device)
+            return embedding
+
+    def _encode_content(self, content: Dict[str, Any], content_type: str) -> torch.Tensor:
+        """
+        Legacy method for backward compatibility.
+
+        This method provides the old single-stage embedding process for cases
+        where the full two-stage process is not needed.
+
+        Args:
+            content: Content dictionary with rich preprocessing data
+            content_type: 'resume' or 'job'
+
+        Returns:
+            Final embedding tensor (same as _encode_content_to_text_embedding for now)
+        """
+        return self._encode_content_to_text_embedding(content, content_type)
+
+    def _get_content_key(self, content: Dict[str, Any]) -> str:
+        """Generate a consistent key for content (legacy method)."""
+        # Delegate to the embedding cache for consistency
+        return self.embedding_cache.get_content_key(content)
+    
+    def _generate_embeddings_fallback(self, triplets: List[ContrastiveTriplet]) -> Dict[str, torch.Tensor]:
+        """
+        Fallback embedding generation method (original implementation).
+        Used when the cache-based method fails.
+        """
+        embeddings = {}
+
+        try:
+            # Ensure all models are on the correct device
+            self.model.to(self.device)
+            self.text_encoder.to(self.device)
+
+            # Collect all unique content
+            all_content = {}
+
+            for triplet in triplets:
+                # Add anchor (resume)
+                anchor_key = self._get_content_key(triplet.anchor)
+                all_content[anchor_key] = ('resume', triplet.anchor)
+
+                # Add positive (job)
+                positive_key = self._get_content_key(triplet.positive)
+                all_content[positive_key] = ('job', triplet.positive)
+
+                # Add negatives (jobs)
+                for negative in triplet.negatives:
+                    negative_key = self._get_content_key(negative)
+                    all_content[negative_key] = ('job', negative)
+
+                for candidate in (triplet.view_metadata.get('ordinal_candidates', [])
+                                  + triplet.view_metadata.get('ordinal_floor', [])):
+                    candidate_key = self._get_content_key(candidate)
+                    all_content[candidate_key] = ('job', candidate)
+
+                # Add resume negatives for symmetric loss
+                for resume_neg in triplet.view_metadata.get('resume_negatives', []):
+                    rn_key = self._get_content_key(resume_neg)
+                    all_content[rn_key] = ('resume', resume_neg)
+
+            # Batch process content for efficiency
+            content_keys = list(all_content.keys())
+            content_texts = []
+
+            for content_key in content_keys:
+                content_type, content_data = all_content[content_key]
+                text_embedding = self._encode_content_to_text_embedding(
+                    content_data, content_type)
+                content_texts.append(text_embedding)
+
+            if content_texts:
+                # Stack all text embeddings
+                text_embeddings_tensor = torch.stack(content_texts)
+                text_embeddings_tensor = text_embeddings_tensor.to(self.device)
+
+                # Pass through the contrastive model for final embeddings
+                self.model.train()
+                final_embeddings = self.model(text_embeddings_tensor)
+                final_embeddings = final_embeddings.to(self.device)
+
+                # Map back to content keys
+                for i, content_key in enumerate(content_keys):
+                    embeddings[content_key] = final_embeddings[i]
+
+            return embeddings
+
+        except Exception as e:
+            logger.error(f"Error in fallback embedding generation: {e}")
+            return {}
+
+    def _create_dual_encoder_model(self, input_dim: int = 768) -> nn.Module:
+        """
+        Create a research-grade contrastive model that eliminates double encoding problems.
+
+        This implementation:
+        1. Uses minimal projection to avoid overfitting on small datasets
+        2. Eliminates complex residual connections that don't help
+        3. Focuses on the contrastive learning innovations (global sampling, career-aware negatives)
+        4. Provides stable training with proper normalization
+
+        Args:
+            input_dim: Input embedding dimension from the frozen SentenceTransformer
+        """
+        class CareerAwareContrastiveModel(nn.Module):
+            def __init__(self, input_dim: int = 384, projection_dim: int = 128, dropout: float = 0.1):
+                """
+                Minimal contrastive model for career-aware resume-job matching.
+
+                Args:
+                    input_dim: Input embedding dimension (from frozen SentenceTransformer)
+                    projection_dim: Output embedding dimension (smaller to reduce overfitting)
+                    dropout: Dropout rate for regularization
+                """
+                super().__init__()
+
+                # Minimal projection head - focus on contrastive learning innovations
+                # No complex encoder or residual connections needed
+                self.projection_head = nn.Sequential(
+                    nn.Linear(input_dim, projection_dim * 2),  # Expand slightly
+                    nn.ReLU(),
+                    nn.Dropout(dropout),
+                    nn.Linear(projection_dim * 2, projection_dim)  # Project to final size
+                )
+
+                # Initialize weights for stable training
+                self._initialize_weights()
+
+            def _initialize_weights(self):
+                """Initialize model weights using Xavier initialization."""
+                for module in self.modules():
+                    if isinstance(module, nn.Linear):
+                        nn.init.xavier_uniform_(module.weight)
+                        if module.bias is not None:
+                            nn.init.zeros_(module.bias)
+
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                """
+                Forward pass through the minimal contrastive model.
+
+                Args:
+                    x: Input embeddings from frozen SentenceTransformer
+
+                Returns:
+                    Normalized embeddings for contrastive learning
+                """
+                # Simple projection (no complex encoding needed)
+                projected = self.projection_head(x)
+
+                # L2-normalize to align with contrastive loss cosine similarity assumptions
+                return F.normalize(projected, p=2, dim=-1)
+
+            def get_embedding_dim(self) -> int:
+                """Get the output embedding dimension."""
+                # Get output dimension from the last Linear layer
+                for layer in reversed(self.projection_head):
+                    if isinstance(layer, nn.Linear):
+                        return layer.out_features
+                return 128  # Default projection_dim
+
+        # Use config values for research-grade setup
+        projection_dim = getattr(self.config, 'projection_dim', 128)
+        dropout = getattr(self.config, 'projection_dropout', 0.1)
+        
+        return CareerAwareContrastiveModel(
+            input_dim=input_dim, 
+            projection_dim=projection_dim, 
+            dropout=dropout
+        )
+    
+    def get_embedding_cache_stats(self) -> Dict[str, Any]:
+        """Get embedding cache statistics."""
+        return self.embedding_cache.get_cache_stats()
+    
+    def clear_embedding_cache(self):
+        """Clear the embedding cache (useful between epochs or for memory management)."""
+        self.embedding_cache.clear_cache()
+        logger.info("Embedding cache cleared")
+    
+    def preload_dataset_embeddings(self, dataset_path: Union[str, Path], batch_size: int = 64):
+        """
+        Preload embeddings for the entire dataset to maximize cache efficiency.
+        
+        Args:
+            dataset_path: Path to training dataset
+            batch_size: Batch size for preloading
+        """
+        logger.info(f"Preloading embeddings for dataset: {dataset_path}")
+        
+        # Try loading from disk cache first. The path is configurable so each
+        # dataset/domain persists its own cache (default preserves the historical
+        # shared career location); CVE runs point this under their isolated run dir.
+        cache_path = getattr(
+            self.config, "embedding_cache_path", "embedding_cache/text_embeddings.pt"
+        )
+        loaded_from_disk = self.embedding_cache.load_from_disk(cache_path)
+        if loaded_from_disk:
+            logger.info(
+                f"Loaded {len(self.embedding_cache.cache)} embeddings from "
+                f"{cache_path}; checking coverage of this dataset.")
+        
+        try:
+            # Collect all unique content from the dataset (keyed by hash to deduplicate)
+            unique_content: Dict[str, tuple] = {}
+            
+            for batch in self.data_loader.load_batches(dataset_path):
+                for sample in batch:
+                    resume_key = self.embedding_cache.get_content_key(sample.resume)
+                    if resume_key not in unique_content:
+                        unique_content[resume_key] = (sample.resume, 'resume')
+                    
+                    job_key = self.embedding_cache.get_content_key(sample.job)
+                    if job_key not in unique_content:
+                        unique_content[job_key] = (sample.job, 'job')
+            
+            # Encode ONLY what the disk cache does not already cover.
+            #
+            # This used to return early whenever load_from_disk() succeeded, which
+            # treated any cache as a complete one. A cache built from a different
+            # dataset loads fine and covers none of these keys, so preloading was
+            # skipped and every text became a cache miss encoded one-at-a-time
+            # inside the training loop — measured at ~120 s/batch with a 0.00% hit
+            # rate on the v7 learning-curve data, versus seconds once warm. The
+            # keys are content hashes, so coverage is checked directly rather than
+            # inferred from the file existing.
+            total_unique = len(unique_content)
+            missing = {k: v for k, v in unique_content.items()
+                       if k not in self.embedding_cache.cache}
+            covered = total_unique - len(missing)
+            logger.info(
+                f"Dataset needs {total_unique} unique embeddings: "
+                f"{covered} cached, {len(missing)} to encode "
+                f"({covered / max(total_unique, 1):.1%} coverage).")
+            if not missing:
+                logger.info("Disk cache fully covers this dataset — nothing to encode.")
+                return
+
+            # Encode text embeddings only (frozen SentenceTransformer output)
+            # The trainable projection model is applied fresh each batch for grad flow
+            items = list(missing.items())
+            batch_size_preload = batch_size
+            for start in range(0, len(items), batch_size_preload):
+                chunk = items[start:start + batch_size_preload]
+                texts = [self.batch_encoder._content_to_text(c, t) for _, (c, t) in chunk]
+                with torch.no_grad():
+                    text_embs = self.text_encoder.encode(
+                        texts, convert_to_tensor=True, device=self.device,
+                        show_progress_bar=False, normalize_embeddings=False
+                    )
+                if text_embs.dim() == 1:
+                    text_embs = text_embs.unsqueeze(0)
+                for i, (key, item) in enumerate(chunk):
+                    emb = text_embs[i].detach().clone()
+                    self.embedding_cache._add_to_cache(key, emb, item)
+                
+                if (start + batch_size_preload) % (batch_size_preload * 10) == 0 or start + batch_size_preload >= len(items):
+                    logger.info(f"Preloaded {min(start + batch_size_preload, len(items))}/{len(items)} text embeddings")
+            
+            # Log final stats
+            stats = self.embedding_cache.get_cache_stats()
+            logger.info(f"Preloading complete. Cache size: {stats['cache_size']}, "
+                       f"Memory usage: {stats['memory_usage_mb']:.1f} MB")
+            
+            # Save to disk for future runs
+            self.embedding_cache.save_to_disk(cache_path)
+            
+        except Exception as e:
+            logger.error(f"Failed to preload embeddings: {e}")
+            logger.info("Continuing with on-demand embedding generation")
+
+    def save_checkpoint(self, epoch: int, metrics: Dict[str, Any]) -> str:
+        """
+        Save training checkpoint.
+
+        Args:
+            epoch: Current epoch number
+            metrics: Training metrics dictionary
+
+        Returns:
+            Path to saved checkpoint
+        """
+        return self._save_checkpoint(epoch, metrics.get('loss', float('inf')))
+
+    def _save_checkpoint(self, epoch: int, loss: float, emergency: bool = False) -> str:
+        """
+        Internal method to save checkpoint.
+
+        Args:
+            epoch: Current epoch number
+            loss: Current loss value
+            emergency: Whether this is an emergency checkpoint
+
+        Returns:
+            Path to saved checkpoint
+        """
+        checkpoint_name = f"checkpoint_epoch_{epoch}"
+        if emergency:
+            checkpoint_name += "_emergency"
+        checkpoint_name += ".pt"
+
+        checkpoint_path = self.output_dir / checkpoint_name
+
+        checkpoint_data = {
+            'epoch': epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'loss': loss,
+            'config': asdict(self.config),
+            'training_metrics': self.training_metrics.copy(),
+            'epoch_losses': self.epoch_losses.copy(),
+            'validation_losses': self.validation_losses.copy(),
+            'total_batches_processed': self.total_batches_processed,
+            'best_loss': self.best_loss
+        }
+
+        try:
+            torch.save(checkpoint_data, checkpoint_path)
+            self.training_metrics['checkpoint_saves'] += 1
+
+            # Note: best_checkpoint.pt is now saved based on validation loss in the training loop
+            # Update best training loss for tracking (but don't save checkpoint based on it)
+            if loss < self.best_loss:
+                self.best_loss = loss
+
+            return str(checkpoint_path)
+
+        except Exception as e:
+            logger.error(f"Failed to save checkpoint: {e}")
+            raise
+
+    def _save_best_checkpoint(self, epoch: int, val_loss: float) -> str:
+        """
+        Save best model checkpoint based on validation loss.
+
+        Args:
+            epoch: Current epoch number
+            val_loss: Current validation loss value
+
+        Returns:
+            Path to saved best checkpoint
+        """
+        best_checkpoint_path = self.output_dir / "best_checkpoint.pt"
+
+        checkpoint_data = {
+            'epoch': epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'loss': self.epoch_losses[-1] if self.epoch_losses else float('inf'),  # Training loss
+            'val_loss': val_loss,  # Validation loss (the metric used for selection)
+            'config': asdict(self.config),
+            'training_metrics': self.training_metrics.copy(),
+            'epoch_losses': self.epoch_losses.copy(),
+            'validation_losses': self.validation_losses.copy(),
+            'total_batches_processed': self.total_batches_processed,
+            'best_loss': self.best_loss,
+            'best_val_loss': self.best_val_loss
+        }
+
+        try:
+            torch.save(checkpoint_data, best_checkpoint_path)
+            return str(best_checkpoint_path)
+        except Exception as e:
+            logger.error(f"Failed to save best checkpoint: {e}")
+            raise
+
+    def load_checkpoint(self, checkpoint_path: Union[str, Path]) -> Dict[str, Any]:
+        """
+        Load training checkpoint and resume training state.
+
+        Args:
+            checkpoint_path: Path to checkpoint file
+
+        Returns:
+            Dictionary containing checkpoint metadata
+
+        Raises:
+            FileNotFoundError: If checkpoint file doesn't exist
+        """
+        checkpoint_path = Path(checkpoint_path)
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(
+                f"Checkpoint file not found: {checkpoint_path}")
+
+        logger.info(f"Loading checkpoint from {checkpoint_path}")
+
+        try:
+            checkpoint_data = torch.load(
+                checkpoint_path, map_location=self.device)
+
+            # Restore model and optimizer state
+            self.model.load_state_dict(checkpoint_data['model_state_dict'])
+            self.optimizer.load_state_dict(
+                checkpoint_data['optimizer_state_dict'])
+
+            # Restore training state
+            self.current_epoch = checkpoint_data['epoch']
+            self.total_batches_processed = checkpoint_data.get(
+                'total_batches_processed', 0)
+            self.best_loss = checkpoint_data.get('best_loss', float('inf'))
+            self.epoch_losses = checkpoint_data.get('epoch_losses', [])
+            self.validation_losses = checkpoint_data.get('validation_losses', [])
+            self.training_metrics.update(
+                checkpoint_data.get('training_metrics', {}))
+
+            logger.info(
+                f"Checkpoint loaded successfully. Resuming from epoch {self.current_epoch}")
+
+            return {
+                'epoch': checkpoint_data['epoch'],
+                'loss': checkpoint_data['loss'],
+                'total_batches': self.total_batches_processed,
+                'config': checkpoint_data.get('config', {})
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to load checkpoint: {e}")
+            raise
+
+    def _should_save_checkpoint(self) -> bool:
+        """Determine if a checkpoint should be saved."""
+        return (self.total_batches_processed % self.config.checkpoint_frequency == 0 or
+                self.current_epoch == self.config.num_epochs - 1)
+
+    def _log_batch_progress(self, batch_num: int, loss: float, stats: Dict[str, Any]) -> None:
+        """Log batch training progress."""
+        # Get current memory usage for progress logging
+        memory_info = self.memory_monitor.get_memory_usage()
+
+        progress_msg = (f"Epoch {self.current_epoch + 1}, Batch {batch_num}: "
+                        f"loss={loss:.6f}, samples={stats['samples_processed']}, "
+                        f"triplets={stats['triplets_created']}, "
+                        f"time={stats['processing_time']:.3f}s")
+
+        if memory_info["system_memory_mb"]:
+            progress_msg += f", mem={memory_info['system_memory_mb']:.1f}MB"
+        if memory_info["gpu_memory_mb"]:
+            progress_msg += f", gpu_mem={memory_info['gpu_memory_mb']:.1f}MB"
+
+        self.structured_logger.logger.info(progress_msg)
+
+    def _log_epoch_completion(self, epoch: int, loss: float) -> None:
+        """Log epoch completion."""
+        self.structured_logger.logger.info(f"Epoch {epoch + 1}/{self.config.num_epochs} completed: "
+                                           f"avg_loss={loss:.6f}, best_loss={self.best_loss:.6f}")
+
+    def _save_config(self) -> None:
+        """Save training configuration."""
+        config_path = self.output_dir / "training_config.json"
+        with open(config_path, 'w') as f:
+            json.dump(asdict(self.config), f, indent=2)
+
+    def _create_training_results(self) -> TrainingResults:
+        """Create TrainingResults object from current training state."""
+        training_time = (self.training_metrics.get('training_end_time', time.time()) -
+                         self.training_metrics.get('training_start_time', 0))
+
+        # Find all checkpoint files
+        checkpoint_paths = []
+        for checkpoint_file in self.output_dir.glob("checkpoint_*.pt"):
+            checkpoint_paths.append(str(checkpoint_file))
+
+        return TrainingResults(
+            final_loss=self.epoch_losses[-1] if self.epoch_losses else float(
+                'inf'),
+            epoch_losses=self.epoch_losses.copy(),
+            training_time=training_time,
+            total_batches=self.total_batches_processed,
+            total_samples=self.training_metrics['total_samples_processed'],
+            checkpoint_paths=checkpoint_paths,
+            metrics=self.training_metrics.copy(),
+            validation_losses=self.validation_losses.copy()
+        )
+
+    def _save_training_results(self, results: TrainingResults) -> None:
+        """Save training results to file."""
+        results_path = self.output_dir / "training_results.json"
+        results.save_json(str(results_path))
+        logger.info(f"Training results saved to {results_path}")
+
+    def _cleanup_resources(self) -> None:
+        """
+        Cleanup memory resources after training.
+        
+        Frees global job pool and embedding cache to release memory.
+        """
+        import gc
+        
+        memory_freed = 0
+        
+        # Cleanup global job pool
+        if self.global_job_pool is not None:
+            pool_size = len(self.global_job_pool)
+            # Estimate memory (rough: ~1KB per job on average)
+            estimated_memory = pool_size * 1024 / (1024 * 1024)  # MB
+            memory_freed += estimated_memory
+            
+            self.global_job_pool = None
+            logger.info(f"Global job pool cleared: {pool_size} jobs (~{estimated_memory:.1f} MB)")
+        
+        # Cleanup embedding cache
+        if hasattr(self, 'embedding_cache') and self.embedding_cache is not None:
+            cache_stats = self.embedding_cache.get_cache_stats()
+            cache_memory = cache_stats.get('memory_usage_mb', 0)
+            memory_freed += cache_memory
+            
+            self.embedding_cache.clear_cache()
+            logger.info(f"Embedding cache cleared: ~{cache_memory:.1f} MB")
+        
+        # Force garbage collection
+        gc.collect()
+        
+        if memory_freed > 0:
+            logger.info(f"Total memory freed: ~{memory_freed:.1f} MB")
+
+    def _setup_signal_handlers(self) -> None:
+        """Setup signal handlers for graceful training interruption."""
+        def signal_handler(signum, frame):
+            logger.info(
+                f"Received signal {signum}, setting interruption flag...")
+            self.training_interrupted = True
+
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
+    def get_training_status(self) -> Dict[str, Any]:
+        """
+        Get current training status and metrics.
+
+        Returns:
+            Dictionary containing current training status
+        """
+        status = {
+            'current_epoch': self.current_epoch,
+            'current_batch': self.current_batch,
+            'total_batches_processed': self.total_batches_processed,
+            'best_loss': self.best_loss,
+            'training_interrupted': self.training_interrupted,
+            'epoch_losses': self.epoch_losses.copy(),
+            'training_metrics': self.training_metrics.copy()
+        }
+
+        # Add comprehensive logging summary
+        if hasattr(self, 'structured_logger'):
+            status['logging_summary'] = self.structured_logger.get_training_summary()
+
+        return status
+
+    def generate_training_summary(self) -> Dict[str, Any]:
+        """
+        Generate comprehensive training summary with performance stats.
+
+        Returns:
+            Dictionary containing detailed training summary
+        """
+        if not hasattr(self, 'structured_logger'):
+            return self.get_training_status()
+
+        # Get logging summary
+        logging_summary = self.structured_logger.get_training_summary()
+
+        # Calculate additional performance metrics
+        total_training_time = (
+            self.training_metrics.get('training_end_time', time.time()) -
+            self.training_metrics.get('training_start_time', 0)
+        )
+
+        samples_per_second = (
+            logging_summary['total_samples'] / total_training_time
+            if total_training_time > 0 else 0
+        )
+
+        batches_per_second = (
+            logging_summary['total_batches'] / total_training_time
+            if total_training_time > 0 else 0
+        )
+
+        # Compile comprehensive summary
+        summary = {
+            'training_overview': {
+                'total_epochs': len(self.epoch_losses),
+                'total_batches': self.total_batches_processed,
+                'total_samples': logging_summary['total_samples'],
+                'total_triplets': logging_summary['total_triplets'],
+                'training_time_seconds': total_training_time,
+                'final_loss': self.epoch_losses[-1] if self.epoch_losses else None,
+                'final_validation_loss': self.validation_losses[-1] if self.validation_losses else None,
+                'best_loss': self.best_loss,
+                'training_completed': not self.training_interrupted
+            },
+            'loss_history': {
+                'epoch_losses': self.epoch_losses,
+                'validation_losses': self.validation_losses
+            },
+            'performance_metrics': {
+                'avg_batch_loss': logging_summary['avg_batch_loss'],
+                'avg_batch_time_seconds': logging_summary['avg_batch_time'],
+                'samples_per_second': samples_per_second,
+                'batches_per_second': batches_per_second,
+                'failed_batches': logging_summary['failed_batches'],
+                'success_rate': (
+                    (logging_summary['total_batches'] - logging_summary['failed_batches']) /
+                    max(1, logging_summary['total_batches'])
+                )
+            },
+            'system_metrics': {
+                'checkpoint_saves': self.training_metrics.get('checkpoint_saves', 0),
+                'interruptions': logging_summary.get('interruptions', 0),
+                'errors': logging_summary['error_count']
+            },
+            'configuration': asdict(self.config),
+            'logging_summary': logging_summary
+        }
+
+        return summary
+
+    def _handle_diagnostic_alert(self, alert_type: str, alert_data: dict) -> None:
+        """Handle diagnostic alerts during training."""
+        self.structured_logger.logger.warning(
+            f"Diagnostic alert: {alert_type}")
+
+        if alert_type == "loss_explosion":
+            self.structured_logger.logger.warning(
+                "Loss explosion detected - reducing learning rate by 50%")
+            for param_group in self.optimizer.param_groups:
+                old_lr = param_group['lr']
+                param_group['lr'] *= 0.5
+                self.structured_logger.logger.info(
+                    f"Learning rate reduced from {old_lr} to {param_group['lr']}")
+
+        elif alert_type == "gradient_explosion":
+            self.structured_logger.logger.warning(
+                "Gradient explosion detected - enabling gradient clipping")
+            # Enable gradient clipping for subsequent batches
+            if hasattr(self.config, 'max_grad_norm'):
+                self.config.max_grad_norm = 1.0
+
+        elif alert_type == "loss_stagnation":
+            self.structured_logger.logger.warning(
+                "Loss stagnation detected - consider adjusting hyperparameters")
+            # Could implement learning rate scheduling here
+
+        elif alert_type == "embedding_collapse":
+            self.structured_logger.logger.critical(
+                "Embedding collapse detected - training may need restart")
+            # Save emergency checkpoint
+            emergency_path = self.output_dir / \
+                f"emergency_checkpoint_step_{self.total_batches_processed}.pt"
+            self.save_checkpoint(emergency_path)
+            self.structured_logger.logger.info(
+                f"Emergency checkpoint saved: {emergency_path}")
+
+    def close(self) -> None:
+        """Close trainer and cleanup resources."""
+        # Cleanup global job pool and other memory resources
+        self._cleanup_resources()
+        
+        # Cleanup diagnostic integration
+        if self.diagnostic_integration:
+            try:
+                self.diagnostic_integration.stop_async_diagnostics()
+
+                # Get and log performance stats
+                stats = self.diagnostic_integration.get_performance_stats()
+                if not stats.get('no_data'):
+                    self.structured_logger.logger.info(
+                        f"Diagnostic performance: {stats['average_overhead_ms']:.2f}ms avg overhead, "
+                        f"{stats['total_steps_monitored']} steps monitored"
+                    )
+
+            except Exception as e:
+                self.structured_logger.logger.warning(
+                    f"Error cleaning up diagnostics: {e}")
+
+        if hasattr(self, 'structured_logger'):
+            # Generate final summary before closing
+            try:
+                final_summary = self.generate_training_summary()
+                summary_file = self.output_dir / "final_training_summary.json"
+                with open(summary_file, 'w') as f:
+                    json.dump(final_summary, f, indent=2, default=str)
+                self.structured_logger.logger.info(
+                    f"Final training summary saved: {summary_file}")
+            except Exception as e:
+                self.structured_logger.logger.error(
+                    f"Failed to save final summary: {e}")
+
+            # Close structured logger
+            self.structured_logger.close()
+
+    def resume_training(self, dataset_path: Union[str, Path],
+                        checkpoint_path: Union[str, Path]) -> TrainingResults:
+        """
+        Resume training from a checkpoint.
+
+        Args:
+            dataset_path: Path to training dataset
+            checkpoint_path: Path to checkpoint file
+
+        Returns:
+            TrainingResults from resumed training
+        """
+        # Load checkpoint
+        self.load_checkpoint(checkpoint_path)
+
+        # Reset interruption flag
+        self.training_interrupted = False
+
+        # Continue training
+        logger.info(f"Resuming training from epoch {self.current_epoch}")
+        return self.train(dataset_path)

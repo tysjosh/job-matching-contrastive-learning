@@ -1,0 +1,7 @@
+{
+  "task_id": "task-go-ppi-withholding",
+  "task_description": "Implement the approved GO/PPI per-target withholding study (design_go_ppi.md v6, protocol_go_ppi.md v6; findings gap items 2-11): leak-pruned features + rebuilt splits in new dirs, frozen target table, withholding generator, runner assertions, the go_ontology_loss_weight L_GO term with a loss-only relation table, diagnostics, negative audit, cached-embedding evaluator with per-target metrics and relation probe, text-similarity covariate, two-way cluster bootstrap statistics, four configs, lambda pilot, and a resumable sweep driver that never runs the full grid. Plan: /Users/olukotunjosh/Downloads/CDCL/.agents/tasks/ontology-withholding-feasibility/plan_go_ppi.md (items 1-23 implementation, 24-26 real gates in the smoke step).",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
+  "blocked_reason": null
+}

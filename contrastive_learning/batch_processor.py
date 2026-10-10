@@ -443,6 +443,35 @@ class BatchProcessor:
         negatives, career_distances = self._select_negatives(
             anchor_sample, batch, global_job_pool)
 
+        # Career ordinal supervision is graded even though the binary InfoNCE
+        # label is positive only for good_fit. Keep potential_fit out of the
+        # InfoNCE positive slot, but expose same-query candidates to the
+        # ordinal margin. Without this, level 1 never reaches the loss.
+        #
+        # With ``ordinal_judged_floor`` the same scan also collects the resume's
+        # own judged no_fit records as the level-0 floor, so the margins compare
+        # labelled jobs only. Sampled negatives are unjudged for this resume and
+        # stay in InfoNCE (L1) alone.
+        ordinal_candidates = []
+        ordinal_floor = []
+        use_judged_floor = bool(getattr(self.config, 'ordinal_judged_floor', False))
+        if getattr(self.config, 'loss_type', None) == 'ordinal' and \
+                anchor_sample.metadata.get('original_label') == 'good_fit':
+            resume_id = (anchor_sample.metadata.get('resume_id')
+                         or self._compute_resume_id(anchor_sample.resume))
+            for sample in batch:
+                label = sample.metadata.get('original_label')
+                if label == 'potential_fit':
+                    target = ordinal_candidates
+                elif label == 'no_fit' and use_judged_floor:
+                    target = ordinal_floor
+                else:
+                    continue
+                sibling_id = (sample.metadata.get('resume_id')
+                              or self._compute_resume_id(sample.resume))
+                if sibling_id == resume_id:
+                    target.append(sample.job)
+
         # Add rejection-based hard negatives (ConFit-inspired)
         if self.use_rejection_hard_negatives and self.rejection_index:
             job_title = anchor_sample.job.get('title', '')
@@ -454,6 +483,18 @@ class BatchProcessor:
                 hard_negs = random.sample(rejected_jobs, n_hard)
                 negatives.extend(hard_negs)
                 career_distances.extend([0.0] * n_hard)
+
+        # A known partial match for this resume must not simultaneously be an
+        # InfoNCE negative or a level-0 ordinal floor for this query.
+        if ordinal_candidates:
+            retained = [(job, distance) for job, distance in zip(negatives, career_distances)
+                        if job not in ordinal_candidates]
+            if retained:
+                negatives, career_distances = map(list, zip(*retained))
+            else:
+                negatives = [{'job_id': 'dummy_negative', 'title': 'No Match Available',
+                              'description': 'Placeholder negative sample', 'level': 'unknown'}]
+                career_distances = [self.config.medium_negative_max_distance]
 
         # Select resume negatives for symmetric loss reverse direction
         resume_negatives = []
@@ -491,6 +532,13 @@ class BatchProcessor:
             'resume_id': anchor_sample.metadata.get('resume_id')
                           or self._compute_resume_id(anchor_sample.resume),
         }
+        if ordinal_candidates:
+            view_metadata['ordinal_candidates'] = ordinal_candidates
+        if use_judged_floor:
+            # Present (possibly empty) whenever the judged floor is on, so the
+            # loss never falls back to sampled negatives for an anchor whose
+            # resume simply has no no_fit record in this batch.
+            view_metadata['ordinal_floor'] = ordinal_floor
 
         # ── CVE ordinal Stage 1: per-candidate priority_band capture (additive) ──
         # When the CVE record adapter tagged the anchor with a band, propagate the
@@ -1190,6 +1238,14 @@ class BatchProcessor:
         #    regardless of the absolute scale. This is what actually delivers hard
         #    negatives to the loss when absolute cut points are unreachable.
         if getattr(self.config, 'ontology_negative_rank_tiers', False):
+            # Tie-break. sorted() is stable, so candidates with equal distance
+            # keep their global-pool order and the tercile cut falls by pool
+            # position, not at random. ISCO distance has only five values, so
+            # most candidates tie and the "hard" third becomes a fixed slice of
+            # the pool. Shuffling first makes the cut random within each tie.
+            if getattr(self.config, 'ontology_rank_tie_break', False):
+                scored = list(scored)
+                random.shuffle(scored)
             ranked = sorted(scored, key=lambda jd: jd[1])   # ascending distance
             k = len(ranked)
             t1, t2 = k // 3, (2 * k) // 3
@@ -1236,5 +1292,3 @@ class BatchProcessor:
         )
 
         return negatives, distances
-
-

@@ -120,6 +120,7 @@ class GoPpiNegativeSelector:
         go_score_cap: int = 400,
         tier_sampling: str = "deterministic",
         tier_window_frac: float = 0.34,
+        unannotated_anchor_window: bool = False,
     ) -> None:
         self.pools = pools
         self.views = views
@@ -128,6 +129,9 @@ class GoPpiNegativeSelector:
         self.go_score_cap = int(go_score_cap)
         self.tier_sampling = str(tier_sampling)
         self.tier_window_frac = float(tier_window_frac)
+        # Withholding study (design 5.6): unannotated anchors in a GO-tiered arm
+        # take the random_window path, so their draws equal the control's.
+        self.unannotated_anchor_window = bool(unannotated_anchor_window)
         self.total_epochs = max(1, int(total_epochs))
         self.training_seed = int(training_seed)
         self.start_hard_ratio = float(start_hard_ratio)
@@ -137,9 +141,9 @@ class GoPpiNegativeSelector:
 
         logger.info(
             "GoPpiNegativeSelector: %d anchor pools, %d indexed protein views, "
-            "hard ratio %.2f -> %.2f over %d epochs, go_tiered=%s",
+            "hard ratio %.2f -> %.2f over %d epochs, go_tiered=%s, unannotated_anchor_window=%s",
             len(pools), len(views), start_hard_ratio, end_hard_ratio,
-            self.total_epochs, self.go_tiered,
+            self.total_epochs, self.go_tiered, self.unannotated_anchor_window,
         )
 
     # ------------------------------------------------------------------ build
@@ -197,6 +201,8 @@ class GoPpiNegativeSelector:
             go_score_cap=int(getattr(config, "go_ppi_go_score_cap", 400)),
             tier_sampling=str(getattr(config, "go_ppi_tier_sampling", "deterministic")),
             tier_window_frac=float(getattr(config, "go_ppi_tier_window_frac", 0.34)),
+            unannotated_anchor_window=bool(
+                getattr(config, "go_ppi_unannotated_anchor_window", False)),
         )
 
     # -------------------------------------------------------------- curriculum
@@ -264,7 +270,13 @@ class GoPpiNegativeSelector:
                 anchor_sample.job["coarse_uris"] = sorted(
                     self.matcher.coarse_for_gene(positive_id))
 
-        if self.tier_sampling == "random_window":
+        # Withholding study (design 5.6): with the flag off this is exactly the
+        # old ``tier_sampling == "random_window"`` test.
+        use_random_window = (self.tier_sampling == "random_window"
+                             or (self.unannotated_anchor_window and self.go_tiered
+                                 and not anchor_uris))
+
+        if use_random_window:
             # DIVERSITY CONTROL. Restrict each tier to a random window of the same
             # size the ontology arms use, chosen once per anchor (seeded WITHOUT
             # the epoch so it is fixed across training, exactly as the GO-closest
@@ -291,7 +303,7 @@ class GoPpiNegativeSelector:
             elif len(easy_pool) > want_easy:
                 want_easy += min(deficit, len(easy_pool) - want_easy)
 
-        if self.tier_sampling == "random_window":
+        if use_random_window:
             # Pools are already restricted to their fixed random window.
             chosen = [(p, 1) for p in rng.sample(hard_pool, min(want_hard, len(hard_pool)))]
             chosen += [(p, 0) for p in rng.sample(easy_pool, min(want_easy, len(easy_pool)))]

@@ -21,6 +21,15 @@ Two domains, one code path
 Both arms of a pair must differ in as few config fields as possible; the runner
 prints the diff so an unintended second factor is visible before training starts
 rather than after the numbers are quoted.
+
+GO/PPI withholding study
+------------------------
+``--withholding-manifest`` switches to :func:`run_study` (design 4.1-4.4, 4.7 of
+``.agents/tasks/ontology-withholding-feasibility/design_go_ppi.md``): preflight,
+condition assertions, epoch callbacks, post-training checks and the extended
+``lc_manifest.json``; any failure writes ``run_error.json`` and exits 2. Without
+it the code path is the one above. ``--device auto|cuda|cpu`` (user decision B)
+selects where the frozen encoder and the projection head run.
 """
 
 from __future__ import annotations
@@ -29,11 +38,14 @@ import argparse
 import json
 import logging
 import sys
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Any, Dict
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+from go_ppi_domain import withholding_constants as wc  # noqa: E402  (stdlib-only module)
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +75,9 @@ EXPECTED_FACTOR_FIELDS = {
     # variety, so baseline-vs-deterministic mixes two effects. The intended
     # single-factor pair is baseline vs the stochastic arm.
     "go_ppi": {"go_ppi_go_tiered_negatives", "go_ppi_tier_sampling",
-               "go_ppi_tier_window_frac"},
+               "go_ppi_tier_window_frac",
+               # Withholding study: the GO relation-preservation loss factor.
+               "go_ontology_loss_weight"},
 }
 
 
@@ -247,6 +261,398 @@ def attach_go_ppi(trainer, config) -> Dict[str, Any]:
     }
 
 
+def attach_go_relation_loss(trainer, config, train_file) -> Dict[str, Any]:
+    """Attach the loss-only GoRelationTable when ``go_ontology_loss_weight > 0``.
+
+    The table goes to the LOSS ENGINE only. This never calls
+    ``batch_processor.set_ontology_matcher`` and never touches the selector, so
+    the loss factor cannot open GO-tiered negative selection (withholding
+    design 4.3, 5.4). Weight 0 attaches nothing.
+    """
+    weight = float(getattr(config, "go_ontology_loss_weight", 0.0))
+    if weight == 0:
+        return {"weight": 0.0, "table": None}
+    if getattr(config, "domain_adapter", None) != "go_ppi":
+        raise ValueError("go_ontology_loss_weight > 0 requires domain_adapter='go_ppi'")
+    from go_ppi_domain.go_relation import GoRelationTable
+
+    table = GoRelationTable.from_train_file(Path(config.go_index_cache), Path(train_file))
+    trainer.loss_engine.set_go_relation_table(table)
+    return {
+        "weight": weight,
+        "table_proteins": len(table.ids),
+        "annotated_proteins": table.n_annotated(),
+        "table_sha256": table.sha256(),
+        "index_leak_pruning": table.source_meta.get("leak_pruning"),
+    }
+
+
+# ====================================================================== device
+#: ``--device`` / ``TrainingConfig.training_device`` (remote GPU execution, user
+#: decision B). ``auto`` is today's behaviour: the trainer and loss engine pick
+#: CUDA when available, else CPU, for both the frozen encoder and the projection.
+DEVICES = ("auto", "cuda", "cpu")
+
+
+def resolve_device(requested: str) -> str:
+    """``auto|cuda|cpu`` -> the device the trainer will use (``cuda`` or ``cpu``)."""
+    import torch
+
+    requested = str(requested or "auto")
+    if requested not in DEVICES:
+        raise ValueError(f"unknown device {requested!r}; choose from {DEVICES}")
+    available = bool(torch.cuda.is_available())
+    if requested == "cuda" and not available:
+        raise RuntimeError("--device cuda requested but torch.cuda.is_available() is False")
+    if requested == "auto":
+        return "cuda" if available else "cpu"
+    return requested
+
+
+@contextmanager
+def device_scope(resolved: str):
+    """Build the trainer on ``resolved``.
+
+    Every device choice in the trainer, loss engine, embedding cache and
+    SentenceTransformer is ``'cuda' if torch.cuda.is_available() else 'cpu'`` at
+    construction time. Forcing CPU on a CUDA machine therefore hides CUDA for the
+    duration of construction only; everything built inside keeps that device. In
+    every other case (CPU machine, ``cuda``, ``auto``) this is a no-op, so CPU and
+    career behaviour are byte-identical.
+    """
+    import torch
+
+    if resolved == "cpu" and torch.cuda.is_available():
+        original = torch.cuda.is_available
+        torch.cuda.is_available = lambda: False
+        try:
+            yield
+        finally:
+            torch.cuda.is_available = original
+    else:
+        yield
+
+
+def device_record(requested: str, resolved: str, trainer=None) -> Dict[str, Any]:
+    """The ``lc_manifest["device"]`` block; asserts the trainer really uses ``resolved``."""
+    import torch
+
+    rec: Dict[str, Any] = {"requested": str(requested or "auto"), "resolved": resolved,
+                           "cuda_available": bool(torch.cuda.is_available()),
+                           "torch": torch.__version__, "cuda_device_name": None}
+    if resolved == "cuda":
+        rec["cuda_device_name"] = torch.cuda.get_device_name(0)
+    if trainer is not None:
+        used = {"trainer": torch.device(trainer.device).type,
+                "loss_engine": torch.device(trainer.loss_engine.device).type}
+        enc = next(iter(trainer.text_encoder.parameters()), None)
+        if enc is not None:
+            used["text_encoder"] = enc.device.type
+        proj = next(iter(trainer.model.parameters()), None)
+        if proj is not None:
+            used["projection"] = proj.device.type
+        wrong = {k: v for k, v in used.items() if v != resolved}
+        if wrong:
+            raise RuntimeError(f"device {resolved!r} requested but {wrong} differ")
+        rec["components"] = used
+    return rec
+
+
+# =============================================================== study path
+#: The four withholding-study cells (design 4.1).
+STUDY_CELLS = ("baseline", "loss_only", "neg_only", "both")
+LOSS_ON_CELLS = ("loss_only", "both")
+
+
+def _validate_study_cli(ap: argparse.ArgumentParser, args) -> None:
+    """The design 4.1 requirement/exclusion rules, as argparse errors (exit 2)."""
+    study_only = {"--study-cell": args.study_cell, "--go-diagnostics": args.go_diagnostics,
+                  "--pilot": args.pilot or None}
+    if args.withholding_manifest is None:
+        given = [k for k, v in study_only.items() if v is not None]
+        if given:
+            ap.error(f"{', '.join(given)} require(s) --withholding-manifest")
+    else:
+        if args.domain != "go_ppi":
+            ap.error("--withholding-manifest requires --domain go_ppi")
+        if args.study_cell is None:
+            ap.error("--withholding-manifest requires --study-cell")
+        if args.go_diagnostics is None:
+            ap.error("--withholding-manifest requires --go-diagnostics")
+        if args.validation_file is not None:
+            ap.error("--withholding-manifest forbids --validation-file")
+    if args.go_ppi_split_dir is not None and args.domain != "go_ppi":
+        ap.error("--go-ppi-split-dir requires --domain go_ppi")
+
+
+def preflight_index(config, frozen: Dict[str, Any]) -> Dict[str, Any]:
+    """Design 4.2 step 2: the pruned index hash and meta, before any matcher exists.
+
+    Uses ``GoIndex.load`` only, so a missing or wrong pickle fails here instead of
+    ``build_or_load`` silently rebuilding (and overwriting) it later.
+    """
+    from go_ppi_domain.go_ontology import GoIndex
+
+    path = Path(config.go_index_cache)
+    if not path.is_file():
+        raise RuntimeError(f"preflight 2: go_index_cache {wc.rel_to_root(path)} does not exist")
+    got = wc.sha256_file(path)
+    if got != frozen.get("go_index_P_sha256"):
+        raise RuntimeError(f"preflight 2: go_index_cache sha256 {got} != frozen_hashes"
+                           f"[go_index_P_sha256] {frozen.get('go_index_P_sha256')}")
+    meta = GoIndex.load(path).meta
+    if (meta.get("leak_pruning") or {}).get("with_from_human_protein") is not True:
+        raise RuntimeError("preflight 2: go_index_cache is not leak-pruned "
+                           "(meta.leak_pruning.with_from_human_protein is not True)")
+    if meta.get("aspect") != "P":
+        raise RuntimeError(f"preflight 2: go_index_cache aspect {meta.get('aspect')!r} != 'P'")
+    return {"go_index_P_sha256": got, "aspect": "P", "leak_pruning": True}
+
+
+def _git_head() -> Any:
+    import subprocess
+
+    try:
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=wc.ROOT, capture_output=True,
+                              text=True, check=True).stdout.strip()
+    except Exception:  # noqa: BLE001 - recorded, not required
+        return None
+
+
+def study_preflight(args, raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Design 4.2 steps 1-5 (plus the device resolution of user decision B).
+
+    Returns the expanded ``TrainingConfig`` and the provenance the manifest needs.
+    Raises ``RuntimeError`` on the first violated step.
+    """
+    from contrastive_learning.data_structures import TrainingConfig
+
+    # 1. paths: keys present in the JSON file + the CLI path overrides. Under
+    #    user decision B a config value may be root-anchored ("$ROOT/...") or
+    #    absolute; a bare relative value (cwd-dependent) is rejected.
+    bad = wc.config_path_problems(raw)
+    cli = {"--go-ppi-split-dir": args.go_ppi_split_dir, "--train-file": args.train_file,
+           "--output-dir": args.output_dir, "--withholding-manifest": args.withholding_manifest,
+           "--go-diagnostics": args.go_diagnostics}
+    bad += [f"{k}={str(v)!r}" for k, v in cli.items()
+            if v is not None and not Path(v).is_absolute()]
+    if bad:
+        raise RuntimeError(f"preflight 1: relative path(s) {bad}; use absolute or "
+                           f"'{wc.ROOT_TOKEN}/...' values")
+    config = TrainingConfig.from_dict(wc.expand_config_dict(raw))
+    config.training_seed = args.seed
+    if args.epochs is not None:
+        config.num_epochs = args.epochs
+    config.orca_enabled = False
+    if args.go_ppi_split_dir is not None:
+        config.go_ppi_split_dir = str(args.go_ppi_split_dir)
+
+    # 2. pruned index, before any matcher is built
+    frozen_path = Path(wc.SPLITS) / "frozen_hashes.json"
+    frozen = json.loads(frozen_path.read_text(encoding="utf-8"))
+    index = preflight_index(config, frozen)
+
+    # 3. no validation path (variant-independent final-epoch checkpoint, design 8)
+    if getattr(config, "validation_path", None) or args.validation_file:
+        raise RuntimeError("preflight 3: study runs must not set validation_path")
+
+    # 4. lambda equality (skipped only under --pilot)
+    weight = float(getattr(config, "go_ontology_loss_weight", 0.0))
+    lam = None
+    if args.pilot:
+        lam_check = "skipped (--pilot)"
+    else:
+        path = wc.lambda_choice_path()
+        if not path.is_file():
+            raise RuntimeError(f"preflight 4: {wc.rel_to_root(path)} does not exist "
+                               f"(run the lambda pilot first, or pass --pilot)")
+        lam = float(json.loads(path.read_text(encoding="utf-8"))["lambda"])
+        expected = lam if args.study_cell in LOSS_ON_CELLS else 0.0
+        if weight != expected:
+            raise RuntimeError(f"preflight 4: go_ontology_loss_weight {weight} != {expected} "
+                               f"for cell {args.study_cell} (lambda_choice {lam})")
+        lam_check = "ok"
+
+    # 5. code pin content hash (equality with the pin is the sweep's job)
+    code_hash, code_files = wc.code_sha256()
+
+    # device (user decision B)
+    requested = args.device or getattr(config, "training_device", "auto")
+    resolved = resolve_device(requested)
+    return {"config": config, "frozen": frozen, "frozen_path": frozen_path,
+            "index": index, "lambda": lam, "lambda_check": lam_check,
+            "code": {"git_head": _git_head(), "code_sha256": code_hash,
+                     "files": len(code_files)},
+            "code_files": code_files, "device_requested": requested,
+            "device_resolved": resolved}
+
+
+def assert_post_training(trainer, config, manifest: Dict[str, Any], recorder, guard,
+                         code_files=None) -> Dict[str, Any]:
+    """Design 4.4: fatal (``RuntimeError``) checks after ``trainer.train`` returns."""
+    import torch
+
+    W = set(manifest.get("withheld_proteins", []))
+    engine = trainer.loss_engine
+    checks: Dict[str, str] = {}
+    seen = set(getattr(engine, "go_relation_seen_ids", set()) or set())
+    if seen & W:
+        raise RuntimeError(f"post-training: L_GO saw withheld proteins {sorted(seen & W)[:5]}")
+    checks["post_seen_ids_disjoint_W"] = "ok"
+    missing = int(getattr(engine, "go_relation_missing_ids", 0) or 0)
+    if missing:
+        raise RuntimeError(f"post-training: go_relation_missing_ids == {missing} (need 0)")
+    checks["post_missing_ids_zero"] = "ok"
+    if recorder.none_returns:
+        raise RuntimeError(f"post-training: selector returned None {recorder.none_returns} times")
+    if recorder.exceptions:
+        raise RuntimeError(f"post-training: selector raised {recorder.exceptions} times")
+    checks["post_selector_counters_zero"] = "ok"
+    n_epochs = int(config.num_epochs)
+    if len(getattr(guard, "epochs", [])) != n_epochs:
+        raise RuntimeError(f"post-training: StrictEpochGuard saw {len(guard.epochs)} of "
+                           f"{n_epochs} epochs")
+    checks["post_every_epoch_guarded"] = "ok"
+    imported = wc.imported_repo_modules()
+    files = set(code_files if code_files is not None else wc.code_sha256()[1])
+    uncovered = sorted(set(imported) - files)
+    if uncovered:
+        raise RuntimeError(f"post-training: imported repo modules outside the code pin: "
+                           f"{uncovered}")
+    checks["post_import_coverage"] = "ok"
+    out_dir = Path(trainer.output_dir)
+    name = f"checkpoint_epoch_{n_epochs - 1}.pt"
+    ckpt = out_dir / name
+    if not ckpt.is_file():
+        raise RuntimeError(f"post-training: final checkpoint {name} missing")
+    epoch = torch.load(ckpt, map_location="cpu", weights_only=False).get("epoch")
+    if epoch != n_epochs - 1:
+        raise RuntimeError(f"post-training: {name} records epoch {epoch} != {n_epochs - 1}")
+    checks["post_final_checkpoint"] = "ok"
+    emergency = sorted(p.name for p in out_dir.glob("*emergency*.pt"))
+    if emergency:
+        raise RuntimeError(f"post-training: emergency checkpoint(s) present {emergency}")
+    checks["post_no_emergency_checkpoint"] = "ok"
+    return {"checks": checks, "imported": imported, "selected_checkpoint": name,
+            "selected_checkpoint_sha256": wc.sha256_file(ckpt), "seen_ids": len(seen),
+            "missing_ids": missing}
+
+
+def _write_run_error(output_dir: Path, stage: str, exc: BaseException,
+                     ctx: Dict[str, Any]) -> None:
+    import traceback
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    payload = {"stage": stage, "error": wc.scrub_root(f"{type(exc).__name__}: {exc}"),
+               "traceback": wc.scrub_root("".join(traceback.format_exception(exc))),
+               "cell": ctx.get("cell"), "cond_id": ctx.get("cond_id"), "seed": ctx.get("seed")}
+    (output_dir / "run_error.json").write_text(json.dumps(payload, indent=2) + "\n",
+                                               encoding="utf-8")
+
+
+def run_study(args, audit) -> int:
+    """The withholding-study path (design 4.2-4.4, 4.7). Any failure: run_error.json, exit 2."""
+    ctx: Dict[str, Any] = {"cell": args.study_cell, "cond_id": None, "seed": args.seed}
+    stage = "preflight"
+    try:
+        raw = json.loads(Path(args.config).read_text(encoding="utf-8"))
+        pre = study_preflight(args, raw)
+        config = pre["config"]
+
+        stage = "wiring"
+        import go_ppi_domain.record_adapter  # noqa: F401  registers "go_ppi"
+        from contrastive_learning.trainer import ContrastiveLearningTrainer
+        from go_ppi_domain.withholding import assert_condition
+        from go_ppi_domain.withholding_diagnostics import (
+            EpochDiagnostics, SelectionRecorder, StrictEpochGuard, negative_selection_block,
+            projection_param_summary)
+        from trials_domain.label_budget_runner import assert_cache_valid, preencode_pool
+
+        manifest_path = Path(args.withholding_manifest)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        ctx["cond_id"] = manifest.get("cond_id")
+        with device_scope(pre["device_resolved"]):
+            trainer = ContrastiveLearningTrainer(config=config, output_dir=str(args.output_dir))
+        device = device_record(pre["device_requested"], pre["device_resolved"], trainer)
+        attach = attach_go_ppi(trainer, config)
+        attach["go_relation_loss"] = attach_go_relation_loss(trainer, config, args.train_file)
+        selector = trainer.batch_processor.domain_negative_selector
+        recorder = SelectionRecorder(selector,
+                                     unannotated_anchors=manifest["unannotated_anchors"]["ids"])
+        attach["preencoded"] = preencode_pool(trainer, selector)
+        attach["cache_check"] = assert_cache_valid(trainer)
+        diag = EpochDiagnostics(Path(args.go_diagnostics), Path(args.train_file),
+                                recorder=recorder,
+                                weight=float(config.go_ontology_loss_weight))
+        guard = StrictEpochGuard(cell=args.study_cell)
+        trainer.epoch_end_callbacks = [recorder.on_epoch_end, diag, guard]
+
+        stage = "condition_assertions"
+        checks = assert_condition(trainer, config, manifest_path, args.train_file,
+                                  args.study_cell, pre["frozen"])
+
+        stage = "train"
+        result = trainer.train(str(args.train_file))
+
+        stage = "post_training"
+        post = assert_post_training(trainer, config, manifest, recorder, guard,
+                                    code_files=pre["code_files"])
+
+        stage = "manifest"
+        engine = trainer.loss_engine
+        rel = attach["go_relation_loss"]
+        counts = {k: checks[k] for k in ("withheld_count", "train_proteins") if k in checks}
+        assertions = {k: v for k, v in checks.items()
+                      if k not in ("cond_id", "withheld_count", "train_proteins")}
+        assertions.update({"preflight_paths": "ok", "preflight_index": "ok",
+                           "preflight_no_validation": "ok",
+                           "preflight_lambda": pre["lambda_check"]})
+        assertions.update(post["checks"])
+        assertions["counts"] = counts
+        lc = {
+            "domain": args.domain,
+            "config": str(args.config),
+            "train_file": str(args.train_file),
+            "train_records": sum(1 for _ in open(args.train_file)),
+            "fraction": args.fraction,
+            "seed": args.seed,
+            "epochs": config.num_epochs,
+            "single_factor_audit": audit,
+            "attach": attach,
+            "train_result": _jsonable(result),
+            "withholding": {
+                "cond_id": manifest.get("cond_id"), "pack_id": manifest.get("pack_id"),
+                "k": manifest.get("k"), "cell": args.study_cell,
+                "manifest_sha256": wc.sha256_file(manifest_path),
+                "frozen_hashes_sha256": wc.sha256_file(pre["frozen_path"]),
+                "assertions": assertions,
+                "selected_checkpoint": post["selected_checkpoint"],
+                "selected_checkpoint_sha256": post["selected_checkpoint_sha256"]},
+            "epoch_stats": list(guard.epochs),
+            "negative_selection": negative_selection_block(recorder, selector),
+            "go_relation_loss": {
+                "weight": float(config.go_ontology_loss_weight),
+                "table_proteins": int(rel.get("table_proteins", 0) or 0),
+                "table_sha256": rel.get("table_sha256"),
+                "seen_ids": post["seen_ids"], "missing_ids": post["missing_ids"],
+                "skipped_batches": int(getattr(engine, "go_relation_skipped_batches", 0)),
+                "applied_batches": int(getattr(engine, "go_relation_applied_batches", 0))},
+            "projection_params": projection_param_summary(trainer),
+            "code": dict(pre["code"], imported=post["imported"]),
+            "pilot": bool(args.pilot),
+            "device": device,
+        }
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        (args.output_dir / "lc_manifest.json").write_text(
+            json.dumps(wc.relativize_json(_jsonable(lc)), indent=2), encoding="utf-8")
+    except BaseException as exc:  # noqa: BLE001 - design 4.2: every failure is exit 2
+        logger.error("withholding run failed at %s: %s: %s", stage, type(exc).__name__, exc)
+        _write_run_error(Path(args.output_dir), stage, exc, ctx)
+        return 2
+    logger.info("Withholding run complete -> %s", args.output_dir)
+    return 0
+
+
 def attach_career(trainer, config) -> Dict[str, Any]:
     """Report (not install) the career arm's negative mechanism.
 
@@ -289,7 +695,23 @@ def main(argv=None) -> int:
     ap.add_argument("--compare-config", type=Path, default=None,
                     help="the paired arm's config; prints a single-factor audit")
     ap.add_argument("--validation-file", type=Path, default=None)
+    # GO/PPI withholding study (design 4.1). Without --withholding-manifest none of
+    # these change anything.
+    ap.add_argument("--go-ppi-split-dir", type=Path, default=None,
+                    help="overrides config.go_ppi_split_dir before the trainer is built")
+    ap.add_argument("--withholding-manifest", type=Path, default=None,
+                    help="enables the withholding-study path (needs --domain go_ppi, "
+                         "--study-cell, --go-diagnostics; forbids --validation-file)")
+    ap.add_argument("--study-cell", choices=STUDY_CELLS, default=None)
+    ap.add_argument("--go-diagnostics", type=Path, default=None,
+                    help="per-epoch diagnostics JSONL (design 6)")
+    ap.add_argument("--pilot", action="store_true",
+                    help="lambda-pilot run: skips only the lambda_choice equality check")
+    ap.add_argument("--device", choices=DEVICES, default=None,
+                    help="auto (default: CUDA when available) | cuda | cpu; overrides "
+                         "config.training_device")
     args = ap.parse_args(argv)
+    _validate_study_cli(ap, args)
 
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
@@ -301,6 +723,9 @@ def main(argv=None) -> int:
     if args.compare_config:
         audit = report_factor(args.domain, args.compare_config, args.config)
 
+    if args.withholding_manifest is not None:
+        return run_study(args, audit)
+
     config = TrainingConfig.from_json(str(args.config))
     config.training_seed = args.seed
     if args.epochs is not None:
@@ -309,6 +734,8 @@ def main(argv=None) -> int:
     # config, so it has to be set before the trainer is constructed.
     if args.validation_file:
         config.validation_path = str(args.validation_file)
+    if args.go_ppi_split_dir is not None:
+        config.go_ppi_split_dir = str(args.go_ppi_split_dir)
     # Single-phase. The staged ORCA schedule is a separate factor worth +0.046 on
     # the career data; leaving it on would fold it into the ontology delta.
     config.orca_enabled = False
@@ -320,8 +747,21 @@ def main(argv=None) -> int:
     elif args.domain == "go_ppi":
         import go_ppi_domain.record_adapter  # noqa: F401
 
-    trainer = ContrastiveLearningTrainer(config=config,
-                                         output_dir=str(args.output_dir))
+    # Device (user decision B): only an explicit --device or a non-"auto"
+    # config.training_device changes anything; the default path is untouched.
+    device_requested = args.device or getattr(config, "training_device", "auto")
+    explicit_device = args.device is not None or device_requested != "auto"
+    device_resolved = None
+    if explicit_device:
+        try:
+            device_resolved = resolve_device(device_requested)
+        except (RuntimeError, ValueError) as exc:
+            ap.error(str(exc))
+    with device_scope(device_resolved) if explicit_device else nullcontext():
+        trainer = ContrastiveLearningTrainer(config=config,
+                                             output_dir=str(args.output_dir))
+    device = (device_record(device_requested, device_resolved, trainer)
+              if explicit_device else None)
 
     if args.domain == "trials":
         attach = attach_trials(trainer, config)
@@ -351,19 +791,22 @@ def main(argv=None) -> int:
     result = trainer.train(str(args.train_file))
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    lc_manifest = {
+        "domain": args.domain,
+        "config": str(args.config),
+        "train_file": str(args.train_file),
+        "train_records": sum(1 for _ in open(args.train_file)),
+        "fraction": args.fraction,
+        "seed": args.seed,
+        "epochs": config.num_epochs,
+        "single_factor_audit": audit,
+        "attach": attach,
+        "train_result": _jsonable(result),
+    }
+    if device is not None:
+        lc_manifest["device"] = device
     (args.output_dir / "lc_manifest.json").write_text(
-        json.dumps({
-            "domain": args.domain,
-            "config": str(args.config),
-            "train_file": str(args.train_file),
-            "train_records": sum(1 for _ in open(args.train_file)),
-            "fraction": args.fraction,
-            "seed": args.seed,
-            "epochs": config.num_epochs,
-            "single_factor_audit": audit,
-            "attach": attach,
-            "train_result": _jsonable(result),
-        }, indent=2), encoding="utf-8")
+        json.dumps(lc_manifest, indent=2), encoding="utf-8")
     logger.info("Learning-curve point complete -> %s", args.output_dir)
     return 0
 
