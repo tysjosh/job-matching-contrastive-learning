@@ -1,0 +1,20 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "MEDIUM",
+      "section": "§5.2, §5.1, §7 analysis.gate2_leaf_classes",
+      "title": "Gate-2 leaf-class patterns have undefined matching semantics; prefix/full-path matching puts all test-side rank leaves at 1e-6 and reintroduces the round-6 stall",
+      "fix": "Define leaf paths as key tuples relative to runs[i] (no dot-joining; curve keys like '0.1' contain dots); pair per_query rows by 'query' field; classify by segment membership: exact if last in {selected_weight,n_queries} or 'queries_with_both_classes'/'confusion_matrix' in P or (last=='n' and 'tier_stats' in P); rank if any of {validation_selection_curve,ranking,ranking_macro,per_query,global_auc,macro_query_auc} in P or last in {kendall_tau_b,spearman_rho}; skipped if binary_classification/ordinal_classification in P; else continuous. Require coverage of every non-skipped numeric leaf. Unit-test with full key tuples from the real published file plus a coverage-failure test."
+    },
+    {
+      "id": 2,
+      "severity": "NIT",
+      "section": "§6.2 step -1 (verify_transfer.py parser)",
+      "title": "Inputs-table row pattern not anchored; it also matches the tail of §3b checkpoint rows",
+      "fix": "Anchor inputs rows to whole lines with exactly two cells (^\\|\\s*(\\S+)[^|]*\\|\\s*([0-9a-f]{64})\\s*\\|\\s*$) and checkpoint rows to exactly four cells; require exactly 15 and exactly 18; unit-test disjointness."
+    }
+  ],
+  "reviewDoc": "/Users/olukotunjosh/Downloads/CDCL/.agents/tasks/ontology-withholding-feasibility/design_review_trials_fusion.md"
+}

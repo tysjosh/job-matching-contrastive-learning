@@ -1,0 +1,52 @@
+{
+  "verdict": "APPROVED",
+  "approved": true,
+  "pass": 2,
+  "reviewDoc": ".agents/tasks/ontology-withholding-feasibility/review_trials_fusion.md",
+  "reviewDocTimestamped": ".agents/tasks/ontology-withholding-feasibility/2026-10-10-190711-review.md",
+  "previousReviewDoc": ".agents/tasks/ontology-withholding-feasibility/2026-10-10-184803-review.md",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "LOW",
+      "confidence": "confirmed",
+      "label": "Post-approval protocol edits not hash-anchored",
+      "detail": "The orchestrator froze v7 by name, not by sha256, and v7 was never committed (HEAD b524f2a holds an older draft). The A0 edits to §0, §4.4, §6.2 and §9 can only be audited from prose.",
+      "action": "Commit the protocol, or record its sha256 in A0, before the 1-0 manifest dump, so pins.git ties revision 1 to a commit."
+    },
+    {
+      "id": 2,
+      "severity": "NIT",
+      "confidence": "confirmed",
+      "label": "§8 exposure counts predate A0",
+      "detail": "§8 still says 52 of 75 patients were never scored under fusion and are not paraphrases, and that 60 were never scored. After A0 the counts are 39 and 47.",
+      "action": "Add the A0 pointer to §8."
+    },
+    {
+      "id": 3,
+      "severity": "NIT",
+      "confidence": "confirmed",
+      "label": "1a ships cve_domain/ (1.28 GB) and .git (0.49 GB)",
+      "detail": "A dry run of the runbook's 1a rsync lists 2,154 files totalling 1.77 GB. The runbook gives sizes only for 1b and 1c, and the study never imports cve_domain.",
+      "action": "Add --exclude '/cve_domain/' to 1a and state the expected 1a size."
+    },
+    {
+      "id": 4,
+      "severity": "NIT",
+      "confidence": "confirmed",
+      "label": "Code manifest optional at step -1",
+      "detail": "verify_transfer.py passes without --code-manifest and only prints a warning. make_pins.py refuses that result one step later.",
+      "action": "Require --code-manifest outside dev mode."
+    }
+  ],
+  "prior_findings_resolved": [1, 2, 3, 4, 5, 6, 7],
+  "checks": {
+    "protocol_adherence": "Hypotheses, controls, C2 ordered states, S4, Holm with ties to H1, the 5-label rule and headline, B=2000 with CRN and rng [31415, year], the fold rule and the derangement are unchanged from pass 1 and match §1-§4. A0 adds only disclosures and a descriptive 39-patient subset, which has no Holm decision and no warning.",
+    "no_test_leak_in_weight_selection": "Confirmed: w and the z-stats use validation arrays only, and analyze.py aborts on any recomputed-w mismatch.",
+    "within_patient_metrics": "Correct; they reuse epf.rank_auc and epf.ranking_metrics.",
+    "paraphrase_colocation_and_derangement": "Confirmed unchanged: components stay within a fold, and the group-aware derangement rejects any same-group neighbour.",
+    "protected_files": "Unmodified: git diff on the protected trees is empty, and the hashes of epf, run_learning_curve_point.py, lc_trials_baseline.json and the frozen cache match §7.",
+    "remote_readiness": "CPU forcing, the training device flags and repo-relative paths are unchanged. /300, reports/ and results/ are excluded. revision 1 now requires the code-tree check against the Mac manifest. Two NITs on transfer size and the optional flag.",
+    "local_confirmatory_computation": "Nothing new since pass 1: no file under results/ or preprocess/ is newer than the pass-1 review. The earlier exposure is disclosed in §9 A0, and the 2021 dev path is now blocked."
+  }
+}
