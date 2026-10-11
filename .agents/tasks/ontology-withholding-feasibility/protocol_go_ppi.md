@@ -419,13 +419,14 @@ Recorded at gate, in `$R/results/go_withholding/protocol_pins.json` and mirrored
 | G3 | 121 conditions; manifests in protocol_pins.json (e.g. all `ad9562ea…`, p01_k0 `b0c754ac…`, p01_k5 `35602db3…`) | 2026-10-10 |
 | G4-lambda | λ = 0.5, r₀ = 0.0441, r* = 0.1538, 181 records, 5 batches; lambda_choice.json `5845b14f37b670b93f5af6890d3f7b465bd4b20f469dd309b464c7d96890ecb0` | 2026-10-10 |
 | G4-configs | configs.sha256.json `afb6dbb78795f7073b4764f833b5e7de2a82b59b80f9f9783730b73da5c2ba49` (λ 0.5) | 2026-10-10 |
-| G5 | | |
+| G5 | `code_sha256` `592125a33d577126fec7b06003d99bfbdd3e1afa8df2edd8909d796880efa258` (219 files), git HEAD `72059ea5438845700c8d8a56bda37d257777c43a` (merge of `orca-experiments-and-runner` into `main`), pinned on the remote grid host | 2026-10-10 |
 
 **Amendments.**
 
 | id | date | gate | groups cleared | cause | fix | re-pin |
 |---|---|---|---|---|---|---|
 | AM1 | 2026-10-10 | before G2 | — | Packing infeasible at 20 targets (design §2.6 step 4): `build_target_table.py` exited 3, "packing infeasible at 20 targets; queue exhausted", on the plan item-12 scratch run of the pruned data. An exact solver confirmed it: at 24 targets 5 valid 3-packs exist and 8 are needed; none of the 41 slot-cycled 20-target sets packs as 6 × 3 + 1 × 2. Among the 24 accepted targets, 204 of 276 target pairs fail P_train disjointness, 90 the 5% neighbour-overlap cap and 1 the N_2 rule; 86 of 276 exceed the 8% pack removal cap. No parameter was changed before this row. | Adopt option (c), one target per condition, singleton packs (`pack_size` 1). Removed: the pack-mate constraints (P_train disjointness, N_2/ancestor/descendant exclusion, 5% neighbour-overlap cap, ≥ 1 low and ≥ 1 high per pack) and the slot-cycling / 24 → 20 packing fallback. Kept per single target: the 8% k = 0 removal cap and ≥ 25 retention-eligible proteins. The §4 size rule is unchanged. Counts: n_packs = n_targets; 24 targets → 121 conditions (24 × 5 + 1 shared `all`), 2,420 runs; 20 targets → 101 / 2,020. The bootstrap resamples 24 (or 20) single-target packs; the 10% rule denominator n_targets × 6 × 5 (6 = k levels) stays 720 / 600. Consequence: S uncontaminated by pack-mates (S reduction by mates is 0 by construction); 12 low-S / 12 high-S targets, SMD log n −0.048, log support −0.036. Edited: protocol §4, §5, §7, §9, §10, §11, §12, §14; design §22. | no |
+| AM2 | 2026-10-10 | G7 | all,s13; p01_k0,s13; p01_k1,s13; p01_k10,s13 | The first grid invocation (2 shards × 7 workers, `--device cpu`, remote L40S host, 26 runs done) wrote `GROUP_FAILED.json` for these four groups, each with the single failure `selection_sha256_by_epoch: neg_only != both`; baseline == loss_only held in every group and epoch, and ok_batches, train_records, epochs, seed and L_GO applied/not-applied all matched. Root cause: Python's per-process string-hash randomisation (`PYTHONHASHSEED` unset). `GoMatcher.ontology_set_similarity` sums IC over `frozenset` iteration order, so simGIC differs in the last bits between processes; near-ties in `GoPpiNegativeSelector._go_ordered` then flip and change the GO window in the GO-tiered cells only (the random-window cells never compute simGIC). Not a leak and not an effect of the loss factor. Verified on the local machine: the offline p01_k1 neg_only selection differs between `PYTHONHASHSEED=1` and `=2` and repeats under the same seed; 15-epoch neg_only and both runs of p01_k1 under `PYTHONHASHSEED=0` match in all 15 epochs (the remote pair differed in all 15). | Every grid process (sweep, runner, evaluator, offline audits) runs with `PYTHONHASHSEED=0`, exported by the launcher and inherited by the sweep's subprocesses. No code, config, data, metric or threshold changed; `code_sha256` 592125a3… is unchanged. Groups that already passed the identity check are kept (their two GO-tiered cells used identical negatives, and pairing is within group). The four groups are renamed by `sweep.py clear-group` and retrained. Known consequence: `test_sweep_driver.py::test_real_protocol_amendments_table_parses` asserts the ids are exactly `["AM1"]` and now fails; it is left unchanged during the grid (test files are inside the code pin) and updated after the grid. | no |
 
 Rules for rows:
 
@@ -450,6 +451,15 @@ Wording only; no criterion, count or rule changes. Not an amendment row (it clea
 | # | change | where |
 |---|---|---|
 | 1 | One sentence added under the amendment-row rules: a literal pipe character inside a cell is written as a backslash followed by the pipe. `parse_amendment_rows` and `sweep.py clear-group` already split cells only on unescaped pipes (plan decision 4b, from the approving v6 design review). | §13 |
+
+### Amendment AM2 (2026-10-10, G7)
+
+Recorded as row AM2 in §13. Operational only: no criterion, count, metric, seed or threshold changes.
+
+| # | change | where |
+|---|---|---|
+| 1 | Every grid process runs with `PYTHONHASHSEED=0` (Python string-hash randomisation made simGIC tie order process-dependent in the GO-tiered cells). | §13 |
+| 2 | Groups all,s13; p01_k0,s13; p01_k1,s13; p01_k10,s13 cleared and retrained. | §13 |
 
 ### Amendment AM1 (2026-10-10, before G2)
 
