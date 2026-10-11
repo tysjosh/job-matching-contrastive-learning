@@ -61,7 +61,10 @@ preprocess/trec_ct_splits/validation.jsonl
 preprocess/trec_ct_splits/test.jsonl
 preprocess/trec_ct_splits/negative_pools.jsonl
 preprocess/trec_ct_splits/split_manifest.json
+preprocess/trec_ct_lc/frac_10/train.jsonl
 preprocess/trec_ct_lc/frac_25/train.jsonl
+preprocess/trec_ct_lc/frac_50/train.jsonl
+preprocess/trec_ct_lc/frac_75/train.jsonl
 preprocess/trec_ct_lc/frac_100/train.jsonl
 preprocess/trec_ct_lc/validation_positive.jsonl
 embedding_cache/trials_text_embeddings.pt
@@ -107,7 +110,7 @@ nvidia-smi
 ## 3. Step −1: verify the transfer (CPU)
 
 This step parses the protocol for the expected hashes:
-- the 15 checkpoint rows and the 18 inputs rows, matched by anchored regexes;
+- the 15 checkpoint rows and the 21 inputs rows (18 + the three `frac_{10,50,75}` files of §9 A1), matched by anchored regexes;
 - the 36-chunk manifest digest `3d015e60…3f11`;
 - the 0-chunk validation dir;
 - the MPNet revision;
@@ -187,7 +190,7 @@ CUDA_VISIBLE_DEVICES="" "$PY" "$S/score.py" --gate-reproduce --pins results/tria
 
 Once gate 2 passes, `pins.code` is frozen. Below, `<PINS>` is the latest revision.
 
-## 6. Training: 4 + 15 runs (GPU), under tmux
+## 6. Training: 19 + 15 runs (GPU), under tmux
 
 ```bash
 tmux new -s tfc          # reattach later with: tmux attach -t tfc
@@ -197,7 +200,7 @@ tmux new -s tfc          # reattach later with: tmux attach -t tfc
 
 What `train.py` does:
 - issues the exact §6.3 `run_learning_curve_point.py` commands in the fixed §3b order:
-  - 2022: f25_s87, f25_s123, f100_s87, f100_s123;
+  - 2022 (§9 A1, all 19 retrained): F 10, 25, 50, 75, 100, each with s42, s13, s21, and at F 25 and 100 then s87, s123;
   - 2021: k0..k4, each with s13, s21, s42;
 - passes `--compare-config config/lc_trials_baseline.json` and `--device cuda`;
 - sets `PYTHONHASHSEED=0` for the child;
@@ -253,14 +256,14 @@ CUDA_VISIBLE_DEVICES="" "$PY" "$S/analyze.py" --pins <PINS> \
 
 `score.py`:
 - re-verifies every pinned hash;
-- scores the 15 published checkpoints, the passing new ones and zero-shot on the 2022 files;
+- scores the passing retrained cohort-2022 runs and zero-shot on the 2022 files (the 15 published checkpoints are used only by gate 2, §9 A1);
 - scores the passing seeds and zero-shot on each 2021 fold. The 2021 vectors come from the frozen cache. Any 2021 text missing from it is fresh-encoded on CPU into `results/trials_fusion_confirm/prepared_embeddings/trials/`. On the Mac every fold text resolved from the frozen cache, so expect 0 fresh encodes.
 
 `analyze.py` recomputes every selected weight (it must equal `selected_w.json`) and writes the headline first in `report.md`.
 
 On wall time:
 - Each 2-epoch CPU smoke run took about 20 s on the Mac.
-- 15-epoch GPU runs should take a few minutes each.
+- 15-epoch GPU runs should take a few minutes each, so 34 runs is likely 1-3 hours in total.
 - 2022 scoring took about 30 s per 16 models on the Mac.
 
 These are estimates, not measurements on the remote.

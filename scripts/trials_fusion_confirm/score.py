@@ -9,8 +9,8 @@ Modes
     Also reports (non-gating) the exploratory +0.013 estimate on the restricted grid.
     With ``--dev-local`` it runs without pins as a NON-CONFIRMATORY code check; output
     must be under ``results/trials_fusion_confirm/dev_local/`` or /tmp.
-default  Export per-pair scores for every model (cohort 2022: 15 published + passing new
-    checkpoints + zero-shot; cohort 2021: per outer fold, passing seeds + zero-shot):
+default  Export per-pair scores for every model (cohort 2022: the passing retrained runs of
+    §9 A1 + zero-shot; cohort 2021: per outer fold, passing seeds + zero-shot):
     text, φ_hier, φ_exact, φ_shuf, grades, patient and nct ids for validation and test,
     plus ``selected_w.json`` (per model × φ variant × normaliser) and shuffle draw counts.
 """
@@ -291,9 +291,9 @@ def score_all(args, pins) -> int:
         pc = pins["published_prepared_cache"]
         val = fc.load_split(pins["cohort2022"]["validation"], frozen, published_chunk_dir=pc["validation_dir"])
         test = fc.load_split(pins["cohort2022"]["test"], frozen, published_chunk_dir=pc["test_dir"])
-        models = [{"name": f"f{r['fraction']}_s{r['seed']}", "kind": "existing", "checkpoint": r["path"],
-                   "sha256": r["sha256"], "fraction": r["fraction"], "seed": r["seed"]}
-                  for r in pins["cohort2022"]["existing_checkpoints"]]
+        # §9 A1: the confirmatory cohort-2022 population is the 19 retrained runs only;
+        # the 15 published checkpoints are scored by gate 2 (--gate-reproduce) and nowhere else.
+        models = []
         for r in pins["cohort2022"]["new_runs"]:
             e = passed.get(f"2022:f{r['fraction']}_s{r['seed']}")
             if e is not None:

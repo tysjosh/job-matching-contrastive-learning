@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Resumable training driver for the 4 + 15 new runs (protocol_trials_fusion.md §6.3).
+"""Resumable training driver for the 19 + 15 new runs (protocol_trials_fusion.md §6.3, §9 A1).
 
 Issues exactly the §6.3 ``run_learning_curve_point.py`` commands in the fixed §3b order
-(2022: F 25 then 100, each S 87 then 123; 2021: k 0..4, each S 13, 21, 42), verifies
+(2022: F 10, 25, 50, 75, 100, each S 42, 13, 21 and, at F 25 and 100, then 87, 123;
+2021: k 0..4, each S 13, 21, 42), verifies
 gate 3 per run and appends to the append-only ``run_ledger.json``. On restart it skips
 runs with a ``passed``/``excluded`` entry and treats an output dir without a passing
 entry as a failed attempt (renamed ``.failed1``/``.failed2``; two failures -> excluded).
@@ -65,7 +66,7 @@ def plan(pins: Dict[str, Any], cohort: str, device: str, epochs=None) -> List[Di
                          "config": cfg("lc_trials_baseline_cache.json"),
                          "train_file": f"preprocess/trec_ct_lc/frac_{F}/train.jsonl",
                          "validation_file": "preprocess/trec_ct_lc/validation_positive.jsonl",
-                         "fraction_arg": {25: "0.25", 100: "1.0"}[F],
+                         "fraction_arg": fc.COHORT2022_FRACTION_ARG[F],
                          "expected_unexpected": derived[cfg("lc_trials_baseline_cache.json")]["expected_unexpected_fields"]})
     else:
         cv = pins["cohort2021"]

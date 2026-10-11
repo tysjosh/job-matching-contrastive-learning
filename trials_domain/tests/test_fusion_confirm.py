@@ -473,7 +473,7 @@ def test_gate3_failures_on_toy_output(tmp_path):
 def test_protocol_parser_rows_and_truncation():
     text = PROTOCOL.read_text(encoding="utf-8")
     parsed = fc.parse_protocol(text)
-    assert len(parsed["checkpoints"]) == 15 and len(parsed["inputs"]) == 18
+    assert len(parsed["checkpoints"]) == 15 and len(parsed["inputs"]) == 21
     assert parsed["manifest_digest"].startswith("3d015e60") and parsed["n_test_chunks"] == 36
     assert parsed["mpnet_revision"] == "e8c3b32edf5434bc2275fc9bab85f82640a19130"
     ck_lines = {ln for ln in text.splitlines() if fc.CKPT_ROW.match(ln)}
@@ -624,7 +624,7 @@ def _toy_root(tmp_path):
     put(fc.BASE_CONFIG_REL, json.dumps({"embedding_cache_path": fc.ORIGINAL_CACHE_REL,
                                         "trials_split_dir": "preprocess/trec_ct_splits"}).encode())
     put(fc.ORIGINAL_CACHE_REL, b"cache")
-    for i in range(16):
+    for i in range(19):   # 19 toy + config + cache = 21 input rows (parser minimum, §9 A1)
         put(f"preprocess/toy/input_{i}.jsonl", f"{i}".encode())
     ck_rows = []
     for F in (10, 25, 50, 75, 100):
@@ -736,6 +736,34 @@ def test_hashseed_guard(name, monkeypatch):
     monkeypatch.delenv("PYTHONHASHSEED")
     with pytest.raises(fc.ProtocolError, match="PYTHONHASHSEED"):
         mod.main(["--help"])
+
+
+def test_a1_cohort2022_population_and_plan():
+    """§9 A1: all 19 cohort-2022 cells are retrained, in the fixed order, with the right
+    train file and --fraction; they are exactly the §3b table cells plus (25|100, 87|123)."""
+    runs = list(fc.COHORT2022_RUNS)
+    assert len(runs) == 19 and len(set(runs)) == 19
+    table = {(r["fraction"], r["seed"]) for r in fc.parse_protocol(PROTOCOL.read_text(encoding="utf-8"))["checkpoints"]}
+    assert set(runs) == table | {(25, 87), (25, 123), (100, 87), (100, 123)}
+    assert runs[:4] == [(10, 42), (10, 13), (10, 21), (25, 42)] and runs[-2:] == [(100, 87), (100, 123)]
+    order = fc.ANALYSIS_PARAMS["training_order"]
+    assert order[:19] == [f"2022:f{F}_s{S}" for F, S in runs] and len(order) == 34
+    tr = load_script("train")
+    cfg = "results/trials_fusion_confirm/configs/lc_trials_baseline_cache.json"
+    pins = {"configs": {"derived": {cfg: {"expected_unexpected_fields": ["embedding_cache_path"]}}},
+            "analysis": {"training_order": order},
+            "cohort2022": {"new_runs": [{"fraction": F, "seed": S, "device": "cuda",
+                                         "output_dir": f"o/f{F}_s{S}"} for F, S in runs]}}
+    plan = tr.plan(pins, "2022", "cuda")
+    assert [p["run"] for p in plan] == order[:19]
+    for p in plan:
+        cmd = p["command"]
+        F = p["fraction"]
+        assert cmd[cmd.index("--train-file") + 1] == f"preprocess/trec_ct_lc/frac_{F}/train.jsonl"
+        assert float(cmd[cmd.index("--fraction") + 1]) == F / 100
+        assert cmd[cmd.index("--device") + 1] == "cuda"
+    inputs = fc.parse_protocol(PROTOCOL.read_text(encoding="utf-8"))["inputs"]
+    assert all(f"preprocess/trec_ct_lc/frac_{F}/train.jsonl" in inputs for F in (10, 25, 50, 75, 100))
 
 
 def test_verify_transfer_requires_code_manifest(tmp_path, monkeypatch):

@@ -44,6 +44,16 @@ Not re-run in pass 2:
 - Protocol §8 has the A0 pointer (39 and 47). A0 states that the §0/§4.4/§8 pointers were the only other edits to §0–§8. The parser still finds 15 checkpoint rows and 18 input rows.
 - The study files are committed before the transfer, so `pins.git` ties revision 1 to that commit.
 
+## Pass 4: §9 A1 (all 19 cohort-2022 checkpoints retrained on the A100)
+
+- `fc.COHORT2022_RUNS` is the single source for the 19 runs. Order: F 10, 25, 50, 75, 100, seeds 42, 13, 21, then 87, 123 at F 25 and 100. It feeds `make_pins.py` (`cohort2022.new_runs`), `train.py` (via `pins.analysis.training_order`, now 34 entries) and the tests. `--fraction` comes from `fc.COHORT2022_FRACTION_ARG`.
+- `score.py` scores only the passing retrained runs and zero-shot for cohort 2022. The published 15 are read only by `--gate-reproduce`.
+- Protocol: the A1 entry, plus pointers in the header, the device policy, §0, §3b, §5.3, §6.2, §6.3, §7 (three new input rows `frac_{10,50,75}`) and §8. The parser minimum is now 21 input rows. The runbook transfer list has the three new files, and the run counts are updated.
+- The A0 shuffled-control disclosure is reworded. The trained C2_2022 input was not previewed, because the previewed checkpoints left the population. Only the zero-shot 2022 controls, which are descriptive, were previewed.
+- Tests: 44 pass, including the new `test_a1_cohort2022_population_and_plan`. All `trials_domain/tests` pass (108 passed, 1 skipped).
+- Real-data transfer check on the Mac, written to `dev_local/` and then deleted: PASSED. It hashed 21 inputs and 15 checkpoints, verified 36 chunks, and the code check passed.
+- Known limit: a `--dev-local` 2022 analysis now has no trained models, because no retrained run exists locally. The dev path is not needed again.
+
 ## Files created
 
 Library:

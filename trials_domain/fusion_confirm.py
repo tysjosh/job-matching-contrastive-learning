@@ -81,9 +81,10 @@ DEV_SMOKE_EXPOSED_2021 = ("2021_7", "2021_9", "2021_12", "2021_14", "2021_29", "
 #: §9 A0 disclosures, printed in every ``report.md``.
 DEV_SMOKE_DISCLOSURES = (
     "§9 A0 (2022 C2 preview): before pins revision 1, the Mac dev smoke ran the full C1-C3 and C2-state "
-    "path, with the group-aware derangement, on the 15 published cohort-2022 checkpoints (15 of the 19 "
-    "C2_2022 inputs; dev settings B=200). C2_2022 is therefore not blind to the estimator's behaviour "
-    "on those checkpoints.",
+    "path, with the group-aware derangement, on the 15 published cohort-2022 checkpoints and zero-shot "
+    "(dev settings B=200). Under §9 A1 those 15 checkpoints are not in the confirmatory population "
+    "(19 retrained runs), so the trained C2_2022 input was not previewed; the zero-shot 2022 controls "
+    "(deterministic, descriptive only) were.",
     "§9 A0 (2021 exposure): the Mac dev smoke scored the fold-1 inner-validation file of outer fold 0 "
     "under fusion (zero-shot and a 2-epoch smoke model; validation nDCG@10 curves for hierarchy, exact "
     "and shuffled φ). This exposed 13 of the 52 closed-unexposed patients: "
@@ -1021,7 +1022,7 @@ CKPT_ROW = re.compile(r"^\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*([0-9a-f]{6
 INPUT_ROW = re.compile(r"^\|\s*(\S+)[^|]*\|\s*([0-9a-f]{64})\s*\|\s*$")
 
 
-def parse_protocol(text: str, min_ckpt: int = 15, min_inputs: int = 18) -> Dict[str, Any]:
+def parse_protocol(text: str, min_ckpt: int = 15, min_inputs: int = 21) -> Dict[str, Any]:
     """§6.2 step -1 parser. Whole-line, anchored rows: a checkpoint row has exactly four
     cells whose last is 64-hex; an inputs row has exactly two cells (design review
     round 7, finding 2). Also extracts the manifest digest, the prepared-cache dirs and
@@ -1321,6 +1322,14 @@ def git_record() -> Dict[str, Any]:
             "dirty_paths": sorted(line[3:] for line in status.splitlines() if line.strip())}
 
 
+#: §9 A1: the cohort-2022 confirmatory population is 19 runs retrained on the one pinned
+#: GPU host, in this fixed order (F ascending; seeds 42, 13, 21 as published, then 87, 123
+#: at F 25 and 100). The 15 published checkpoints are used only by gate 2.
+COHORT2022_SEEDS = {10: (42, 13, 21), 25: (42, 13, 21, 87, 123), 50: (42, 13, 21),
+                    75: (42, 13, 21), 100: (42, 13, 21, 87, 123)}
+COHORT2022_RUNS = tuple((F, S) for F in (10, 25, 50, 75, 100) for S in COHORT2022_SEEDS[F])
+COHORT2022_FRACTION_ARG = {10: "0.1", 25: "0.25", 50: "0.5", 75: "0.75", 100: "1.0"}
+
 #: Code pinned in ``pins.code`` (new study files plus every reused module).
 CODE_GLOBS = ("trials_domain/fusion_confirm.py", "trials_domain/tests/test_fusion_confirm*.py",
               "scripts/trials_fusion_confirm/*.py", "scripts/trials_fusion_confirm/requirements-remote.txt",
@@ -1357,8 +1366,9 @@ ANALYSIS_PARAMS: Dict[str, Any] = {
     "rng_fraction_stratified_2022": [31415, 2022, 1],
     "shuffle_seed": 11, "shuffle": "group_aware_cyclic_shift_rejection_per_file", "shuffle_max_draws": 10000,
     "embedding_dim": EMBEDDING_DIM, "manifest_digest_rule": "sha256 of sorted '<sha256>  <basename>\\n' lines",
-    "training_order": (["2022:f25_s87", "2022:f25_s123", "2022:f100_s87", "2022:f100_s123"]
+    "training_order": ([f"2022:f{F}_s{S}" for F, S in COHORT2022_RUNS]
                        + [f"2021:k{k}_s{s}" for k in range(5) for s in (13, 21, 42)]),
+    "cohort2022_population": "retrained_19_single_device_v1 (§9 A1)",
     "sensitivity_unexposed_closed": True, "descriptive_unexposed60": True,
     "descriptive_unexposed_closed_minus_dev_smoke": True,
     "equivalence_bound": 0.01, "equivalence_ci": 0.90, "alpha": 0.05,

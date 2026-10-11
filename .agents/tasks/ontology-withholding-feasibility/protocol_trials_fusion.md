@@ -1,9 +1,9 @@
 # Preregistration: MeSH score fusion in TREC-CT trial matching, confirmation (2022) + replication (2021 CV)
 
-Status: **DRAFT v7, written before any new result.** Round 7. It resolves every finding in `design_review_trials_fusion.{json,md}` (round 6, CHANGES_REQUESTED: 0 HIGH, 2 MEDIUM, 3 NIT), on top of the 18 round-1, 8 round-2, 6 round-3, 7 round-4 and 5 round-5 findings. The finding-to-section maps are in §10 (round 1), §11 (round 2), §12 (round 3), §13 (round 4), §14 (round 5) and §15 (round 6).
+Status: **DRAFT v7, written before any new result**, plus pre-pins amendments §9 A0 (disclosure) and **§9 A1 (cohort 2022 retrained on one device; supersedes the 15 + 4 population wherever the text below still describes it)**. Round 7. It resolves every finding in `design_review_trials_fusion.{json,md}` (round 6, CHANGES_REQUESTED: 0 HIGH, 2 MEDIUM, 3 NIT), on top of the 18 round-1, 8 round-2, 6 round-3, 7 round-4 and 5 round-5 findings. The finding-to-section maps are in §10 (round 1), §11 (round 2), §12 (round 3), §13 (round 4), §14 (round 5) and §15 (round 6).
 - Repo: `/Users/olukotunjosh/Downloads/CDCL` (local development checkout), branch `orca-experiments-and-runner`. HEAD at writing: `b524f2a` (its diff from `147b1e7` touches only `.agents/**`). `pins.json` records the HEAD at pin time on the remote.
 - **Execution location.** All gates, training, scoring and analysis run on **one** remote NVIDIA GPU host (Linux x86_64): the user's A100, or whichever single host `pins.environment` records. The protocol does not hard-code a GPU model; it pins the one that is used. `pins.json` (revision 1) is written on that host, so `pins.environment` records it (GPU name from `torch.cuda.get_device_name(0)`, driver, CUDA, torch build, Python, BLAS), and gate 3 (§5.3) requires every training run to report that same GPU name. Nothing confirmatory runs on the Mac. The Mac is used only for development, unit tests during development, and a non-confirmatory CPU smoke whose outputs go under `results/trials_fusion_confirm_smoke/` and are never read by any confirmatory script. The transfer list, environment setup and exact remote commands are in the runbook `.agents/tasks/ontology-withholding-feasibility/REMOTE_RUN_TRIALS_FUSION.md`, written during implementation; where the runbook and this protocol differ, this protocol wins.
-- **Device policy (fixed).** Training of the 4 + 15 new runs uses `--device cuda`. Scoring (`score.py`, including gate 2), every fresh 2021 encode, the paraphrase cosine computation, and analysis run on the remote **CPU** (`CUDA_VISIBLE_DEVICES=""`, `--device cpu`, `SentenceTransformer(..., device="cpu")`).
+- **Device policy (fixed).** Training of the 19 + 15 new runs (§9 A1) uses `--device cuda`. Scoring (`score.py`, including gate 2), every fresh 2021 encode, the paraphrase cosine computation, and analysis run on the remote **CPU** (`CUDA_VISIBLE_DEVICES=""`, `--device cpu`, `SentenceTransformer(..., device="cpu")`).
 
 ## 0. What is already known, and what is new
 
@@ -20,7 +20,7 @@ Exploratory, post hoc results (source: `findings_trials_where_ontology_helps.md`
 - Trained text is 0.07–0.13 nDCG@10 below zero-shot.
 
 Consequences for interpretation, fixed now:
-- **Cohort 2022 is a frozen-pipeline confirmation, not an independent test.** 15 of its 19 checkpoints and all 50 patients have already been analysed. The only new information there is 4 new training seeds plus the restricted, preregistered estimator.
+- **Cohort 2022 is a frozen-pipeline confirmation, not an independent test.** 15 of its 19 checkpoints and all 50 patients have already been analysed. The only new information there is 4 new training seeds plus the restricted, preregistered estimator. *(§9 A1: all 19 cohort-2022 checkpoints are now retrained on the pinned GPU host, so every 2022 model is new; the 50 patients are still already analysed.)*
 - **Cohort 2021 (5-fold patient-disjoint CV) is the only replication with new models and mostly new patients.** Every CV model is new, but not every patient is unseen.
   - **Prior exposure, disclosed:** the 15 topics of `preprocess/trec_ct_splits/validation.jsonl` (2021_6, 2021_16, 2021_17, 2021_23, 2021_26, 2021_37, 2021_42, 2021_45, 2021_49, 2021_51, 2021_61, 2021_63, 2021_64, 2021_69, 2021_74; pinned as `pins.cohort2021.exposed_topics`) were the fusion-weight validation set in the exploration. Fused-vs-text validation nDCG@10 curves (`validation_selection_curve` in `trials_fusion_learning_curve_ndcg_selected.json`) and per-pair φ (hierarchy, exact, shuffled; `/tmp/trials_helps/score.py`, `a7_controls.py`) were computed on them with the 15 published checkpoints, and `findings_trials_where_ontology_helps.md` §B1 reasons from their validation behaviour. In the CV each of them becomes a test patient in some fold. The other 60 2021 topics have never themselves been scored under fusion. But 8 of those 60 are §3 paraphrase partners of an exposed topic (2021_15, 21, 25, 27, 33, 40, 57, 59), and near-duplicates share most MeSH descriptors and judged pools, so their outcome was effectively seen. **Closed exposure set:** `exposed_closed` = the union of the §3 paraphrase components that contain at least one `exposed_topics` member. Expected size 23 (the 15 above plus those 8), asserted by `build_cv2021.py` and pinned as `pins.cohort2021.exposed_topics_closed`. **52 2021 patients are closed-unexposed**: neither scored under fusion nor a paraphrase of a scored patient. The preregistered sensitivity uses these 52 (§4.4). *(§9 A0: the Mac dev smoke later scored 13 of them under fusion on the validation side; a descriptive 39-patient subset excludes them.)*
   - Prior exposure, disclosed: the φ separation table in `findings_trials.md` §C used 2021 *train* topics and their judged pools (φ alone, no fusion, no model).
@@ -142,7 +142,7 @@ Frozen MPNet cosine, identity, no training. It is one deterministic function:
 - `best_checkpoint.pt` = lowest validation InfoNCE on grade-2 validation positives, with fixed validation negatives (seed 1729).
 
 **Derived configs.** The trainer writes the cache file at `config.embedding_cache_path` (`trainer.py` L931, after validation if the cache grew, and L1643, after preload). Both writes read the same config attribute, so one redirect covers both. To leave `embedding_cache/trials_text_embeddings.pt` untouched, each new run uses a derived copy of `lc_trials_baseline.json` that differs **only** in:
-- `embedding_cache_path` → `results/trials_fusion_confirm/cache/trials_text_embeddings.pt`. This is a byte copy of the original, made in §6.2 step 0 with `cp -n` (never overwrites). It is a mutable performance cache: training may append to it. Its **starting state** is pinned: `make_pins.py` asserts `sha256(copy) == sha256(original) == fa83e10a95a37a378c3d54e110678a64f702a850aef2442b06148d2589e31d4e` and records it as `pins.inputs["results/trials_fusion_confirm/cache/trials_text_embeddings.pt@pin_time"]`; later states are logged per run in the ledger, not pinned. Under `--device cuda`, vectors the trainer appends to the copy are CUDA encodes, used only by later training runs (scoring never reads the copy, §2.1). Because whether a run reads a cached (original-device) vector or a fresh CUDA encode depends on earlier runs, **run order is fixed and part of the condition**: 2022 F 25 then F 100, within each F seed 87 then 123; then 2021 k = 0..4, within each k seed 13, 21, 42. `train.py` logs the cache's entry count and sha256 before and after each run in `run_ledger.json` (§6.3).
+- `embedding_cache_path` → `results/trials_fusion_confirm/cache/trials_text_embeddings.pt`. This is a byte copy of the original, made in §6.2 step 0 with `cp -n` (never overwrites). It is a mutable performance cache: training may append to it. Its **starting state** is pinned: `make_pins.py` asserts `sha256(copy) == sha256(original) == fa83e10a95a37a378c3d54e110678a64f702a850aef2442b06148d2589e31d4e` and records it as `pins.inputs["results/trials_fusion_confirm/cache/trials_text_embeddings.pt@pin_time"]`; later states are logged per run in the ledger, not pinned. Under `--device cuda`, vectors the trainer appends to the copy are CUDA encodes, used only by later training runs (scoring never reads the copy, §2.1). Because whether a run reads a cached (original-device) vector or a fresh CUDA encode depends on earlier runs, **run order is fixed and part of the condition**: 2022 F 10, 25, 50, 75, 100, within each F seeds 42, 13, 21 and, at F 25 and 100, then 87, 123 (§9 A1); then 2021 k = 0..4, within each k seed 13, 21, 42. `train.py` logs the cache's entry count and sha256 before and after each run in `run_ledger.json` (§6.3).
 - for cohort 2021 only, `trials_split_dir` → `preprocess/trials_fusion_confirm/cv2021/fold_{k}`. The negative selector reads `{trials_split_dir}/negative_pools.jsonl`.
 
 These fields change where data and cached frozen embeddings are read from. They do not change the model, loss or schedule. Each run passes `--compare-config config/lc_trials_baseline.json`. The single-factor audit (`report_factor`, stored by `run_learning_curve_point.main` at `lc_manifest.json` → `single_factor_audit.unexpected_fields`) is then required to report:
@@ -152,6 +152,8 @@ These fields change where data and cached frozen embeddings are read from. They 
 The audit's WARNING line is expected. Any other set fails gate 3 (§5).
 
 ### Cohort 2022 population: 19 checkpoints
+*(§9 A1: the confirmatory population is the 19 (F, S) cells below (the 15 existing cells plus the 4 new ones), all **retrained** on the pinned GPU host with `--device cuda`, to `results/trials_fusion_confirm/cohort2022/checkpoints/trials_baseline_f{F}_s{S}/`. The 15 published checkpoints in the table are used only by gate 2.)*
+
 **Existing 15.** Path pattern: `results/publication_phase1_fixedval/checkpoints/trials_baseline_f{F}_s{S}/best_checkpoint.pt`. Train file: `preprocess/trec_ct_lc/frac_{F}/train.jsonl`. Validation file (`validation_path` in each `training_config.json`): `preprocess/trec_ct_lc/validation_positive.jsonl`. Training device: `null` (auto).
 
 | F | S | train records | best_checkpoint.pt sha256 |
@@ -352,7 +354,7 @@ in the order 2022, 2021, provided that cohort's C2 state was reached by the rule
    - the grade-0 cap: a topic with ≤ 60 grade-0 qrels keeps all of them without error, a topic with > 60 gets exactly 60 sorted ids, and missing trials are skipped after sampling;
    - the gate-2 leaf classifier and comparator (§5.2): `selected_weight` and count leaves are exact; a `validation_selection_curve` or `ranking.macro.ndcg@10` difference of 5e-5 passes and 2e-4 fails; a `validation_stats.text.mean` difference of 5e-7 passes and 2e-6 fails; a `selected_weight` mismatch fails regardless of other leaves;
    - gate 3's device check (§5.3) on toy `lc_manifest.json` device blocks: passes when `cuda_device_name` equals the pinned `gpu_name`, fails when it differs (e.g. pinned `"NVIDIA A100-SXM4-80GB"`, manifest `"NVIDIA L40S"`), and fails when `requested` or `resolved` is not `"cuda"`;
-   - `verify_transfer.py`'s protocol parser (§6.2 step −1) on this protocol file: it finds exactly 15 §3b checkpoint rows and ≥ 18 §7 input rows, and aborts on a truncated copy with fewer;
+   - `verify_transfer.py`'s protocol parser (§6.2 step −1) on this protocol file: it finds exactly 15 §3b checkpoint rows and ≥ 21 §7 input rows (18 before §9 A1), and aborts on a truncated copy with fewer;
    - the `PYTHONHASHSEED` guard: each new script's entry check raises when `PYTHONHASHSEED != "0"`.
    - **Gate-1 timing and retry.** Gate 1 (the confirmatory run of these tests) runs on the remote, after the step −1 transfer and **before** `make_pins.py` (§6.2 step 0); passing runs on the Mac during development do not count as gate 1. Revision 1 is therefore written only after the tests pass and a gate-1 code fix needs no pins revision. If a gate-1 test is ever rerun and fails after `pins.json` exists, it follows the gate-2 retry rule below (§9 entry, `make_pins.py --revise`, new revision).
 2. **Reproduction gate.** Score the 15 existing checkpoints with W = 0–1.0 (`[i/10 for i in range(11)]`) and nDCG selection, using the read-only embedding sources of §2.1. Compare against `results/publication_phase1_fixedval/trials_fusion_learning_curve_ndcg_selected.json` (sha256 in §7):
@@ -368,7 +370,7 @@ in the order 2022, 2021, provided that cohort's C2 state was reached by the rule
    - Zero-shot test macro pooled AUC must equal 0.795 to 3 dp.
    - This gate touches only the already-analysed population. On failure, the code may be fixed and the gate rerun; each attempt is logged in §9 and produces a new pins revision (`pins_r{n}.json`, §7) because the code hashes change. Each rerun writes to a new leaf `gate_reproduction_r{n}.json` (no overwrite). The tolerances above are fixed. A failure that persists after a code fix stops the study and requires a §9 amendment: a declared change of `analysis.gate2_tolerance_abs` (or `analysis.gate2_leaf_classes`) through the declared-change branch of §7, with `confirmatory_output_seen == false`, which always holds at gate 2 because no new run has been scored.
    - **Code freeze.** Once gate 2 passes, `pins.code` is frozen (§7).
-3. **Run checks.** For the 4 new cohort-2022 runs and the 15 CV runs, all of:
+3. **Run checks.** For the 19 cohort-2022 runs (§9 A1) and the 15 CV runs, all of:
    - the runner's exit code is 0 (the plain path of `run_learning_curve_point.main` used here raises on failure; `run_error.json` is written only on the withholding-study path, so its absence alone proves nothing);
    - `lc_manifest.json` and `best_checkpoint.pt` both exist in the output dir;
    - no `run_error.json`;
@@ -412,13 +414,13 @@ in the order 2022, 2021, provided that cohort's C2 state was reached by the rule
 ### 6.2 Order and commands
 **Step −1 (transfer, before anything else on the remote).** None of the inputs below is git-tracked, so a branch checkout on the remote has none of them. Copy, to the **same repo-relative paths** on the remote (method: `rsync -a --relative` from the local repo root, exact lines in `REMOTE_RUN_TRIALS_FUSION.md`; the method actually used is logged in that runbook's run log):
 - the code checkout (working tree including the new, uncommitted study files; never `/300` or `reports/`);
-- every file in the §7 inputs table (embedding caches, `preprocess/trec_ct/**`, `preprocess/trec_ct_splits/**`, `preprocess/trec_ct_lc/frac_{25,100}/train.jsonl` and `validation_positive.jsonl`, `desc2021.gz`, the published fusion JSON);
+- every file in the §7 inputs table (embedding caches, `preprocess/trec_ct/**`, `preprocess/trec_ct_splits/**`, `preprocess/trec_ct_lc/frac_{10,25,50,75,100}/train.jsonl` (§9 A1) and `validation_positive.jsonl`, `desc2021.gz`, the published fusion JSON);
 - the 15 existing checkpoint dirs `results/publication_phase1_fixedval/checkpoints/trials_baseline_f{F}_s{S}/` (at least `best_checkpoint.pt` and `training_config.json`);
 - the published prepared-cache dirs `test_4030cc85ff1b4ef3_…` (36 chunks) and `validation_5defb59b858bdeee_…` (0 chunks);
 - the Hugging Face snapshot `models--sentence-transformers--all-mpnet-base-v2` (revision `e8c3b32edf5434bc2275fc9bab85f82640a19130`) into the remote HF cache.
 
 Then, on the remote, `scripts/trials_fusion_confirm/verify_transfer.py` (new file, CPU) runs. No pins file exists yet, so **its expected hashes come from this protocol file**, passed as `--protocol`; there are no embedded constants:
-- It parses the §3b checkpoint table (rows `| F | S | records | <64-hex> |`, mapped to `results/publication_phase1_fixedval/checkpoints/trials_baseline_f{F}_s{S}/best_checkpoint.pt`) and the §7 inputs table (rows `| <path> | <64-hex> |`, where path = the first whitespace-delimited token of the first cell, so annotations such as `(= frac_100)` are ignored). It aborts if the parse finds fewer than 15 checkpoint rows or fewer than 18 input rows.
+- It parses the §3b checkpoint table (rows `| F | S | records | <64-hex> |`, mapped to `results/publication_phase1_fixedval/checkpoints/trials_baseline_f{F}_s{S}/best_checkpoint.pt`) and the §7 inputs table (rows `| <path> | <64-hex> |`, where path = the first whitespace-delimited token of the first cell, so annotations such as `(= frac_100)` are ignored). It aborts if the parse finds fewer than 15 checkpoint rows or fewer than 21 input rows (18 before §9 A1).
 - It checks the sha256 of every parsed file.
 - It verifies the 36 test chunks through the §2.1 manifest digest `3d015e60c7d8484a12289299023fa8101a6d12c594af4812995e15e411c03f11`, which covers every chunk's sha256 and basename (per-chunk hashes are therefore not listed in this protocol; `make_pins.py` records them later). It also asserts the validation chunk directory holds 0 chunks.
 - It confirms the MPNet snapshot revision by the §2.1 rule.
@@ -466,12 +468,13 @@ CUDA_VISIBLE_DEVICES="" .venv/bin/python scripts/trials_fusion_confirm/make_pins
 ```
 In every later command, `<PINS>` = the latest pins revision (`pins.json` if none was ever revised, else the highest-numbered `pins_r{n}.json`). Every script verifies the full `supersedes` chain back to `pins.json` and refuses a `--pins` that is not the latest revision present in `results/trials_fusion_confirm/`.
 
-### 6.3 Training (19 runs)
+### 6.3 Training (34 runs, §9 A1)
 ```
 export PYTHONHASHSEED=0
 export HF_HUB_OFFLINE=1
 
-# cohort 2022: (F, FRAC) in {(25, 0.25), (100, 1.0)}, S in {87, 123}
+# cohort 2022 (§9 A1): (F, FRAC) in (10, 0.1), (25, 0.25), (50, 0.5), (75, 0.75), (100, 1.0);
+#   S in 42, 13, 21, plus 87, 123 at F 25 and 100 (19 runs, in this order)
 PYTHONHASHSEED=0 .venv/bin/python scripts/run_learning_curve_point.py --domain trials \
   --config results/trials_fusion_confirm/configs/lc_trials_baseline_cache.json \
   --compare-config config/lc_trials_baseline.json \
@@ -571,7 +574,7 @@ Revision 1 (`pins.json`) is written on the remote GPU host after approval, after
               "derived": {"<path>": {"sha256": "...", "diff_vs_base": {"field": ["old", "new"]},
                                      "expected_unexpected_fields": ["embedding_cache_path"]}}},
   "cohort2022": {"existing_checkpoints": [{"fraction": 10, "seed": 42, "path": "...", "sha256": "...", "training_device": null}],
-                 "new_runs": [{"fraction": 25, "seed": 87, "output_dir": "...", "device": "cuda"}],
+                 "new_runs": [{"fraction": 10, "seed": 42, "output_dir": "...", "device": "cuda"}, "... 19 entries in training order (§9 A1)"],
                  "validation": "preprocess/trec_ct_splits/validation.jsonl",
                  "test": "preprocess/trec_ct_splits/test.jsonl"},
   "cohort2021": {"fold_seed": 2021, "n_folds": 5, "cosine_threshold": 0.80, "max_component": 6,
@@ -601,7 +604,8 @@ Revision 1 (`pins.json`) is written on the remote GPU host after approval, after
                "c3_fixed_w": 0.2, "B": 2000, "rng": {"2022": [31415, 2022], "2021": [31415, 2021]},
                "shuffle_seed": 11, "shuffle": "group_aware_cyclic_shift_rejection_per_file", "shuffle_max_draws": 10000,
                "embedding_dim": 768, "manifest_digest_rule": "sha256 of sorted '<sha256>  <basename>\\n' lines",
-               "training_order": ["2022:f25_s87", "2022:f25_s123", "2022:f100_s87", "2022:f100_s123",
+               "training_order": ["2022:f10_s42", "2022:f10_s13", "2022:f10_s21", "2022:f25_s42", "...",
+                                  "2022:f25_s87", "2022:f25_s123", "...", "2022:f100_s123",
                                   "2021:k0_s13", "2021:k0_s21", "2021:k0_s42", "...", "2021:k4_s42"],
                "sensitivity_unexposed_closed": true, "descriptive_unexposed60": true,
                "equivalence_bound": 0.01, "equivalence_ci": 0.90, "alpha": 0.05,
@@ -629,6 +633,9 @@ Revision 1 (`pins.json`) is written on the remote GPU host after approval, after
 | preprocess/trec_ct_splits/split_manifest.json | 32160deaa0f149f902e4379644adb93028ace195c0f1f171a9e367460e9d2d66 |
 | preprocess/trec_ct_lc/frac_100/train.jsonl (read by the F = 100 runs, §6.3) | e4620c65c0a2ac8229ae35dd47440accfd7442e25a5d931182012cc519a7bfa8 |
 | preprocess/trec_ct_lc/frac_25/train.jsonl | 9fb56dbec881a09c17d714cfd1e03714a7384f40ede9aa41f17f26cdb28a893c |
+| preprocess/trec_ct_lc/frac_10/train.jsonl (§9 A1) | e62cdc23f24d33ea4bcc1f0ae47d7c4fbcddcdb558b39fb54162ee971b956b9b |
+| preprocess/trec_ct_lc/frac_50/train.jsonl (§9 A1) | 85be44a38742ad4bce65225c759a44673b043acda3877f5b401674de7891f685 |
+| preprocess/trec_ct_lc/frac_75/train.jsonl (§9 A1) | 6361db769b4d01c6df6a9d79ed7aa8806ab5a0486303b17962d4e4e21aced115 |
 | preprocess/trec_ct_lc/validation_positive.jsonl | 197b9c910dc1b443dd9114740b6ff1ddbc53c82e83f26ad4568aeb1ad80960e7 |
 | preprocess/trec_ct/qrels.jsonl | ae4631741963c5fd14c6d62a86ee1c0aaa15bb61771fc2e16f6c2534501ac18a |
 | preprocess/trec_ct/topics.jsonl | ab79d0ef3767fb7a1639a431ba90fa5dd2a04a02c918e5f7b42881f0adf70588 |
@@ -651,7 +658,7 @@ The 2022 qrels are embedded in `test.jsonl` (a grade on each record). The raw TR
 - **Weak trained base.** Trained text is 0.07–0.13 nDCG@10 below zero-shot, so a gain over trained text does not imply a gain over the best text model. H1z/H2z address this but are not part of the replication criterion.
 - **Training non-determinism and device mix.**
   - Checkpoints are not reproducible bit for bit at a fixed seed (§5).
-  - The 15 existing checkpoints were trained on the Mac (device auto, `training_device: null`, plausibly MPS). The 4 new 2022 runs and the 15 CV runs are trained on the remote GPU host (`pins.environment.gpu_name`) with CUDA. The checkpoint level of the bootstrap absorbs this variation, but device (and host) is confounded with seed for the new 2022 seeds; no per-seed or per-device claim is made.
+  - *(Superseded by §9 A1.)* All 34 confirmatory checkpoints (19 cohort-2022, 15 CV) are trained on the one remote GPU host with CUDA, so device and host are no longer confounded with seed. The 15 published checkpoints (trained on the Mac) enter only gate 2.
   - All confirmatory scoring runs on one host and one device (remote x86 CPU), so the published numbers are reproduced only to the tiered tolerance of gate 2 (exact `selected_weight`, 1e-6 continuous, 1e-4 rank-based), not bit for bit.
   - The frozen-cache vectors (Mac-encoded) and the fresh remote-CPU encodes used for 2021 fold texts come from different devices; during training, the trainer may also append CUDA encodes to the cache copy. Δ is paired within each text, so this affects text and fused scores alike.
 - **Noisy topic-side MeSH extraction.** The primary condition is captured in ≈ 80% of 2021 and ≈ 60% of 2022 topics (eyeball estimate), and 7 topics have no condition descriptor. Effects are conditional on this extractor.
@@ -668,6 +675,15 @@ Any change after `pins.json` is written, and any reproduction-gate retry, is log
 - **Code-tree transfer check (finding 4).** Before the step −1 rsync, `scripts/trials_fusion_confirm/dump_code_hashes.py` writes the Mac-side `code_hashes()` manifest. On the remote, `verify_transfer.py` additionally takes `--code-manifest <that file>` and fails on any missing, extra or differing code file. `make_pins.py` (revision 1) requires that passing code check in `transfer_check.json` and re-compares `pins.code` with the manifest.
 - **Text pointers.** The A0 pointers in §0, §4.4 and §8 are the only other edits to §0–§8; no table, hypothesis, threshold or decision rule changed. This file is committed before the step −1 transfer, so `pins.git` ties revision 1 to that commit.
 - **Smoke directory (finding 6).** The header names `results/trials_fusion_confirm_smoke/`; the implementation writes non-confirmatory outputs to `results/trials_fusion_confirm/dev_local/` (or `/tmp`), as the implementation brief specified. No confirmatory script reads either; the runbook excludes `dev_local/` from the transfer.
+
+**A1 (2026-10-10, before revision 1; creates no pins revision). Cohort 2022 retrained on one device.** User decision, to avoid mixing training platforms within the cohort-2022 population. No confirmatory output had been produced: no pins file, no new checkpoint, no confirmatory score.
+- **Population.** The cohort-2022 trained population is the same 19 (F, S) cells as before (F ∈ {10, 25, 50, 75, 100}; seeds 42, 13, 21 at every F, plus 87 and 123 at F 25 and 100), but **all 19 are retrained** on the pinned GPU host with `--device cuda` by the §6.3 command. The 15 published checkpoints (§3b table) no longer enter any confirmatory estimate. They are used only by gate 2, which is unchanged.
+- **Why.** Before A1, the 15 published checkpoints were trained on the Mac and the 4 new seeds on CUDA, so device was confounded with seed (old §8). After A1, all 34 confirmatory checkpoints (19 + 15 CV) come from one host and one device.
+- **Effect on §0.** Every cohort-2022 model is new. The 50 test patients and the cohort-2022 validation file are unchanged and already analysed, so cohort 2022 remains a confirmation, not an independent test. The A0 shuffled-control preview ran on the published checkpoints, so it no longer covers the trained C2_2022 input; it did cover the zero-shot 2022 controls, which are deterministic and descriptive only.
+- **Training order (§3b, §6.3, `pins.analysis.training_order`).** 2022: F 10, 25, 50, 75, 100; within each F seeds 42, 13, 21, then 87, 123 at F 25 and 100. Then 2021 as before. Code constant: `fc.COHORT2022_RUNS`.
+- **Inputs (§7).** `preprocess/trec_ct_lc/frac_{10,50,75}/train.jsonl` are added to the inputs table and the transfer list (21 input rows; the parser minimum rises from 18 to 21 so a copy missing any of them aborts).
+- **Unchanged.** Hypotheses, metrics, controls, weight grid, normalisation, bootstrap (equal weight per checkpoint, c* over the 19), Holm, labels, the ≥ 17 of 19 stop rule, the fraction-stratified sensitivity, cohort 2021, gate 2 and its tolerances, gate 3 (`device == cuda`, GPU name equals `pins.environment.gpu_name`), and scoring and analysis on CPU.
+- **Cost.** 15 more GPU training runs (34 in total).
 
 ## 10. Round-1 findings → resolutions (applied in v2)
 

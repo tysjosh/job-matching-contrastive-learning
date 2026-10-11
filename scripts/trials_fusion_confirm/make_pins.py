@@ -25,7 +25,7 @@ from typing import Any, Dict
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from trials_domain import fusion_confirm as fc  # noqa: E402
 
-NEW_2022 = [(25, 87), (25, 123), (100, 87), (100, 123)]
+NEW_2022 = list(fc.COHORT2022_RUNS)   # §9 A1: all 19 cohort-2022 runs are retrained
 SEEDS_2021 = [13, 21, 42]
 
 
