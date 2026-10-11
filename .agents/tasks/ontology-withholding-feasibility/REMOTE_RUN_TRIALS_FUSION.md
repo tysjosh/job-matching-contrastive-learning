@@ -23,6 +23,36 @@ Device rule:
 
 ## 1. Transfer (step −1), from the local repo root
 
+### 1A. Preferred: clone from GitHub, pull data from Hugging Face (no Mac step)
+
+The study code and the Mac code-hash manifest (`code_hashes_trials_fusion.mac.json`) are committed on branch `orca-experiments-and-runner`. Every pinned non-git input is in the public dataset `olukotunjosh/cdcl-data` at its repo-relative path (verified against the Mac: 108 files, 58 by LFS sha256, the rest by size; the 36-chunk manifest digest matches). `verify_transfer.py` re-hashes everything on the remote regardless.
+
+```bash
+git clone -b orca-experiments-and-runner git@github.com:tysjosh/job-matching-contrastive-learning.git CDCL
+cd CDCL
+python3.13 -m venv .venv && .venv/bin/pip install "huggingface-hub==0.34.4"   # full env in section 2
+unset HF_HUB_OFFLINE      # downloads need the network; turn it back on before section 3
+
+.venv/bin/huggingface-cli download olukotunjosh/cdcl-data --repo-type dataset --local-dir . \
+  --include "preprocess/trec_ct/*" "preprocess/trec_ct_splits/*" "preprocess/trec_ct_lc/*" "preprocess/*.py" \
+            "embedding_cache/trials_text_embeddings.pt" "embedding_cache/mesh2021_index.pkl" \
+            "trec-clinical-trials/raw/ontology/desc2021.gz" \
+            "results/publication_phase1_fixedval/trials_fusion_learning_curve_ndcg_selected.json" \
+            "results/publication_phase1_fixedval/checkpoints/trials_baseline_*/*" \
+            "results/publication_phase1_fixedval/prepared_embeddings/trials/test_4030cc85ff1b4ef3_sentence-transformers_all-mpnet-base-v2/*"
+# Hugging Face stores no empty directories; the transfer check requires this one to exist with 0 chunks
+mkdir -p results/publication_phase1_fixedval/prepared_embeddings/trials/validation_5defb59b858bdeee_sentence-transformers_all-mpnet-base-v2
+
+# MPNet: the hub's current main is the pinned revision e8c3b32edf5434bc2275fc9bab85f82640a19130
+.venv/bin/huggingface-cli download sentence-transformers/all-mpnet-base-v2 \
+  --include "*.json" "1_Pooling/*" "model.safetensors" "vocab.txt" "README.md"
+export HF_HUB_OFFLINE=1
+```
+
+`git status` on the remote should then show only untracked data paths. Continue with section 2 (environment) and section 3 (`verify_transfer.py` with the committed manifest). If `verify_transfer.py` reports an MPNet revision mismatch, the hub's `main` has moved: copy the Mac snapshot instead (1c below).
+
+### 1B. Alternative: copy everything from the Mac
+
 None of the pinned inputs is git-tracked, so a plain clone has none of them. Copy the working tree, which includes `.git` and the uncommitted study files, and then the data, both to the same repo-relative paths.
 
 **Never ship:**
