@@ -387,7 +387,7 @@ def test_leaf_classifier_on_real_key_tuples(published_run):
              ("validation_stats", "text", "mean"): "continuous",
              ("selected_weight",): "exact",
              ("test", "fusion", "contrasts", "queries_with_both_classes", "pooled"): "exact",
-             ("test", "text", "ranking", "per_query", "2022_1", "average_precision"): "rank",
+             ("test", "text", "ranking", "per_query", "2022_1", "average_precision"): "rank_per_query",
              ("test", "text", "ordinal", "kendall_tau_b"): "rank",
              ("test", "text", "ordinal", "cohens_d", "hard"): "continuous",
              ("test", "text", "binary_classification", "confusion_matrix", "tn"): "skipped"}
@@ -398,7 +398,7 @@ def test_leaf_classifier_on_real_key_tuples(published_run):
     for P in leaves:   # no rank leaf may fall into the 1e-6 continuous class (round-6 stall)
         if any(k in P for k in ("ranking", "global_auc", "macro_query_auc", "per_query", "ranking_macro",
                                 "validation_selection_curve")) and fc.leaf_class(P) != "skipped":
-            assert fc.leaf_class(P) in ("rank", "exact"), P
+            assert fc.leaf_class(P) in ("rank", "rank_per_query", "exact"), P
 
 
 def _perturb(run, path, delta):
@@ -416,9 +416,16 @@ def test_gate2_comparator_tolerances(published_run):
     for path in (("validation_selection_curve", "0.1"), ("test", "fusion", "ranking", "macro", "ndcg@10")):
         assert fc.compare_gate2_run(run, _perturb(run, path, 5e-5))["passed"], path
         assert not fc.compare_gate2_run(run, _perturb(run, path, 2e-4))["passed"], path
-    p = ("validation_stats", "text", "mean")
-    assert fc.compare_gate2_run(run, _perturb(run, p, 5e-7))["passed"]
-    assert not fc.compare_gate2_run(run, _perturb(run, p, 2e-6))["passed"]
+    for p in (("validation_stats", "text", "mean"), ("test", "text", "ordinal", "tier_stats", "2", "median")):
+        assert fc.compare_gate2_run(run, _perturb(run, p, 5e-6))["passed"], p      # §9 A2: 1e-5
+        assert not fc.compare_gate2_run(run, _perturb(run, p, 2e-5))["passed"], p
+    pq = run["test"]["text"]["ranking"]["per_query"]
+    def per_query_delta(d):
+        r = copy.deepcopy(run)
+        r["test"]["text"]["ranking"]["per_query"][0]["average_precision"] = pq[0]["average_precision"] + d
+        return r
+    assert fc.compare_gate2_run(run, per_query_delta(5e-4))["passed"]          # §9 A2: per-patient 1e-3
+    assert not fc.compare_gate2_run(run, per_query_delta(2e-3))["passed"]
     bad = copy.deepcopy(run)
     bad["selected_weight"] = run["selected_weight"] + 0.1
     assert not fc.compare_gate2_run(run, bad)["passed"]

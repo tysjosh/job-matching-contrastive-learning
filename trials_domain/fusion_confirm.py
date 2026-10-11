@@ -869,16 +869,19 @@ def headline(labels: Mapping[str, Mapping[str, Any]]) -> str:
 
 
 # ---------------------------------------------------------------------------- gate 2
-GATE2_TOLERANCE_ABS = {"continuous": 1e-6, "rank": 1e-4}
+#: §9 A2: continuous 1e-6 -> 1e-5 (tier medians are single float32 order statistics) and a
+#: separate per-patient rank class at 1e-3 (one near-tie flip is undiluted by the 50-patient mean).
+GATE2_TOLERANCE_ABS = {"continuous": 1e-5, "rank": 1e-4, "rank_per_query": 1e-3}
 _SKIP_KEYS = {"binary_classification", "ordinal_classification"}
 _RANK_KEYS = {"validation_selection_curve", "ranking", "ranking_macro", "per_query", "global_auc", "macro_query_auc"}
 GATE2_LEAF_CLASSES = {
     "path_semantics": ("leaf paths are key tuples (never dot-joined), relative to one runs[i]; "
                        "per_query rows are paired by their 'query' field"),
-    "order": ["skipped", "exact", "rank", "continuous"],
+    "order": ["skipped", "exact", "rank_per_query", "rank", "continuous"],
     "skipped": "binary_classification or ordinal_classification in P",
     "exact": ("P[-1] in {selected_weight, n_queries} or queries_with_both_classes in P or "
               "confusion_matrix in P or (P[-1] == n and tier_stats in P)"),
+    "rank_per_query": "per_query in P (one patient's rank metric; §9 A2)",
     "rank": ("any of {validation_selection_curve, ranking, ranking_macro, per_query, global_auc, "
              "macro_query_auc} in P, or P[-1] in {kendall_tau_b, spearman_rho}"),
     "continuous": "everything else (validation_stats, tier_stats mean/sd/median, cohens_d)",
@@ -900,6 +903,8 @@ def leaf_class(P: Tuple[str, ...]) -> str:
     if (P[-1] in ("selected_weight", "n_queries") or "queries_with_both_classes" in P
             or "confusion_matrix" in P or (P[-1] == "n" and "tier_stats" in P)):
         return "exact"
+    if "per_query" in P:
+        return "rank_per_query"
     if _RANK_KEYS & set(P) or P[-1] in ("kendall_tau_b", "spearman_rho"):
         return "rank"
     return "continuous"
