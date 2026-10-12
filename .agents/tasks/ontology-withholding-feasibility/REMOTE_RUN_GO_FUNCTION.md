@@ -16,7 +16,7 @@ Exit codes of every script: 0 ok, 2 fatal, 3 protocol stop (stop and ask the use
 - Local gates done on the Mac (protocol §15): G0, G1, G2, G2b, G3, InterPro features (G5 local part), G6 and the G9a smoke. `results/go_function/protocol_pins.json` holds G1-labels, G1-norm, G2, G2b, G3, G5 (InterPro) and G6.
 - **The user commits and pushes** the study code (`go_function/`, `scripts/go_function/`, `config/go_function/`) to a branch. No step of this study makes git writes.
 - **Sign-offs needed before G8** (protocol §10 G8):
-  - D19, closed-world W2/W1 (a deviation from spec §5 "Masking");
+  - D19, closed-world W2/W1 (a deviation from spec §5 "Masking"): **approved 2026-10-12**;
   - plan decision 3, the G9a smoke with reduced batches (`max_train_batches` 40, 2 epochs, CPU).
 - **Obsolete go.norm classes (decided, protocol A3).** go.norm names 728 GO classes that are obsolete in the pinned go.obo. `embed_terms.py` gives each its own stanza's text (name without the leading "obsolete ", definition as written), so step 4b runs without a further decision.
 - **Pick the ESM-2 revision** (a commit sha of `facebook/esm2_t33_650M_UR50D`). It is pinned at G5.
