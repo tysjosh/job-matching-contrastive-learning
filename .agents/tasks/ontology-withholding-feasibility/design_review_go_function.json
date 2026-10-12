@@ -1,0 +1,44 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "round": 3,
+  "counts": {"HIGH": 1, "MEDIUM": 0, "NIT": 4},
+  "findings": [
+    {
+      "id": 1,
+      "severity": "HIGH",
+      "title": "W2 row-selective loss mask leaks P(t); k = 0 is not zero-shot and arm contrasts are biased",
+      "where": "design §5.2 W2/W1/W2drop masks, §5.5 assertions 1 and 7, §6.5; protocol §5 W2 step 3, D9, risk 6, C1/C2/C4/C5 (k=0 included), C3 TP/W2 side, C3_col; spec §5 Masking",
+      "problem": "Masked rows on column t (and D*(t), Lost(p)) are exactly W = P(t) \\ R_k, so the mask encodes the withheld labels. Negatives-only BCE with a jointly trained encoder pushes every unmasked row down but leaves the W region untouched, so test t-positives score relatively high with no ontology or text (a PU 'hole in the negatives' leak). Arms differ in how freely g(t) can exploit it (free e_t in V0/EL arms vs shared projection in V5), so C2/C4/C5 carry an arm-dependent bias. C3_col and risk 6 become uninterpretable. Real scarcity has no such oracle: closed-world BCE (as in DGZ) treats unannotated positives as negatives.",
+      "fix": "Adopt closed-world W2 as primary (decision D19, deviation from spec §5, user/supervisor sign-off before G8): for p in W erase D*^GO_rho(t) from A_rho(p), re-propagate, add NO mask (erased D* and Lost entries are ordinary 0 labels). W1: as W2 then strict ancestors of t set to 1, no mask. WDGZrel unchanged. W2drop = closed-world W2 labels + T_cols(t) masked on all train rows. Update assertion 1 (entries are 0 and unmasked), assertion 7 (W2drop mask = {(p,c): p in train, c in T_cols(t)}), add assertion 10 (W1/W2 train mask empty; WDGZrel/W2drop masks are whole-column only; no row-selective mask on any target-related column). Rewrite D9, risk 6 and the spec-§5 'changes exactly one thing' sentence. Alternative only with explicit user choice: keep masked rule as 'W2mask', declare it an oracle setting, drop zero-shot wording for C2/C4/C5, and add a closed-world W2 descriptive control for V0/V4/V5 at k in {0,1,5} (360 runs per aspect)."
+    },
+    {
+      "id": 2,
+      "severity": "NIT",
+      "title": "Assertion 8 k=all clause for WDGZrel/W2drop is moot",
+      "where": "design §5.5 assertion 8",
+      "fix": "Reword: 'Under WDGZrel/W2drop (k = 0 only), no column with primary(c) = t has any unmasked train entry.'"
+    },
+    {
+      "id": 3,
+      "severity": "NIT",
+      "title": "LD filler support undefined for fillers outside the vocabulary",
+      "where": "design §4 step 3; protocol §4",
+      "fix": "Define n_train(F) = |{p in train : F in closure_TP(p)}| regardless of F in V (or state F not in V counts as 0)."
+    },
+    {
+      "id": 4,
+      "severity": "NIT",
+      "title": "Max-over-columns channel reads scale with channel size",
+      "where": "design §12.2 channel reads; protocol §1",
+      "fix": "Report C3_leak_desc also stratified by |Desc(t)| (<=5 vs >5); state the channel reads are compared by CI sign only, not magnitude."
+    },
+    {
+      "id": 5,
+      "severity": "NIT",
+      "title": "Wording inconsistencies",
+      "where": "protocol §8 ('; Its'); design §0.2 vs protocol §4 alt-id exclusion count wording",
+      "fix": "Fix capitalisation; use the same 'about 14 BP and 5 MF (before the n_test filter)' wording in both documents."
+    }
+  ],
+  "reviewDoc": "/Users/olukotunjosh/Downloads/CDCL/.agents/tasks/ontology-withholding-feasibility/design_review_go_function.md"
+}

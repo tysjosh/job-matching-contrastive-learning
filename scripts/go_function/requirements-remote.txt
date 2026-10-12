@@ -1,0 +1,22 @@
+# Pinned environment for the GO protein-function study on the remote CUDA host (L40S;
+# protocol_go_function.md §15). Copied from scripts/trials_fusion_confirm/requirements-remote.txt
+# (same pins); these are the versions the study code is developed and unit-tested with
+# (local .venv, Python 3.13.5). Install torch first from the CUDA wheel index:
+#   pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+# (driver < 570: cu126), then: pip install -r scripts/go_function/requirements-remote.txt
+numpy==2.3.2
+scipy==1.16.1
+scikit-learn==1.7.1
+pandas==2.3.2
+networkx==3.5
+PyYAML==6.0.2
+tqdm==4.67.1
+sentence-transformers==5.1.0
+transformers==4.55.4
+tokenizers==0.21.4
+huggingface-hub==0.34.4
+safetensors==0.6.2
+pytest==8.4.2
+matplotlib==3.10.6
+seaborn==0.13.2
+psutil==7.1.0

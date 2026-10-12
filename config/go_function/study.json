@@ -1,0 +1,38 @@
+{
+  "analysis_seed": 20261011,
+  "batch_size": 37,
+  "dim": 1024,
+  "dropout": 0.1,
+  "epochs_star": {},
+  "gamma": 0.1,
+  "ks": [
+    0,
+    1,
+    5,
+    10,
+    25,
+    "all"
+  ],
+  "lambda_el": 1.0,
+  "lr": 0.0005,
+  "margin": 0.1,
+  "milestones": [
+    5,
+    20
+  ],
+  "nf4_radius": "dgz",
+  "norm": "layernorm",
+  "note": "Frozen training configuration (design §12.1, protocol §6.3). norm is set by gate_checkpoints.py (G3); epochs_star by pilot.py (G7); otherwise edited only by materialize.py.",
+  "retention_seeds": {
+    "draw1": 20261011,
+    "draw2": 20261012
+  },
+  "schema": 1,
+  "seeds": [
+    13,
+    21,
+    42,
+    87,
+    123
+  ]
+}

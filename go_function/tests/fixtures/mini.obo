@@ -1,0 +1,103 @@
+format-version: 1.2
+data-version: releases/fixture
+ontology: go
+
+[Term]
+id: GO:0008150
+name: biological_process
+namespace: biological_process
+def: "A biological process." [GOC:fixture]
+
+[Term]
+id: GO:0000010
+name: process A
+namespace: biological_process
+def: "Process A." [GOC:fixture]
+is_a: GO:0008150 ! biological_process
+
+[Term]
+id: GO:0000011
+name: process B
+namespace: biological_process
+alt_id: GO:0000099
+def: "Process B." [GOC:fixture]
+is_a: GO:0000010 ! process A
+
+[Term]
+id: GO:0000012
+name: process C
+namespace: biological_process
+def: "Process C, part of D." [GOC:fixture]
+is_a: GO:0000010 ! process A
+relationship: part_of GO:0000013 ! process D
+
+[Term]
+id: GO:0000013
+name: process D
+namespace: biological_process
+is_a: GO:0008150 ! biological_process
+
+[Term]
+id: GO:0000014
+name: regulation of process B
+namespace: biological_process
+is_a: GO:0000015 ! biological regulation
+intersection_of: GO:0000015 ! biological regulation
+intersection_of: regulates GO:0000011 ! process B
+relationship: regulates GO:0000011 ! process B
+
+[Term]
+id: GO:0000015
+name: biological regulation
+namespace: biological_process
+is_a: GO:0008150 ! biological_process
+
+[Term]
+id: GO:0000016
+name: positive regulation of process B
+namespace: biological_process
+is_a: GO:0000014 ! regulation of process B
+intersection_of: GO:0000015 ! biological regulation
+intersection_of: positively_regulates GO:0000011 ! process B
+relationship: positively_regulates GO:0000011 ! process B
+
+[Term]
+id: GO:0003674
+name: molecular_function
+namespace: molecular_function
+
+[Term]
+id: GO:0005488
+name: binding
+namespace: molecular_function
+is_a: GO:0003674 ! molecular_function
+
+[Term]
+id: GO:0005515
+name: protein binding
+namespace: molecular_function
+is_a: GO:0005488 ! binding
+
+[Term]
+id: GO:0000020
+name: activity E
+namespace: molecular_function
+is_a: GO:0003674 ! molecular_function
+relationship: part_of GO:0000013 ! process D
+relationship: has_part GO:0005515 ! protein binding
+
+[Term]
+id: GO:0000030
+name: obsolete process
+namespace: biological_process
+is_obsolete: true
+
+[Typedef]
+id: positively_regulates
+name: positively regulates
+is_a: regulates ! regulates
+
+[Typedef]
+id: part_of
+name: part of
+is_transitive: true

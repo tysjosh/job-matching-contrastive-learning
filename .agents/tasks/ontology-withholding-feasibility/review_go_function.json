@@ -1,0 +1,22 @@
+{
+ "verdict": "APPROVED",
+ "high": 0,
+ "medium": 0,
+ "nit": 2,
+ "findings": [
+  {
+   "id": 1,
+   "severity": "NIT",
+   "where": "go_function/train.py:1013",
+   "issue": "Pilot-mode preflight still builds the test feature split (InterPro CSR at train.py:1013, ESM view at :1025) before the pilot branch at :1068 discards it. Nothing derived from test reaches any output, but amendment A4 (protocol line 311), protocol §6.4 (line 165), the comment at train.py:1070 and pilot.py:24 say pilots load no test features.",
+   "fix": "For spec.mode == 'pilot', load only the train and valid splits in both feature branches, and extend test_pilot_preflight_never_loads_test_labels to assert that no test feature rows are built; or reword A4 and the comments to cover whole-file loading, as A4 already does for labels."
+  },
+  {
+   "id": 2,
+   "severity": "NIT",
+   "where": ".agents/tasks/ontology-withholding-feasibility/task-go-function/task.json:15",
+   "issue": "G0 (go_ppi_domain/tests) has not been re-verified on the final code. The iteration-2 run gave 326/3/3 failed/6 errors at the 5 GB free-disk guard of scripts/go_withholding/make_conditions.py, and about 4 GB is free now. REMOTE_RUN_GO_FUNCTION.md:16 still lists G0 as a completed local gate. The protected paths are byte-identical, so a regression is unlikely.",
+   "fix": "Free at least 5.5 GB, re-run go_ppi_domain/tests (expected: 334 passed, 3 skipped, 1 known failure), then close the open item in task.json, or mark G0 as pending in runbook §0."
+  }
+ ]
+}

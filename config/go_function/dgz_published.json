@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "source": "Kulmanov and Hoehndorf, DeepGOZero: improving protein function prediction from sequence and zero-shot learning based on ontology axioms. Bioinformatics 38(Supplement_1):i238-i245 (2022). https://pmc.ncbi.nlm.nih.gov/articles/PMC9235501/",
+  "note": "UniProtKB-SwissProt similarity split. Fmax, Smin and AUPR are protein-centric; AUC is the class-centric average AUC. The MFO results are in Table 3 and the BPO results in Table 4 of the paper (plan item 7 says 'Table 3' for both).",
+  "values": {
+    "mf": {
+      "mlp": {
+        "fmax": {"value": 0.657, "cell": "Table 3, row MLP, column Fmax"},
+        "smin": {"value": 9.857, "cell": "Table 3, row MLP, column Smin"},
+        "aupr": {"value": 0.655, "cell": "Table 3, row MLP, column AUPR"},
+        "auc": {"value": 0.882, "cell": "Table 3, row MLP, column AUC"}
+      },
+      "deepgozero": {
+        "fmax": {"value": 0.657, "cell": "Table 3, row DeepGOZero, column Fmax"},
+        "smin": {"value": 9.808, "cell": "Table 3, row DeepGOZero, column Smin"},
+        "aupr": {"value": 0.657, "cell": "Table 3, row DeepGOZero, column AUPR"},
+        "auc": {"value": 0.903, "cell": "Table 3, row DeepGOZero, column AUC"}
+      }
+    },
+    "bp": {
+      "mlp": {
+        "fmax": {"value": 0.460, "cell": "Table 4, row MLP, column Fmax"},
+        "smin": {"value": 43.987, "cell": "Table 4, row MLP, column Smin"},
+        "aupr": {"value": 0.435, "cell": "Table 4, row MLP, column AUPR"},
+        "auc": {"value": 0.793, "cell": "Table 4, row MLP, column AUC"}
+      },
+      "deepgozero": {
+        "fmax": {"value": 0.451, "cell": "Table 4, row DeepGOZero, column Fmax"},
+        "smin": {"value": 44.621, "cell": "Table 4, row DeepGOZero, column Smin"},
+        "aupr": {"value": 0.422, "cell": "Table 4, row DeepGOZero, column AUPR"},
+        "auc": {"value": 0.798, "cell": "Table 4, row DeepGOZero, column AUC"}
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "task_id": "task-go-function",
+  "task_description": "Implement the GO protein-function prediction study (gap items 2-11 of findings_go_function.md) per design/protocol v3 with the round-3 closed-world W2/W1 fix: typed ontology + go.norm, label builder (G1), evaluator + DGZ eval gate (G2), InterPro/ESM/term-text features, target table + closed-world withholding generator (G6), bilinear multi-label trainer with free/EL/text towers and checkpoint gates (G3, G2b), pilot, materializer, sweep driver, analysis, local G9a smoke and REMOTE_RUN_GO_FUNCTION.md. No git writes; full grid runs later on a remote L40S.",
+  "status": "completed",
+  "feature_order": [
+    "FEAT-001",
+    "FEAT-002",
+    "FEAT-003",
+    "FEAT-004",
+    "FEAT-005"
+  ],
+  "blocked_reason": null,
+  "open_items": [
+    "RESOLVED 2026-10-12 (integration step): go_ppi_domain/tests (G0) re-run gave 334 passed, 3 skipped, 1 known failure = baseline.",
+    "OPEN 2026-10-12 (review iteration 2): go_ppi_domain/tests (G0) gave 326/3/3 failed/6 errors, all extra non-passes at scripts/go_withholding/make_conditions.py's free-disk guard (3.8 GB < 5 GB, macOS swap); re-run at >= 5 GB free, expected 334 passed, 3 skipped, 1 known failure. Protected paths unchanged (0 lines)."
+  ]
+}
