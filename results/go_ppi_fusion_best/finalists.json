@@ -1,0 +1,354 @@
+{
+  "frozen_at": "2026-10-12T22:02:20",
+  "rule": {
+    "criterion": "cv_delta.composite: mean over the 15 checkpoints of the mean of Delta within-anchor hard AUC, Delta within-anchor pooled AUC, Delta AP and Delta nDCG@10, each from anchor-grouped 5-fold cross-fitting on the published validation split (697 anchors; fold seed 20261012). Delta = variant - text on the same checkpoint.",
+    "slots": [
+      "F1: highest criterion over all logged variants",
+      "F2: highest criterion among variants whose GO inputs are all leak-pruned (pruned index + pruned record URIs; with/from partner leak removed), if not F1",
+      "F3: highest criterion among variants with at most one tuned parameter and no learned model (simplest robust form), if not already chosen; else next overall"
+    ],
+    "ties": "higher criterion wins; exact ties -> fewer tuned parameters, then earlier log order",
+    "test_set": "never read by this step; finalists are frozen before any test scoring"
+  },
+  "n_variants_logged": 208,
+  "validation": {
+    "path": "/Users/olukotunjosh/Downloads/CDCL/preprocess/go_ppi_splits/validation.jsonl",
+    "sha256": "07e432fb64f3e2716d74019806b0926aa26b2926a12b541a2fda1b8bf8ac91c6",
+    "pruned_sha256": "90c0b7df9851cae23866e3101201981f7339727582276ae459d3d34cbfe31fd7",
+    "records": 5587,
+    "anchors": 697,
+    "fold_seed": 20261012,
+    "n_folds": 5
+  },
+  "stage2_inner_metric": "global_pooled_auc",
+  "reference_published": {
+    "id": "f17bbc1bc2eb",
+    "spec": {
+      "family": "linear",
+      "phi": "simgic_P_unpruned",
+      "missing": "zero",
+      "select_on": "ndcg@10",
+      "step": 0.1,
+      "scope": "checkpoint"
+    },
+    "cv_delta": {
+      "auc_hard": -0.0010720803619354235,
+      "auc_pooled": 0.005501323136739833,
+      "auc_easy": 0.015084801811496755,
+      "average_precision": -0.0017023051099814316,
+      "ndcg@10": 0.010751109486328004,
+      "precision@10": 3.8259206121473806e-05,
+      "reciprocal_rank": -0.0033813136302762578,
+      "composite": 0.003369511787787745
+    },
+    "insample_delta": {
+      "auc_hard": 0.0013322597960279052,
+      "auc_pooled": 0.007232625013875064,
+      "auc_easy": 0.01637493274145818,
+      "average_precision": 0.0011614964104591137,
+      "ndcg@10": 0.012301051071582953,
+      "precision@10": 3.8259206121473806e-05,
+      "reciprocal_rank": -0.00019803847604675054,
+      "composite": 0.005506858072986259
+    }
+  },
+  "finalists": [
+    {
+      "slot": "F1",
+      "id": "4aa815d4ed1c",
+      "spec": {
+        "family": "stacker",
+        "model": "hgb",
+        "phi": [
+          "simgic_P_unpruned",
+          "simgic_F_unpruned",
+          "simgic_C_unpruned",
+          "resnik_P_unpruned",
+          "exact_P_unpruned",
+          "isa_simgic_P_unpruned"
+        ],
+        "flags": [
+          "miss_P_unpruned",
+          "miss_F_unpruned",
+          "miss_C_unpruned"
+        ],
+        "counts": [
+          "na_P_unpruned",
+          "nb_P_unpruned"
+        ],
+        "interactions": true,
+        "scope": "checkpoint",
+        "set": "rich"
+      },
+      "leak_pruned": false,
+      "n_thetas": 1,
+      "cv_delta": {
+        "auc_hard": 0.03868873169235488,
+        "auc_pooled": 0.024682497479372508,
+        "auc_easy": 0.01659912788090756,
+        "average_precision": 0.034730254953284,
+        "ndcg@10": 0.014752029510402487,
+        "precision@10": -4.625929269271486e-19,
+        "reciprocal_rank": 0.03316103137679903,
+        "composite": 0.02821337840885347
+      },
+      "insample_delta": {
+        "auc_hard": 0.09763886971857992,
+        "auc_pooled": 0.06764667739667746,
+        "auc_easy": 0.047074926015604,
+        "average_precision": 0.10485824898169298,
+        "ndcg@10": 0.023430998202536853,
+        "precision@10": 0.00013390722142515624,
+        "reciprocal_rank": 0.09964625508193976,
+        "composite": 0.0733936985748718
+      },
+      "cv_n_positive_composite": 15,
+      "theta_all": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "slot": "F2",
+      "id": "57515cc164be",
+      "spec": {
+        "family": "stacker",
+        "model": "hgb",
+        "phi": [
+          "simgic_P_pruned"
+        ],
+        "flags": [
+          "miss_P_pruned",
+          "miss_F_pruned",
+          "miss_C_pruned"
+        ],
+        "counts": [
+          "na_P_pruned",
+          "nb_P_pruned"
+        ],
+        "interactions": true,
+        "scope": "checkpoint",
+        "set": "P"
+      },
+      "leak_pruned": true,
+      "n_thetas": 1,
+      "cv_delta": {
+        "auc_hard": 0.037464074840886465,
+        "auc_pooled": 0.025206587201378902,
+        "auc_easy": 0.018883003766478366,
+        "average_precision": 0.036225573834495005,
+        "ndcg@10": 0.002506544475418626,
+        "precision@10": 9.564801530368797e-06,
+        "reciprocal_rank": 0.03508720878015484,
+        "composite": 0.025350695088044755
+      },
+      "insample_delta": {
+        "auc_hard": 0.07080956215014188,
+        "auc_pooled": 0.05281969149677486,
+        "auc_easy": 0.04001507712312799,
+        "average_precision": 0.07582348322493553,
+        "ndcg@10": 0.009299314733154602,
+        "precision@10": 0.00012434241989478788,
+        "reciprocal_rank": 0.07242436217539953,
+        "composite": 0.05218801290125172
+      },
+      "cv_n_positive_composite": 15,
+      "theta_all": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "slot": "F3",
+      "id": "f4598215fb81",
+      "spec": {
+        "family": "anchor_z",
+        "phi": "exact_P_unpruned",
+        "select_on": "global_pooled_auc",
+        "step": 0.1,
+        "scope": "checkpoint"
+      },
+      "leak_pruned": false,
+      "n_thetas": 11,
+      "cv_delta": {
+        "auc_hard": 0.02549137336093856,
+        "auc_pooled": 0.0168618010076344,
+        "auc_easy": 0.014551721818671001,
+        "average_precision": 0.019184080480761003,
+        "ndcg@10": 0.011962619602945535,
+        "precision@10": 7.651841224294668e-05,
+        "reciprocal_rank": 0.020149698925632543,
+        "composite": 0.018374968613069878
+      },
+      "insample_delta": {
+        "auc_hard": 0.02600115021854154,
+        "auc_pooled": 0.017229683896350607,
+        "auc_easy": 0.014810667204735022,
+        "average_precision": 0.020023176838529545,
+        "ndcg@10": 0.012286313063611269,
+        "precision@10": 7.651841224294668e-05,
+        "reciprocal_rank": 0.02118243290442463,
+        "composite": 0.018885081004258238
+      },
+      "cv_n_positive_composite": 15,
+      "theta_all": [
+        0.4,
+        0.4,
+        0.4,
+        0.4,
+        0.4,
+        0.4,
+        0.4,
+        0.4,
+        0.4,
+        0.4,
+        0.3,
+        0.3,
+        0.4,
+        0.4,
+        0.4
+      ]
+    }
+  ],
+  "test_scoring": "NOT run in this step. Report step: freeze each finalist with go_ppi_fusion.search.final_fit on all validation, score test once with final_score, Delta vs text on the same checkpoint.",
+  "top10_by_criterion": [
+    {
+      "id": "4aa815d4ed1c",
+      "family": "stacker",
+      "phi": [
+        "simgic_P_unpruned",
+        "simgic_F_unpruned",
+        "simgic_C_unpruned",
+        "resnik_P_unpruned",
+        "exact_P_unpruned",
+        "isa_simgic_P_unpruned"
+      ],
+      "cv_composite": 0.02821337840885347,
+      "leak_pruned": false
+    },
+    {
+      "id": "80e8d1db7292",
+      "family": "stacker",
+      "phi": [
+        "simgic_P_unpruned",
+        "simgic_F_unpruned",
+        "simgic_C_unpruned",
+        "resnik_P_unpruned",
+        "exact_P_unpruned",
+        "isa_simgic_P_unpruned"
+      ],
+      "cv_composite": 0.02702810019375148,
+      "leak_pruned": false
+    },
+    {
+      "id": "57515cc164be",
+      "family": "stacker",
+      "phi": [
+        "simgic_P_pruned"
+      ],
+      "cv_composite": 0.025350695088044755,
+      "leak_pruned": true
+    },
+    {
+      "id": "de30798e61e4",
+      "family": "stacker",
+      "phi": [
+        "simgic_P_unpruned"
+      ],
+      "cv_composite": 0.023592649481361787,
+      "leak_pruned": false
+    },
+    {
+      "id": "c2e540a2d3fa",
+      "family": "stacker",
+      "phi": [
+        "simgic_P_unpruned",
+        "simgic_F_unpruned",
+        "simgic_C_unpruned"
+      ],
+      "cv_composite": 0.023266977006646424,
+      "leak_pruned": false
+    },
+    {
+      "id": "632275633f50",
+      "family": "stacker",
+      "phi": [
+        "simgic_P_pruned",
+        "simgic_F_pruned",
+        "simgic_C_pruned"
+      ],
+      "cv_composite": 0.020889263657371406,
+      "leak_pruned": true
+    },
+    {
+      "id": "73de490782c5",
+      "family": "stacker",
+      "phi": [
+        "simgic_P_pruned",
+        "simgic_F_pruned",
+        "simgic_C_pruned",
+        "resnik_P_pruned",
+        "exact_P_pruned",
+        "isa_simgic_P_pruned"
+      ],
+      "cv_composite": 0.020814451781349587,
+      "leak_pruned": true
+    },
+    {
+      "id": "5d7b14d9844f",
+      "family": "stacker",
+      "phi": [
+        "simgic_P_unpruned",
+        "simgic_F_unpruned",
+        "simgic_C_unpruned"
+      ],
+      "cv_composite": 0.02053295887020301,
+      "leak_pruned": false
+    },
+    {
+      "id": "f4598215fb81",
+      "family": "anchor_z",
+      "phi": "exact_P_unpruned",
+      "cv_composite": 0.018374968613069878,
+      "leak_pruned": false
+    },
+    {
+      "id": "d5264fbac7b3",
+      "family": "stacker",
+      "phi": [
+        "simgic_P_pruned",
+        "simgic_F_pruned",
+        "simgic_C_pruned"
+      ],
+      "cv_composite": 0.017798433920401487,
+      "leak_pruned": true
+    }
+  ],
+  "seconds": 1620.0
+}
