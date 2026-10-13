@@ -1,0 +1,49 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "NIT",
+      "confidence": "likely",
+      "title": "CV folds are anchor-grouped but not protein-disjoint; validation/test share 0 proteins",
+      "detail": "92.8% of validation records have a partner present in other folds and 56.9% of partners are validation anchors. HGB stackers (F1, F2) with partner-level features can learn partner propensities that transfer across folds but not to test, biasing selection toward them.",
+      "fix": "Before any test scoring, re-run stage-6 stackers and F3 with protein-disjoint folds as a sensitivity, or state in the report that F1/F2's CV advantage may not transfer. Do not re-fold after seeing test."
+    },
+    {
+      "id": 2,
+      "severity": "NIT",
+      "confidence": "confirmed",
+      "title": "Adaptive 208-variant search makes finalist CV composites optimistic",
+      "fix": "Disclose variant count and stage-wise choices; report test delta as the estimate, CV as best-of-208."
+    },
+    {
+      "id": 3,
+      "severity": "NIT",
+      "confidence": "confirmed",
+      "title": "Composite masks F2's weak nDCG@10 (CV +0.0025 vs published form +0.0108)",
+      "fix": "Report per-metric deltas for every finalist, not only the composite."
+    },
+    {
+      "id": 4,
+      "severity": "NIT",
+      "confidence": "confirmed",
+      "title": "Published-variant in-sample sanity check in run_search.py is commented, not asserted",
+      "fix": "Assert theta_all of the published spec equals the published selected weights (it does in the current log)."
+    },
+    {
+      "id": 5,
+      "severity": "NIT",
+      "confidence": "confirmed",
+      "title": "phi.py docstring references nonexistent PhiContext; no runtime assert that record URIs equal index.direct",
+      "fix": "Fix docstring; optionally assert URI/index equality on load (holds today: 0/11,174 mismatches)."
+    },
+    {
+      "id": 6,
+      "severity": "NIT",
+      "confidence": "confirmed",
+      "title": "Unit-test run not persisted on disk",
+      "fix": "Save pytest summary next to reproduction.json (reviewer spot-check: 16/16 passed)."
+    }
+  ],
+  "reviewDoc": "/Users/olukotunjosh/Downloads/CDCL/.agents/tasks/ontology-withholding-feasibility/review_go_ppi_fusion_best.md"
+}
