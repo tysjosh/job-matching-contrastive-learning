@@ -1,6 +1,6 @@
 {
   "schema": "go_ppi_fusion_confirm/code_hashes/v1",
-  "created_utc": "2026-10-13T06:44:56Z",
+  "created_utc": "2026-10-13T08:24:12Z",
   "globs": [
     "go_ppi_domain/fusion_confirm.py",
     "go_ppi_domain/tests/test_fusion_confirm.py",
@@ -17,7 +17,7 @@
     "scripts/trials_fusion_confirm/requirements-remote.txt"
   ],
   "git": {
-    "head": "c7a355b6ecfac444a5aeb5b317f0bef4f1d212c5",
+    "head": "f2621207ba03452b6d3eb8cdf9425df12f79cea7",
     "branch": "go-ppi-fusion-confirm",
     "dirty_paths": [
       ".agents/tasks/ontology-withholding-feasibility/code_hashes_go_ppi_fusion.mac.json",
@@ -29,8 +29,7 @@
       "agents/tasks/ontology-withholding-feasibility/REMOTE_RUN_TRIALS_FUSION.md",
       "go_ppi_domain/fusion_confirm.py",
       "go_ppi_domain/tests/test_fusion_confirm.py",
-      "reports/",
-      "scripts/go_ppi_fusion_confirm/score.py"
+      "reports/"
     ]
   },
   "code": {
@@ -66,7 +65,7 @@
     "go_ppi_domain/__init__.py": "038fd71ef07500d71464ca748c3e78ec22969d648f12425de43ee113237b9cd3",
     "go_ppi_domain/data_converter.py": "37e8ee969e3f89cedc6d95919dd3fdf728eba29fe6acdd27c15077cff1f34719",
     "go_ppi_domain/data_splitter.py": "e5b0b45d6386e3e8d45806af31dbcaefb3579c7dab022eec70f8c6d31b743c73",
-    "go_ppi_domain/fusion_confirm.py": "04ecd272ce4436c94d170793d9f0efaba1e9306b5414e8c73a1b2c7182083817",
+    "go_ppi_domain/fusion_confirm.py": "a8d27b89a35e2404fe5d301a634eef9e1e0cbb465e3b33aa74ba5732379debbd",
     "go_ppi_domain/go_ontology.py": "e370785fbf117848ffc05f0f0b51d955d1000ec565fb20c5e1ff69bea447ee43",
     "go_ppi_domain/go_relation.py": "29fc81d321dcf068cbc92f8946855fc2e93497f8626b080dec7018b3ff351f38",
     "go_ppi_domain/leak_pruning.py": "c636e68d731124f5de51d01fb726867eaaa4411e2fa4b1bb3c9879e0df123a97",
@@ -74,7 +73,7 @@
     "go_ppi_domain/record_adapter.py": "a00818d737dc58bb69e24d54909ede8b6534bf8bbaa3a6559e2356a44f466e3b",
     "go_ppi_domain/run_config.py": "e95a630a492cccf4b75b3c236650ed876f12f9e2ad115544e94edb32ee14fde4",
     "go_ppi_domain/tests/_leak_fixtures.py": "dfdb898d619a5dcaad1178a08a7e86806dc3d53e1c590935d933f60dff562c17",
-    "go_ppi_domain/tests/test_fusion_confirm.py": "808ad3d28578648cf142974ed54e55020bf79f57d95ad6ec9164837ac326ab62",
+    "go_ppi_domain/tests/test_fusion_confirm.py": "050bcdb45294c5e8bff5b6673d2f4a9d49250962033e266ec3971d9e0e2b5b28",
     "go_ppi_domain/withholding.py": "b9ed17e88525bff03204fb10237cde4809b7b9822ead64b1d4f0bd9cddb00820",
     "go_ppi_domain/withholding_constants.py": "aef61ebf3b14e8c4b69cff3e768fb16d65da3d72cbd41ee52905b590dfd0f48b",
     "go_ppi_domain/withholding_diagnostics.py": "2251327239da77d4be364954a29b19145863c56d893e809457a9754a803542f0",

@@ -663,13 +663,36 @@ def test_float_tie_explains_only_tie_swaps():
     far = raw.copy(); far[3] = raw[2] - 1e-3
     ev = fc.float_tie_explains(far, far, None, grades, "A", "ndcg@10", published, 1e-3)
     assert not ev["explained"] and ev["reason"] == "no float-tied group"
-    # fusion arm: the tie only counts when phi is identical
+    # fusion arm: a raw-text tie only counts when phi is identical (A1); here the fused scores
+    # separate the pair, so there is no arm-score tie either (A2)
     phi = np.zeros(len(raw)); phi[3] = 0.5
-    assert not fc.float_tie_explains(raw, raw, phi, grades, "A", "ndcg@10", published, 1e-3)["explained"]
+    fused = raw + 0.1 * phi
+    assert not fc.float_tie_explains(fused, raw, phi, grades, "A", "ndcg@10", published, 1e-3)["explained"]
     # too many orderings: refused
     big = np.r_[np.full(8, 0.5) - np.arange(8) * 1e-8, 0.1]
     ev = fc.float_tie_explains(big, big, None, np.r_[np.zeros(8, int), 2], "A", "ndcg@10", 0.3, 1e-3)
     assert not ev["explained"] and ev["reason"] == "too many orderings"
+
+
+def test_float_tie_a2_arm_score_tie():
+    """§9 A2: fused scores tied by coincidence (raw text and phi both differ), as PYCARD f25_s42."""
+    E = fc.epf()
+    raw = np.array([0.95, 0.80, 0.70, 0.60, 0.50, 0.45, 0.40, 0.291779071, 0.214074418, 0.10, 0.05, 0.01])
+    phi = np.array([0.3, 0.2, 0.2, 0.1, 0.1, 0.0, 0.0, 0.003938, 0.051160, 0.0, 0.0, 0.0])
+    fused = np.array([3.0, 2.5, 2.2, 1.9, 1.6, 1.3, 1.0, 0.7000001, 0.7, 0.2, 0.1, 0.0])
+    grades = np.array([1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0])
+    q = np.full(len(raw), "P", dtype=object)
+    sw = fused.copy(); sw[8] = fused[7] + 1e-9
+    published = E.ranking_metrics(sw, grades, q)["per_query"][0]["ndcg@10"]
+    assert abs(published - E.ranking_metrics(fused, grades, q)["per_query"][0]["ndcg@10"]) > 1e-3
+    assert fc.float_tie_groups(raw, phi) == []                       # A1 alone: no tie
+    no_a2 = {**fc.GATE2_FLOAT_TIE, "arm_gap": 0.0}
+    assert not fc.float_tie_explains(fused, raw, phi, grades, "P", "ndcg@10", published, 1e-3, no_a2)["explained"]
+    ev = fc.float_tie_explains(fused, raw, phi, grades, "P", "ndcg@10", published, 1e-3)
+    assert ev["explained"] and ev["tied_group_sizes"] == [2]
+    far = fused.copy(); far[8] = fused[7] - 1e-4                      # gap 1e-4 >= arm_gap
+    assert not fc.float_tie_explains(far, raw, phi, grades, "P", "ndcg@10", published, 1e-3)["explained"]
+    assert fc.merge_tie_groups([[1, 2]], [[2, 3], [5, 6]]) == [[1, 2, 3], [5, 6]]
 
 
 def test_gate2_comparator_float_tie_hook(published_run):

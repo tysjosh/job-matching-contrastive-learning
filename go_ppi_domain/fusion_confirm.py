@@ -1890,13 +1890,16 @@ def _checkpoint_id(path: Any) -> Tuple[str, ...]:
     return tuple(Path(str(path)).parts[-2:])
 
 
-#: §5.2 2a float-tie exception for per-anchor leaves (§9 A1). Two records of one anchor are
-#: float-tied when their raw float32 text scores differ by < ``gap`` (and, in the fusion arm,
-#: their φ is identical), chained over adjacent records in score order.
-GATE2_FLOAT_TIE = {"gap": 1e-6, "max_orderings": 5040, "offset": 1e-13,
+#: §5.2 2a float-tie exception for per-anchor leaves (§9 A1, A2). Two records of one anchor are
+#: float-tied when (A1) their raw float32 text scores differ by < ``gap`` (and, in the fusion
+#: arm, their φ is identical), or (A2) the arm's own ranked scores differ by < ``arm_gap``;
+#: chained over adjacent records in score order, overlapping groups merged.
+GATE2_FLOAT_TIE = {"gap": 1e-6, "arm_gap": 1e-6, "max_orderings": 5040, "offset": 1e-13,
                    "rule": ("a failing rank_per_query leaf passes iff its anchor has >= 1 float-tied "
-                            "group and some ordering of the tied records reproduces the published "
-                            "value within the rank_per_query tolerance; logged as an event")}
+                            "group (raw text gap < gap with identical phi in the fusion arm, or "
+                            "ranked-score gap < arm_gap) and some ordering of the tied records "
+                            "reproduces the published value within the rank_per_query tolerance; "
+                            "logged as an event")}
 
 
 def float_tie_groups(raw_text: np.ndarray, phi: Optional[np.ndarray] = None,
@@ -1927,10 +1930,30 @@ def float_tie_groups(raw_text: np.ndarray, phi: Optional[np.ndarray] = None,
     return groups
 
 
+def merge_tie_groups(*group_lists: Sequence[Sequence[int]]) -> List[List[int]]:
+    """Union of overlapping tie groups (§9 A2); output sorted by smallest member."""
+    parent: Dict[int, int] = {}
+
+    def find(x: int) -> int:
+        while parent.setdefault(x, x) != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for groups in group_lists:
+        for g in groups:
+            for i in g[1:]:
+                parent[find(int(i))] = find(int(g[0]))
+    comps: Dict[int, List[int]] = collections.defaultdict(list)
+    for x in list(parent):
+        comps[find(x)].append(x)
+    return sorted((sorted(c) for c in comps.values() if len(c) >= 2), key=lambda c: c[0])
+
+
 def float_tie_explains(scores: np.ndarray, raw_text: np.ndarray, phi: Optional[np.ndarray],
                        grades: np.ndarray, query: str, metric: str, published: float, tol: float,
                        params: Mapping[str, Any] = GATE2_FLOAT_TIE) -> Dict[str, Any]:
-    """§9 A1: is a per-anchor ranking-leaf difference explained by a float tie?
+    """§9 A1/A2: is a per-anchor ranking-leaf difference explained by a float tie?
 
     Re-orders every float-tied group of the anchor in every way (members placed at the group's
     top score minus k * ``offset``, which keeps them between the same neighbours) and recomputes
@@ -1939,7 +1962,9 @@ def float_tie_explains(scores: np.ndarray, raw_text: np.ndarray, phi: Optional[n
     """
     E = epf()
     scores = np.asarray(scores, dtype=float)
-    groups = float_tie_groups(raw_text, phi, params["gap"])
+    groups = merge_tie_groups(float_tie_groups(raw_text, phi, params["gap"]),
+                              float_tie_groups(scores, None, params.get("arm_gap", 0.0))
+                              if params.get("arm_gap") else [])
     out: Dict[str, Any] = {"query": query, "metric": metric, "published": published,
                            "n_tied_groups": len(groups), "tied_group_sizes": [len(g) for g in groups],
                            "explained": False}
