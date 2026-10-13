@@ -126,7 +126,8 @@ def arrays(prep: Dict[str, Any], text: np.ndarray, phis: Dict[str, np.ndarray]) 
 
 
 # --------------------------------------------------------------------------- gate 2
-def gate_2a_2f(ctx: Ctx, parsed: Dict[str, Any], tol, near_ties, parts) -> Dict[str, Any]:
+def gate_2a_2f(ctx: Ctx, parsed: Dict[str, Any], tol, near_ties, parts,
+               float_tie: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     E = fc.epf()
     out: Dict[str, Any] = {}
     val = published_prepared(ctx, "validation", parsed["prepared"])
@@ -149,6 +150,26 @@ def gate_2a_2f(ctx: Ctx, parsed: Dict[str, Any], tol, near_ties, parts) -> Dict[
         ostats = E.z_stats(vphi)
         vpz, tpz = E.z_apply(vphi, ostats), E.z_apply(tphi, ostats)
         ties = {tuple(c[:3]) for c in near_ties}
+        q_test = np.asarray(test["queries"], dtype=object)
+        q_index = {q: np.flatnonzero(q_test == q) for q in np.unique(q_test)}
+
+        def tie_checker(arm_scores, raw_text):
+            """§9 A1: float-tie check for one run's failing test per-anchor ranking leaves.
+            ``None`` (no check) when the pins carry no ``gate2_float_tie`` (revision 1)."""
+            if float_tie is None:
+                return None
+
+            def check(P, pv):
+                if len(P) != 6 or P[0] != "test" or P[2] != "ranking" or P[3] != "per_query" \
+                        or P[1] not in arm_scores:
+                    return {"explained": False, "reason": "not a test ranking per_query leaf"}
+                arm, q, metric = P[1], P[4], P[5]
+                idx = q_index[q]
+                return fc.float_tie_explains(arm_scores[arm][idx], raw_text[idx],
+                                             tphi[idx] if arm == "fusion" else None,
+                                             np.asarray(test["grades"])[idx], q, metric, pv,
+                                             tol["rank_per_query"], float_tie)
+            return check
         rules = {}
         for rule, path in fc.PUBLISHED_FUSION_REL.items():
             pub = {(r["fraction"], r["seed"]): r for r in json.loads(fc.absp(path).read_text())["runs"]}
@@ -173,15 +194,19 @@ def gate_2a_2f(ctx: Ctx, parsed: Dict[str, Any], tol, near_ties, parts) -> Dict[
                                     "validation_stats": {"text": {"mean": ts[0], "sd": ts[1]},
                                                          "ontology": {"mean": ostats[0], "sd": ostats[1]}},
                                     "test": {"text": tr, "fusion": fr, "delta": delta}})
-                c = fc.compare_gate2_run(pub[(F, S)], run, tol, weight_exception=exception)
+                c = fc.compare_gate2_run(pub[(F, S)], run, tol, weight_exception=exception,
+                                         per_query_tie_check=tie_checker({"text": ttz, "fusion": tf}, tt))
                 c.update({"fraction": F, "seed": S, "selected_weight": w, "published_selected_weight": pw,
                           "validation_top2_gap": fc.top_two_gap(curve.values()), "near_tie_exception": exception})
                 if exception:
                     events.append({"fraction": F, "seed": S, "computed": w, "published": pw,
                                    "test_leaves_compared_at": pw})
+                for ev in c["float_tie_exceptions"]:
+                    events.append({"fraction": F, "seed": S, "float_tie_exception": ev})
                 comps.append(c)
                 print(f"2a {rule} f{F} s{S}: w={w} (published {pw}) {'PASS' if c['passed'] else 'FAIL'} "
-                      f"max={c['max_abs_by_class']}", flush=True)
+                      f"max={c['max_abs_by_class']} float_tie_exceptions={len(c['float_tie_exceptions'])}",
+                      flush=True)
             mx: Dict[str, float] = {}
             for c in comps:
                 for k, v in c["max_abs_by_class"].items():
@@ -195,7 +220,10 @@ def gate_2a_2f(ctx: Ctx, parsed: Dict[str, Any], tol, near_ties, parts) -> Dict[
         zok = all(round(zgot[k], 3) == v for k, v in fc.GATE2_ZERO_SHOT.items())
         out["2a"] = {"passed": all(r["passed"] for r in rules.values()) and zok, "rules": rules,
                      "zero_shot": {"computed": zgot, "expected_3dp": fc.GATE2_ZERO_SHOT, "passed": zok},
-                     "tolerance_abs": tol, "leaf_classes": fc.GATE2_LEAF_CLASSES, "near_tie_cells": near_ties}
+                     "tolerance_abs": tol, "leaf_classes": fc.GATE2_LEAF_CLASSES, "near_tie_cells": near_ties,
+                     "float_tie": float_tie,
+                     "n_float_tie_exceptions": sum(len(c["float_tie_exceptions"])
+                                                   for r in rules.values() for c in r["runs"])}
     if "2f" in parts:
         best = json.loads(fc.absp(fc.BEST_TEST_RESULTS_REL).read_text())
         phis_v = {"X": fc.phi_array(ctx.matchers["X"], val["uris_a"], val["uris_b"]),
@@ -349,14 +377,16 @@ def gate_reproduce(args, pins: Optional[Dict[str, Any]]) -> int:
         tol = dict(fc.GATE2_TOLERANCE_ABS)
         pub = {r: json.loads(fc.absp(p).read_text()) for r, p in fc.PUBLISHED_FUSION_REL.items()}
         near = fc.near_tie_cells(pub)
+        float_tie = dict(fc.GATE2_FLOAT_TIE)
     else:
         tol, near = pins["analysis"]["gate2_tolerance_abs"], pins["analysis"]["gate2_near_tie_cells"]
+        float_tie = pins["analysis"].get("gate2_float_tie")
     t0 = time.time()
     caches = {p: fc.file_sha256(p) for p in (fc.ORIGINAL_CACHE_REL, fc.MASKED_CACHE_REL) if fc.absp(p).exists()}
     ctx = Ctx(pins)
     res: Dict[str, Any] = {}
     if {"2a", "2f"} & set(parts):
-        res.update(gate_2a_2f(ctx, parsed, tol, near, parts))
+        res.update(gate_2a_2f(ctx, parsed, tol, near, parts, float_tie))
     if "2b" in parts:
         res["2b"] = gate_2b(pins)
     if "2c" in parts:

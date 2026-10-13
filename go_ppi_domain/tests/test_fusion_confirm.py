@@ -628,6 +628,72 @@ def test_gate2_near_tie_exception(published_run):
     assert all(c[3] < 1e-4 for c in cells)
 
 
+# ----------------------------------------------------------------- §9 A1 float-tie exception
+def _tie_anchor():
+    """One anchor: records 2 and 3 are float-tied (gap 9e-8, as IGLL1 f10_s42 on the L40S host)."""
+    raw = np.array([0.90, 0.70, 0.394653022, 0.394652933, 0.30, 0.20, 0.10, 0.05, 0.04, 0.03, 0.02, 0.01])
+    grades = np.array([2, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0])
+    return raw, grades
+
+
+def test_float_tie_groups_chain_and_phi_split():
+    raw, _ = _tie_anchor()
+    assert fc.float_tie_groups(raw) == [[2, 3]]
+    assert fc.float_tie_groups(raw, phi=np.zeros(len(raw))) == [[2, 3]]
+    phi = np.zeros(len(raw)); phi[3] = 0.5
+    assert fc.float_tie_groups(raw, phi=phi) == []           # fused scores are not tied
+    assert fc.float_tie_groups(np.array([0.5, 0.5 - 4e-7, 0.5 - 8e-7, 0.1])) == [[0, 1, 2]]   # chained
+    assert fc.float_tie_groups(np.array([0.5, 0.4, 0.3])) == []
+
+
+def test_float_tie_explains_only_tie_swaps():
+    E = fc.epf()
+    raw, grades = _tie_anchor()
+    q = np.full(len(raw), "A", dtype=object)
+    swapped = raw.copy(); swapped[3] = raw[2] + 1e-9            # the other machine's order
+    published = E.ranking_metrics(swapped, grades, q)["per_query"][0]["ndcg@10"]
+    computed = E.ranking_metrics(raw, grades, q)["per_query"][0]["ndcg@10"]
+    assert abs(published - computed) > 1e-3                      # a real gate-2a failure
+    ev = fc.float_tie_explains(raw, raw, None, grades, "A", "ndcg@10", published, 1e-3)
+    assert ev["explained"] and ev["n_tied_groups"] == 1 and ev["abs_diff"] <= 1e-3
+    # a difference no ordering of the tied pair can produce is not explained
+    ev = fc.float_tie_explains(raw, raw, None, grades, "A", "ndcg@10", published + 0.05, 1e-3)
+    assert not ev["explained"] and ev["reason"] == "no ordering reproduces the published value"
+    # no float tie (gap 1e-3): never explained, whatever the values
+    far = raw.copy(); far[3] = raw[2] - 1e-3
+    ev = fc.float_tie_explains(far, far, None, grades, "A", "ndcg@10", published, 1e-3)
+    assert not ev["explained"] and ev["reason"] == "no float-tied group"
+    # fusion arm: the tie only counts when phi is identical
+    phi = np.zeros(len(raw)); phi[3] = 0.5
+    assert not fc.float_tie_explains(raw, raw, phi, grades, "A", "ndcg@10", published, 1e-3)["explained"]
+    # too many orderings: refused
+    big = np.r_[np.full(8, 0.5) - np.arange(8) * 1e-8, 0.1]
+    ev = fc.float_tie_explains(big, big, None, np.r_[np.zeros(8, int), 2], "A", "ndcg@10", 0.3, 1e-3)
+    assert not ev["explained"] and ev["reason"] == "too many orderings"
+
+
+def test_gate2_comparator_float_tie_hook(published_run):
+    run = published_run
+    mine = copy.deepcopy(run)
+    mine["checkpoint"] = "results/publication_phase1_fixedval/checkpoints/" + "/".join(Path(run["checkpoint"]).parts[-2:])
+    mine["test"]["text"]["ranking"]["per_query"][0]["ndcg@10"] += 0.02
+    assert not fc.compare_gate2_run(run, mine)["passed"]
+    calls = []
+
+    def yes(P, pv):
+        calls.append(P)
+        return {"explained": True}
+
+    c = fc.compare_gate2_run(run, mine, per_query_tie_check=yes)
+    assert c["passed"] and len(c["float_tie_exceptions"]) == 1 and calls[0][3] == "per_query"
+    c = fc.compare_gate2_run(run, mine, per_query_tie_check=lambda P, pv: {"explained": False, "reason": "x"})
+    assert not c["passed"] and c["failures"][0]["float_tie_check"]["reason"] == "x"
+    # the hook never rescues a macro (rank-class) leaf
+    macro = _perturb(mine, ("test", "fusion", "ranking", "macro", "ndcg@10"), 2e-4)
+    assert not fc.compare_gate2_run(run, macro, per_query_tie_check=yes)["passed"]
+    assert fc.ANALYSIS_PARAMS["gate2_float_tie"] == fc.GATE2_FLOAT_TIE
+
+
 # ----------------------------------------------------------------- pins chain
 def _pins(**over):
     base = {"schema": "s", "revision": 1, "supersedes": None, "amendment": None, "created_utc": "t0",

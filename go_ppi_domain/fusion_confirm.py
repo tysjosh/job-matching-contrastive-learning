@@ -43,6 +43,7 @@ import datetime as _dt
 import gzip
 import hashlib
 import importlib.util
+import itertools
 import json
 import math
 import os
@@ -1889,14 +1890,99 @@ def _checkpoint_id(path: Any) -> Tuple[str, ...]:
     return tuple(Path(str(path)).parts[-2:])
 
 
+#: §5.2 2a float-tie exception for per-anchor leaves (§9 A1). Two records of one anchor are
+#: float-tied when their raw float32 text scores differ by < ``gap`` (and, in the fusion arm,
+#: their φ is identical), chained over adjacent records in score order.
+GATE2_FLOAT_TIE = {"gap": 1e-6, "max_orderings": 5040, "offset": 1e-13,
+                   "rule": ("a failing rank_per_query leaf passes iff its anchor has >= 1 float-tied "
+                            "group and some ordering of the tied records reproduces the published "
+                            "value within the rank_per_query tolerance; logged as an event")}
+
+
+def float_tie_groups(raw_text: np.ndarray, phi: Optional[np.ndarray] = None,
+                     gap: float = GATE2_FLOAT_TIE["gap"]) -> List[List[int]]:
+    """Float-tied groups (local indices, size >= 2) of one anchor's records."""
+    raw = np.asarray(raw_text, dtype=float)
+    order = np.argsort(-raw, kind="stable")
+    chains, cur = [], [int(order[0])] if len(order) else []
+    for a, b in zip(order[:-1], order[1:]):
+        if abs(raw[a] - raw[b]) < gap:
+            cur.append(int(b))
+        else:
+            chains.append(cur)
+            cur = [int(b)]
+    if cur:
+        chains.append(cur)
+    groups = []
+    for c in chains:
+        if len(c) < 2:
+            continue
+        if phi is None:
+            groups.append(c)
+            continue
+        by_phi: Dict[float, List[int]] = collections.OrderedDict()
+        for i in c:
+            by_phi.setdefault(float(phi[i]), []).append(i)
+        groups.extend(g for g in by_phi.values() if len(g) >= 2)
+    return groups
+
+
+def float_tie_explains(scores: np.ndarray, raw_text: np.ndarray, phi: Optional[np.ndarray],
+                       grades: np.ndarray, query: str, metric: str, published: float, tol: float,
+                       params: Mapping[str, Any] = GATE2_FLOAT_TIE) -> Dict[str, Any]:
+    """§9 A1: is a per-anchor ranking-leaf difference explained by a float tie?
+
+    Re-orders every float-tied group of the anchor in every way (members placed at the group's
+    top score minus k * ``offset``, which keeps them between the same neighbours) and recomputes
+    ``epf.ranking_metrics`` for the anchor. Explained iff some ordering reproduces ``published``
+    within ``tol``.
+    """
+    E = epf()
+    scores = np.asarray(scores, dtype=float)
+    groups = float_tie_groups(raw_text, phi, params["gap"])
+    out: Dict[str, Any] = {"query": query, "metric": metric, "published": published,
+                           "n_tied_groups": len(groups), "tied_group_sizes": [len(g) for g in groups],
+                           "explained": False}
+    if not groups:
+        out["reason"] = "no float-tied group"
+        return out
+    n_orderings = int(np.prod([math.factorial(len(g)) for g in groups]))
+    out["n_orderings"] = n_orderings
+    if n_orderings > params["max_orderings"]:
+        out["reason"] = "too many orderings"
+        return out
+    q = np.full(len(scores), query, dtype=object)
+    g = np.asarray(grades)
+    best = None
+    for perms in itertools.product(*(itertools.permutations(gr) for gr in groups)):
+        s = scores.copy()
+        for gr, perm in zip(groups, perms):
+            top = float(np.max(scores[list(gr)]))
+            for k, i in enumerate(perm):
+                s[i] = top - k * params["offset"]
+        v = E.ranking_metrics(s, g, q)["per_query"][0][metric]
+        d = abs(float(v) - float(published))
+        if best is None or d < best:
+            best = d
+        if d <= tol:
+            out.update({"explained": True, "reproduced": float(v), "abs_diff": d})
+            return out
+    out.update({"reason": "no ordering reproduces the published value", "best_abs_diff": best})
+    return out
+
+
 def compare_gate2_run(published: Mapping[str, Any], computed: Mapping[str, Any],
                       tol: Mapping[str, float] = GATE2_TOLERANCE_ABS,
-                      weight_exception: bool = False) -> Dict[str, Any]:
+                      weight_exception: bool = False,
+                      per_query_tie_check: Optional[Callable[[Tuple[str, ...], float], Dict[str, Any]]] = None,
+                      ) -> Dict[str, Any]:
     """Compare one published ``runs[i]`` with the scorer's equivalent (§5.2 2a tiers).
     ``weight_exception`` = the cell is a pinned near-tie cell and the computed weight is one
-    of its two top weights (the event is logged by the caller)."""
+    of its two top weights (the event is logged by the caller). ``per_query_tie_check(path,
+    published)`` implements the §9 A1 float-tie exception for failing rank_per_query leaves."""
     comp = dict(iter_leaves(computed))
     failures, missing = [], []
+    tie_exceptions: List[Dict[str, Any]] = []
     skipped = 0
     max_by_class: Dict[str, float] = collections.defaultdict(float)
     max_by_group: Dict[str, float] = collections.defaultdict(float)
@@ -1932,10 +2018,20 @@ def compare_gate2_run(published: Mapping[str, Any], computed: Mapping[str, Any],
         max_by_class[cls] = max(max_by_class[cls], diff)
         max_by_group[f"{cls}:{group}"] = max(max_by_group[f"{cls}:{group}"], diff)
         if (cls == "exact" and float(pv) != float(cv)) or (cls != "exact" and diff > tol[cls]):
+            if cls == "rank_per_query" and per_query_tie_check is not None:
+                ev = per_query_tie_check(P, float(pv))
+                ev.update({"path": list(P), "computed": cv, "abs_diff_computed": diff})
+                if ev.get("explained"):
+                    tie_exceptions.append(ev)
+                    continue
+                failures.append({"path": list(P), "class": cls, "published": pv, "computed": cv,
+                                 "abs_diff": diff, "float_tie_check": ev})
+                continue
             failures.append({"path": list(P), "class": cls, "published": pv, "computed": cv, "abs_diff": diff})
     return {"passed": not failures, "failures": failures[:50], "n_failures": len(failures),
             "missing": [list(p) for p in missing][:50], "skipped": skipped, "n_compared": dict(n_compared),
-            "max_abs_by_class": dict(max_by_class), "max_abs_by_group": dict(max_by_group)}
+            "max_abs_by_class": dict(max_by_class), "max_abs_by_group": dict(max_by_group),
+            "float_tie_exceptions": tie_exceptions}
 
 
 def near_tie_cells(published_by_rule: Mapping[str, Mapping[str, Any]], gap: float = GATE2_NEAR_TIE_GAP) -> List[List[Any]]:
@@ -2334,6 +2430,7 @@ ANALYSIS_PARAMS: Dict[str, Any] = {
     "min_complete_folds_B": 4,
     "gate2_tolerance_abs": dict(GATE2_TOLERANCE_ABS),
     "gate2_selected_weight": "exact_except_near_tie<1e-4",
+    "gate2_float_tie": dict(GATE2_FLOAT_TIE),
     "gate2_near_tie_cells": [list(c) for c in GATE2_NEAR_TIE_CELLS],
     "gate2_leaf_classes": GATE2_LEAF_CLASSES,
     "gate2_zero_shot": dict(GATE2_ZERO_SHOT),
