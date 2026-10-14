@@ -1,0 +1,209 @@
+{
+  "schema": 1,
+  "note": "Frozen grids, seeds, bands and pins of protocol_go_function_fusion.md (v3, approved round 3). Edited only by a protocol section-14 amendment.",
+  "protocol": ".agents/tasks/ontology-withholding-feasibility/protocol_go_function_fusion.md",
+  "aspects": [
+    "bp",
+    "mf"
+  ],
+  "tier_a": [
+    "mlp",
+    "deepgozero"
+  ],
+  "tier_b": [
+    "V0IPR",
+    "V4IPR",
+    "V0ESM"
+  ],
+  "grids": {
+    "apt_c": [
+      1,
+      2,
+      3
+    ],
+    "apt_tau": [
+      10,
+      30,
+      100
+    ],
+    "fixed_c": [
+      1,
+      2,
+      3
+    ],
+    "w_H": [
+      0,
+      0.25,
+      0.5,
+      1
+    ],
+    "w_R": [
+      0,
+      0.25,
+      0.5,
+      1
+    ],
+    "pc_c": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "pc_tau": [
+      10,
+      30,
+      100
+    ],
+    "pc_alpha": [
+      0,
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ],
+    "xds_alpha": [
+      0,
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ],
+    "xds_alpha_published": 0.5
+  },
+  "tie_tolerance": 1e-12,
+  "bands": [
+    [
+      "0",
+      0,
+      0
+    ],
+    [
+      "1-10",
+      1,
+      10
+    ],
+    [
+      "11-30",
+      11,
+      30
+    ],
+    [
+      "31-100",
+      31,
+      100
+    ],
+    [
+      "101-1000",
+      101,
+      1000
+    ],
+    [
+      ">1000",
+      1001,
+      null
+    ]
+  ],
+  "seeds": {
+    "shuffled_graph": 20261013,
+    "term_bootstrap": 20261014,
+    "protein_bootstrap": 20261015,
+    "two_level_bootstrap": 20261016,
+    "shuffled_hits": 20261017,
+    "s2_two_way": 20261011
+  },
+  "bootstrap": {
+    "B": 2000,
+    "B_P": 200,
+    "B_s2": 10000
+  },
+  "floors": {
+    "P": 0.01,
+    "Sc": 0.01,
+    "Ty": 0.01,
+    "Hc": 0.002,
+    "Hf": 0.01
+  },
+  "alpha_holm": 0.05,
+  "holm_families": {
+    "F-A1": [
+      "P_MLP",
+      "P_DGZ"
+    ],
+    "F-A2": [
+      "Sc0_MLP",
+      "Sc1_MLP",
+      "Sc0_DGZ",
+      "Sc1_DGZ"
+    ],
+    "F-B1": [
+      "P_V0IPR",
+      "P_V4IPR",
+      "P_V0ESM"
+    ],
+    "F-B2": [
+      "Sc0_V0IPR",
+      "Sc1_V0IPR",
+      "Sc0_V4IPR",
+      "Sc1_V4IPR",
+      "Sc0_V0ESM",
+      "Sc1_V0ESM"
+    ],
+    "F-H": [
+      "Hc_MLP",
+      "Hf_MLP",
+      "Hc_DGZ",
+      "Hf_DGZ"
+    ],
+    "F-T": [
+      "Ty_V0IPR",
+      "Ty_V4IPR",
+      "Ty_V0ESM"
+    ]
+  },
+  "s2": {
+    "ks": [
+      0,
+      1,
+      5,
+      10,
+      25
+    ],
+    "placeholder_params": {
+      "c": 2,
+      "tau": 30
+    }
+  },
+  "pilot_snapshot_sha256": {
+    "struct_bp_mlp.json": "80509d22f029e3d9c846c2eae45469410faaf075aa5fe8a4751add23677e5730",
+    "struct_bp_deepgozero.json": "9c2a22e15e09384df161fa34c799f39251a4a8ae036ad13a8bc1877d62324c9a",
+    "struct_mf_mlp.json": "56ec317d63c1904ee48572a103f11497f493b89fc8f0a6ba29a65f3088c58966",
+    "struct_mf_deepgozero.json": "b8fa2e3823d332e566259e52c05fe21622735cd56666b33bdaca576a46a3d868",
+    "pilot_bp_mlp.json": "5fed1e4436bc9dbb3f8ef1c6ea3ab053b87e1acd2fa3dd35064caaef0e411820",
+    "pilot_mf_mlp.json": "32f42bc086ce001574193bc7051515a0c7ce89b13df2c2aa05c614a4003a5c70",
+    "pilot_mf_deepgozero.json": "c1ac81edee47c7c47fd693fc36c56d2904e6d7d770fd4bce403e361d64be1dfa",
+    "c_struct.py": "e11a27d2dafc2de03a31e0b7d7d30981606839bd95985d74fe8ec0f62628d822",
+    "b_valid_pilot.py": "660883d74fe59b9aecf83575d6e7b9393dac8ba1b3a76bbb1dba33fe33a62186",
+    "dgz_evaluate.py": "0a89c4c013eea4d17f22f7235be6c8351e99ad3b7ac4f8712bbf49f0cb9af848"
+  },
+  "pilot_perterm_npz": [
+    "struct_bp_mlp_perterm.npz",
+    "struct_bp_deepgozero_perterm.npz",
+    "struct_mf_mlp_perterm.npz",
+    "struct_mf_deepgozero_perterm.npz",
+    "pilot_bp_mlp_perterm.npz",
+    "pilot_mf_mlp_perterm.npz",
+    "pilot_mf_deepgozero_perterm.npz"
+  ],
+  "pilot_tolerance": 5e-05,
+  "g2_tolerance": 1e-09
+}

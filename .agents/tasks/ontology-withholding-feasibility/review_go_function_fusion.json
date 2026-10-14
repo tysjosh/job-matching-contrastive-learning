@@ -1,0 +1,33 @@
+{
+  "verdict": "APPROVED",
+  "round": 2,
+  "findings": [
+    {"id": 1, "severity": "NIT", "confidence": "confirmed", "label": "Protein-bootstrap stream sizes",
+     "where": "scripts/go_function_fusion/score_test.py run() protein_draws(len(rows)); report.py analyse_aspect protein_draws(n_prot)",
+     "problem": "P_b draws use n = evaluated test rows, Fmax draws use n = protein-table rows; if they differ the single-stream order of protocol 8 is not reproduced. Descriptive P_b CI only; never enters Holm or 12.",
+     "fix": "Draw once from the protein-table n and reuse, or record both n in meta_<aspect>.json."},
+    {"id": 2, "severity": "NIT", "confidence": "confirmed", "label": "G-R(a) labelled optional",
+     "where": "REMOTE_RUN_GO_FUNCTION_FUSION.md section 2",
+     "problem": "Runbook says 'optional here' but protocol 9 gates on G-R(a) (a miss stops the study) and the smoke report schedules it before G-V2.",
+     "fix": "Mark G-R(a) required on the remote before G-V2."},
+    {"id": 3, "severity": "NIT", "confidence": "confirmed", "label": "G-0 evidence predates the fixes",
+     "where": "smoke_report_go_function_fusion.md section 1",
+     "problem": "Recorded 41 passing tests; the suite now has 44 (3 added with the round-1 fixes). Reviewer spot-check of test_guard.py: 10 passed.",
+     "fix": "Rerun G-0 when the confirmatory G-F is written on the Mac (runbook section 0) and record the count."},
+    {"id": 4, "severity": "NIT", "label": "Section 15 file-list drift",
+     "problem": "Protocol lists diamond_valid_test.sh and dump_code_hashes.py; code has diamond_valid.sh and make_pins.py code.",
+     "fix": "Align names at the next protocol touch."},
+    {"id": 5, "severity": "NIT", "label": "Dev code pin predates the fixes",
+     "problem": "results/go_function_fusion_dev/code_pin.json and its G-F pin do not hash the current code (dev only).",
+     "fix": "Write the confirmatory G-F only after the last code edit."},
+    {"id": 6, "severity": "NIT", "label": "PC shuffled-hits re-selection scope",
+     "problem": "Re-selected over alpha only at frozen (c_PC*, tau_PC*).",
+     "fix": "State it in the report text (descriptive control)."}
+  ],
+  "resolved_from_round_1": [
+    "Tier B source (b) guard gap and crash: tp_bases/** blocked except checkpoint.pt and provenance; allow_checkpoints only for results/go_function/ (test_tier_b_source_b_outputs_blocked).",
+    "w_H selected at the rerun's (c*, tau*): --diamond-valid builds pass 2 at the pinned G-F cell, writes to search/*_dv/, G-F2 refuses on pass2_star mismatch.",
+    "G-TP provenance checks incomplete: verify_tp_bases.py implements spec checks, GF code-pin comparison, 10.4 listings and two-call determinism in search mode."
+  ],
+  "reviewDoc": "/Users/olukotunjosh/Downloads/CDCL/.agents/tasks/ontology-withholding-feasibility/review_go_function_fusion.md"
+}

@@ -1,0 +1,15 @@
+{
+  "verdict": "APPROVED",
+  "round": 3,
+  "counts": {"HIGH": 0, "MEDIUM": 0, "NIT": 7},
+  "findings": [
+    {"id": 1, "severity": "NIT", "where": "§8 Multiplicity", "problem": "Holm handling of a contrast not computed because a required band is empty is unspecified (practically impossible on DGZ test).", "fix": "A contrast not computed because a required band is empty keeps its Holm slot with p = 1 (family size fixed) and is labelled 'not computed'."},
+    {"id": 2, "severity": "NIT", "where": "header, §10.4, §11.2, §16", "problem": "GF amendment A6 (2026-10-14) not reflected: header cites A1-A5; §10.4 omits GF G4 gate test results; §11.2 'released MLP has V0's architecture' ignores the deepgopro vs study.json training-settings difference.", "fix": "Cite A1-A6; add G4 gate base-only exposure to §10.4; note the training-settings difference in §11.2 and §16."},
+    {"id": 3, "severity": "NIT", "where": "§5 Protein-centric", "problem": "Whether vocab.duplicate_cols are included in the protein-centric column set is ambiguous.", "fix": "State 'all primary, non-duplicate columns except root', or state that duplicates are kept for GF G2 parity."},
+    {"id": 4, "severity": "NIT", "where": "§9 G-0", "problem": "'Holm with a p = 1 slot' listed twice.", "fix": "Delete the duplicate."},
+    {"id": 5, "severity": "NIT", "where": "§3.1 and other tie rules", "problem": "'Ties (equal to 1e-12)' is ill-worded.", "fix": "'Ties (|Δ| ≤ 1e-12)' everywhere."},
+    {"id": 6, "severity": "NIT", "where": "§12 MLP + AP-T vs DGZ", "problem": "Bootstrap draw set for the descriptive matches/exceeds rule not named.", "fix": "Per-band CIs from draw set S (§8)."},
+    {"id": 7, "severity": "NIT", "where": "§11.3", "problem": "S2 standardises over GF eval_rows, which may differ from S1's protein set.", "fix": "State it and report the difference count per run."}
+  ],
+  "reviewDoc": "/Users/olukotunjosh/Downloads/CDCL/.agents/tasks/ontology-withholding-feasibility/design_review_go_function_fusion.md"
+}

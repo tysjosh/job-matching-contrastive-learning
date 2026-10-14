@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "note": "Fusion-study inputs beyond config/go_function/input_hashes.json (DGZ release; reused and verified with go_function.pins.verify_inputs). Paths are repo-relative or logical names; no absolute path is recorded. The diamond_valid slots are filled at G-D on the remote by scripts/go_function_fusion/make_pins.py.",
+  "reused": "config/go_function/input_hashes.json",
+  "files": {
+    "swissprot_exp.sim": {
+      "sha256": "a143b3896954a4a794d4715205a5db09b6d7ee391d41cea6bd626194576c3101",
+      "size": 31161064,
+      "role": "Mac exploratory H_sim only (protocol 4.3); never enters a finalist, a confirmatory contrast or S2",
+      "source": "DGZ release on bio2vec (swissprot_exp.sim); scratch copy passed with --sim"
+    }
+  },
+  "diamond_valid": {
+    "status": "pending G-D (remote)",
+    "diamond_version": null,
+    "diamond_binary_sha256": null,
+    "train_fasta": {
+      "path": "results/go_function_fusion/diamond/<aspect>/train_data.fa",
+      "sha256": null
+    },
+    "train_db": {
+      "path": "results/go_function_fusion/diamond/<aspect>/train_only.dmnd",
+      "sha256": null
+    },
+    "valid_res": {
+      "path": "results/go_function_fusion/diamond/<aspect>/valid_diamond_trainonly.res",
+      "sha256": null
+    },
+    "test_res": {
+      "path": "results/go_function_fusion/diamond/<aspect>/test_diamond_trainonly.res",
+      "sha256": null
+    }
+  }
+}
