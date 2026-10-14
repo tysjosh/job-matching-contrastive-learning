@@ -287,6 +287,31 @@ def test_schema_accepts_smoke_gate_and_all():
     assert d2.condition_dir.endswith("p01_k5_d2") and d2.run_name.endswith("__d2__s13")
 
 
+def test_gate_v0_uses_the_dgz_mlp_profile_only(tmp_path):
+    """Protocol A6: gate-mode V0 must use deepgopro.py's lr, milestones and dropout;
+    no other spec may carry them, and the model gets the spec's dropout."""
+    gate = dict(mode="gate", regime="DGZ", pack=None, k="all", selection="best_valid_loss",
+                seed=42, epochs=256)
+    p = T.DGPRO_MLP
+    g = T.validate_spec(_spec(**gate, lr=p["lr"], milestones=p["milestones"],
+                              dropout=p["dropout"]), _study())
+    assert (g.lr, g.milestones, g.dropout) == (1e-3, (1, 3), 0.3)
+    with pytest.raises(FatalError):                       # study settings: not the MLP profile
+        T.validate_spec(_spec(**gate), _study())
+    with pytest.raises(FatalError):                       # profile without its dropout
+        T.validate_spec(_spec(**gate, lr=p["lr"], milestones=p["milestones"]), _study())
+    with pytest.raises(FatalError):                       # V4 gate keeps deepgozero.py's settings
+        T.validate_spec(_spec(**{**gate, "variant": "V4", "lambda_el": 1.0}, lr=p["lr"],
+                              milestones=p["milestones"], dropout=p["dropout"]), _study())
+    with pytest.raises(FatalError):                       # study / smoke specs never set dropout
+        T.validate_spec(_spec(dropout=0.3), _study())
+    d = _data()
+    m = T.build_run_model(g, _study(), d, "cpu")
+    assert m.net[0].dropout.p == 0.3
+    assert T.build_run_model(T.validate_spec(_spec(), _study()), _study(), d,
+                             "cpu").net[0].dropout.p == 0.1
+
+
 def test_set_study_field(tmp_path):
     p = tmp_path / "study.json"
     s = T.load_study()

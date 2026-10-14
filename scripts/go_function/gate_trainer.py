@@ -53,14 +53,22 @@ def run_name(aspect: str, variant: str, seed: int, nf4_radius: str = "dgz") -> s
 
 
 def gate_spec(study: dict, aspect: str, variant: str, seed: int, nf4_radius: str = "dgz") -> dict:
-    return {"aspect": aspect, "feature": "interpro", "variant": variant, "regime": "DGZ",
+    """V0 = DGZ's MLP, trained with deepgopro.py's optimiser settings (protocol A6);
+    V4 = DeepGOZero, with deepgozero.py's settings (= study.json)."""
+    from go_function.train import DGPRO_MLP
+    opt = (dict(DGPRO_MLP) if variant == "V0" else
+           {"lr": study["lr"], "milestones": list(study["milestones"]), "gamma": study["gamma"]})
+    spec = {"aspect": aspect, "feature": "interpro", "variant": variant, "regime": "DGZ",
             "rule": "W2", "retention_draw": 1, "pack": None, "k": "all", "seed": seed,
             "epochs": EPOCHS, "lambda_el": None if variant == "V0" else float(study["lambda_el"]),
-            "batch_size": study["batch_size"], "lr": study["lr"],
-            "milestones": list(study["milestones"]), "gamma": study["gamma"],
+            "batch_size": study["batch_size"], "lr": opt["lr"],
+            "milestones": list(opt["milestones"]), "gamma": opt["gamma"],
             "selection": "best_valid_loss",
             "out_dir": f"{RUN_DIR}/{run_name(aspect, variant, seed, nf4_radius)}",
             "mode": "gate", "nf4_radius": nf4_radius}
+    if "dropout" in opt:
+        spec["dropout"] = opt["dropout"]
+    return spec
 
 
 def write_specs(study: dict, fallback: bool, diagnostic: bool, spec_dir: Path, log) -> dict:

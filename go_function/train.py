@@ -134,8 +134,17 @@ SPEC_FIELDS: Dict[str, Any] = {
     "retention_draw": 1, "pack": True, "k": True, "seed": True, "epochs": True,
     "lambda_el": True, "batch_size": True, "lr": True, "milestones": True, "gamma": True,
     "selection": True, "out_dir": True, "mode": True, "max_train_batches": None,
-    "nf4_radius": "dgz",
+    "nf4_radius": "dgz", "dropout": None,
 }
+
+#: Protocol amendment A6: DGZ trained its MLP baseline (the published MLP row that the
+#: G4 V0 cell is compared with) with deepgopro.py, not with deepgozero.py's settings.
+#: Gate-mode V0 specs use exactly this profile; every other spec uses study.json
+#: (lr, milestones, gamma) and study.json's dropout (spec dropout null). Source:
+#: github.com/bio-ontology-research-group/deepgozero, deepgopro.py (Adam lr 1e-3,
+#: MultiStepLR milestones [1, 3] gamma 0.1, MLPBlock dropout 0.3, batch 37, 256 epochs,
+#: best validation loss).
+DGPRO_MLP: Dict[str, Any] = {"lr": 1e-3, "milestones": [1, 3], "gamma": 0.1, "dropout": 0.3}
 
 
 @dataclass(frozen=True)
@@ -160,6 +169,7 @@ class RunSpec:
     mode: str
     max_train_batches: Optional[int] = None
     nf4_radius: str = "dgz"
+    dropout: Optional[float] = None
 
     @property
     def is_el(self) -> bool:
@@ -258,14 +268,24 @@ def validate_spec(raw: Mapping[str, Any], study: Mapping[str, Any]) -> RunSpec:
             bad(f"lambda_el must equal {study['lambda_el']} in {mode} mode")
     elif lam is not None:
         bad("lambda_el must be null for arms without an axiom loss")
+    # gate-mode V0 reproduces DGZ's MLP with deepgopro.py's optimiser settings (A6)
+    dgpro = mode == "gate" and s["variant"] == "V0"
+    ref = {**{f: study[f] for f in ("gamma", "lr", "milestones")}, "dropout": None}
+    if dgpro:
+        ref = dict(DGPRO_MLP)
+    src = "the DGZ MLP profile (protocol A6)" if dgpro else "study.json"
     for f in ("batch_size", "gamma", "lr"):
         if not _is_num(s[f]) or (f == "batch_size" and not _is_int(s[f])):
             bad(f"{f} has the wrong type")
-        if s[f] != study[f]:
-            bad(f"{f} must equal study.json ({study[f]})")
+        want = study[f] if f == "batch_size" else ref[f]
+        if s[f] != want:
+            bad(f"{f} must equal {src} ({want})")
     ms = s["milestones"]
-    if not isinstance(ms, list) or not all(_is_int(m) for m in ms) or ms != list(study["milestones"]):
-        bad(f"milestones must equal study.json ({study['milestones']})")
+    if not isinstance(ms, list) or not all(_is_int(m) for m in ms) or ms != list(ref["milestones"]):
+        bad(f"milestones must equal {src} ({ref['milestones']})")
+    do = s["dropout"]
+    if do != ref["dropout"] or (do is not None and not _is_num(do)):
+        bad(f"dropout must be {ref['dropout']} ({src}; null = study.json's dropout)")
     sel = s["selection"]
     if sel not in ("final", "best_valid_loss"):
         bad("selection must be 'final' or 'best_valid_loss'")
@@ -302,7 +322,8 @@ def validate_spec(raw: Mapping[str, Any], study: Mapping[str, Any]) -> RunSpec:
                    seed=s["seed"], epochs=ep, lambda_el=float(lam) if lam is not None else None,
                    batch_size=s["batch_size"], lr=float(s["lr"]), milestones=tuple(ms),
                    gamma=float(s["gamma"]), selection=sel, out_dir=od.rstrip("/"), mode=mode,
-                   max_train_batches=mtb, nf4_radius=rad)
+                   max_train_batches=mtb, nf4_radius=rad,
+                   dropout=float(do) if do is not None else None)
 
 
 def check_study_ready(study: Mapping[str, Any]) -> None:
@@ -516,7 +537,9 @@ def build_run_model(spec: RunSpec, study: Mapping[str, Any], data: RunData, devi
     from go_function.model import build_model
     model = build_model(spec.variant, data.x_train.shape[1], len(data.vocab_ids), data.nf,
                         hidden_dim=int(study["dim"]), norm=study["norm"],
-                        dropout=float(study["dropout"]), margin=float(study["margin"]),
+                        dropout=float(spec.dropout if spec.dropout is not None
+                                      else study["dropout"]),
+                        margin=float(study["margin"]),
                         nf4_radius=spec.nf4_radius, text=data.text)
     return model.to(device)
 

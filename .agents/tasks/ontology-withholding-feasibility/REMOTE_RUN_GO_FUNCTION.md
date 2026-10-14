@@ -95,6 +95,8 @@ for s in results/go_function/specs/gates/*.json; do $PY scripts/go_function/run.
 $PY scripts/go_function/gate_trainer.py               # compare with dgz_published.json (+-0.01); pin G4
 ```
 
+The V0 gate specs use DGZ's `deepgopro.py` settings (lr 1e-3, milestones [1, 3], dropout 0.3; protocol A6); the V4 gate specs use study.json. If `results/go_function/specs/gates/` or `results/go_function/gates/runs/` still hold V0 specs or runs from before A6 (study.json settings), `--write-specs` exits 2 on the spec mismatch: rename those spec files and run dirs with a `.studyhp1` suffix first (never delete them).
+
 Exit 4 means a seed-42 cell missed and the seed 13/21 fallback runs are needed:
 
 ```bash
