@@ -396,7 +396,10 @@ def execute(item: Dict[str, Any], device: str, max_attempts: int = 2) -> str:
         st = run_state(run_dir, own_claim=True)
         if st not in PENDING:
             return "skipped"
-        if st == "interrupted":
+        from go_function.resume import resumable
+        if resumable(run_dir):
+            log.info("%s: resuming from its resume.pt", item["name"])   # run.py continues it
+        elif st == "interrupted":
             os.replace(run_dir, next_free(run_dir, ".interrupted"))
         elif st == "failed_once":
             os.replace(run_dir, next_free(run_dir, ".attempt"))
@@ -607,7 +610,9 @@ def cmd_status(args) -> int:
             stale.append(r["name"])
             if args.release_stale:
                 release(d)
-                if d.exists() and not (d / "DONE.json").exists() and not (d / "FAILED.json").exists():
+                from go_function.resume import RESUME_FILE
+                if d.exists() and not (d / "DONE.json").exists() and not (d / "FAILED.json").exists() \
+                        and not (d / RESUME_FILE).exists():      # a resume.pt dir is continued
                     os.replace(d, next_free(d, ".interrupted"))
                 released.append(r["name"])
     out = {"n_selected": len(sel), "states": counts, "stale_claims": stale[:50],

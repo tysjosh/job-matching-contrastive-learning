@@ -23,6 +23,18 @@ over all train rows.
 Any exception writes ``FAILED.json`` with ``stage`` in {preflight, train, eval}.
 Every path written is repo-relative.
 
+Checkpoint and resume (for hosts with a wall-time cap): during training the full
+training state (model, Adam, MultiStepLR, the shuffling generator, the torch /
+CUDA / numpy / python RNG states, the best-epoch weights and the next epoch) is
+written atomically to ``resume.pt`` after an epoch once ``RESUME_EVERY_S`` seconds
+(env ``GO_FUNCTION_RESUME_EVERY_S``, default 900; 0 = every epoch) have passed
+since the last save. ``run`` on an out dir that holds ``resume.pt`` (and no
+DONE.json, and no FAILED.json other than an interrupt) continues from it after
+checking that the spec, study.json and input hashes are unchanged; epochs.jsonl
+is cut back to the saved epoch and appended. The resumed trajectory is the
+uninterrupted one (asserted on CPU in test_train.py). ``resume.pt`` is deleted
+once DONE.json is written. Results never depend on when snapshots were taken.
+
 ``_grad_norm`` is reimplemented from go_ppi_domain/withholding_diagnostics.py,
 function ``_grad_norm`` (lines 218-226; source file sha256
 2251327239da77d4be364954a29b19145863c56d893e809457a9754a803542f0); not imported.
@@ -49,6 +61,7 @@ from go_function.constants import (ARMS, EXIT_FATAL, EXIT_OK, EXIT_REFUSED, EXIT
                                    REGIMES, RULES, SEEDS)
 from go_function.pins import (PROTECTED, assert_writable_target, canonical_json,
                               npz_bytes, sha256_bytes, sha256_file)
+from go_function.resume import RESUME_FILE, resumable  # noqa: F401 (re-exported)
 from go_function.runtime import ROOT, FatalError, ProtocolStop, repo_path, repo_rel
 
 STUDY_PATH = ROOT / "config" / "go_function" / "study.json"
@@ -60,6 +73,7 @@ SPEC_KS = (0, 1, 5, 10, 25, "all")
 PACKS = tuple(f"p{i:02d}" for i in range(1, 9))
 MAX_EPOCHS = 256
 GRAD_EVERY = 50
+RESUME_EVERY_S = float(os.environ.get("GO_FUNCTION_RESUME_EVERY_S", "900"))
 EVAL_BATCH = 512
 EL_ARMS = ("V1", "V2", "V3", "V3c", "V4", "V6")
 #: eval.json of a pilot run (protocol §6.4, amendment A4): no test data are read
@@ -507,10 +521,60 @@ def build_run_model(spec: RunSpec, study: Mapping[str, Any], data: RunData, devi
     return model.to(device)
 
 
+def run_identity(spec: RunSpec, study: Mapping[str, Any], data: RunData) -> str:
+    """What a resume snapshot must match: the spec, study.json and the input hashes."""
+    return sha256_bytes(canonical_json({"spec": spec.to_json(),
+                                        "study_sha256": sha256_bytes(canonical_json(study)),
+                                        "inputs": data.hashes}))
+
+
+def _rng_state(gen) -> Dict[str, Any]:
+    import random
+    import torch
+    return {"gen": gen.get_state(), "torch": torch.get_rng_state(),
+            "cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+            "numpy": np.random.get_state(), "python": random.getstate()}
+
+
+def _set_rng_state(gen, st: Mapping[str, Any]) -> None:
+    import random
+    import torch
+    gen.set_state(st["gen"])
+    torch.set_rng_state(st["torch"])
+    if st["cuda"] is not None and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all(st["cuda"])
+    np.random.set_state(st["numpy"])
+    random.setstate(st["python"])
+
+
+def save_resume(path: Path, identity: str, next_epoch: int, model, opt, sched, gen,
+                best: Mapping[str, Any]) -> None:
+    """Atomic snapshot of everything the remaining epochs depend on."""
+    import torch
+    tmp = path.with_name(f".{path.name}.tmp")
+    torch.save({"schema": 1, "identity": identity, "next_epoch": int(next_epoch),
+                "model": model.state_dict(), "opt": opt.state_dict(),
+                "sched": sched.state_dict(), "rng": _rng_state(gen), "best": dict(best)}, tmp)
+    tmp.replace(path)
+
+
+def load_resume(path: Path, identity: str) -> Dict[str, Any]:
+    import torch
+    # CPU first: RNG states must be CPU tensors; load_state_dict moves weights and
+    # Adam moments to the parameters' device
+    st = torch.load(path, map_location="cpu", weights_only=False)
+    if st.get("schema") != 1 or st.get("identity") != identity:
+        raise FatalError(f"{path.name} belongs to a different spec, study.json or input set; "
+                         "move the run dir aside to start the run again")
+    return st
+
+
 def train(spec: RunSpec, study: Mapping[str, Any], data: RunData, device: str, out_dir: Path,
-          log) -> Tuple[Any, Dict[str, Any]]:
+          log, identity: Optional[str] = None) -> Tuple[Any, Dict[str, Any]]:
     """Train; returns (model with the selected weights, summary). Writes
-    ``epochs.jsonl`` line by line. A non-finite loss or gradient raises."""
+    ``epochs.jsonl`` line by line. A non-finite loss or gradient raises. With an
+    ``identity``, the training state is snapshotted to ``resume.pt`` and an existing
+    snapshot is resumed (module docstring)."""
     import torch
     from torch.optim.lr_scheduler import MultiStepLR
     from go_function.model import masked_bce
@@ -519,6 +583,8 @@ def train(spec: RunSpec, study: Mapping[str, Any], data: RunData, device: str, o
     opt = torch.optim.Adam(model.parameters(), lr=spec.lr)
     sched = MultiStepLR(opt, milestones=list(spec.milestones), gamma=spec.gamma)
     gen = torch.Generator().manual_seed(spec.seed)
+    resume_path = out_dir / RESUME_FILE
+    start, resumed_from = 0, []
     xs = FeatureStore(data.x_train, device)
     ys = RowStore(data.y_train, device)
     ms = loss_mask(data.train_mask, data.y_train.shape, device)
@@ -534,10 +600,30 @@ def train(spec: RunSpec, study: Mapping[str, Any], data: RunData, device: str, o
     params = list(model.parameters())
     best = {"valid_bce": math.inf, "epoch": None, "state": None}
     epochs_path = out_dir / "epochs.jsonl"
+    lines: List[str] = []
+    if identity is not None and resume_path.exists():
+        st = load_resume(resume_path, identity)
+        model.load_state_dict(st["model"])
+        opt.load_state_dict(st["opt"])
+        sched.load_state_dict(st["sched"])
+        best = st["best"]
+        start = st["next_epoch"]
+        _set_rng_state(gen, st["rng"])
+        lines = epochs_path.read_text().splitlines()[:start] if epochs_path.exists() else []
+        if len(lines) != start:
+            raise FatalError(f"epochs.jsonl has {len(lines)} epochs; {RESUME_FILE} is at {start}")
+        resumed_from.append(start)
+        log.info("resuming %s at epoch %d of %d", spec.run_name, start, spec.epochs)
     summary: Dict[str, Any] = {"n_steps_per_epoch": n_steps, "mask_tensor": ms is not None,
                                "n_masked_entries": int(len(data.train_mask))}
+    if resumed_from:
+        summary["resumed_at_epochs"] = resumed_from
+    last_save = time.time()
     with open(epochs_path, "w") as fh:
-        for epoch in range(spec.epochs):
+        for line in lines:
+            fh.write(line + "\n")
+        fh.flush()
+        for epoch in range(start, spec.epochs):
             t0 = time.time()
             model.train()
             perm = torch.randperm(n, generator=gen).numpy()
@@ -584,6 +670,10 @@ def train(spec: RunSpec, study: Mapping[str, Any], data: RunData, device: str, o
                 best = {"valid_bce": vb, "epoch": epoch,
                         "state": {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}}
             sched.step()
+            if identity is not None and epoch + 1 < spec.epochs \
+                    and time.time() - last_save >= RESUME_EVERY_S:
+                save_resume(resume_path, identity, epoch + 1, model, opt, sched, gen, best)
+                last_save = time.time()
     if spec.selection == "best_valid_loss":
         if best["state"] is None:
             raise FatalError("best_valid_loss selection without a validation loss")
@@ -813,7 +903,14 @@ def run(spec_raw: Mapping[str, Any], device: str, *, log,
     assert_writable_target(out_dir)
     if (out_dir / "DONE.json").exists():
         raise Refused(f"{spec.out_dir} already has DONE.json")
-    if out_dir.exists() and any(out_dir.iterdir()):
+    if resumable(out_dir):
+        fp = out_dir / "FAILED.json"
+        if fp.exists():                     # an interrupt: keep it as a record, then resume
+            n = 1
+            while (out_dir / f"FAILED.interrupted{n}.json").exists():
+                n += 1
+            fp.replace(out_dir / f"FAILED.interrupted{n}.json")
+    elif out_dir.exists() and any(out_dir.iterdir()):
         raise Refused(f"{spec.out_dir} is not empty (the sweep renames failed attempts)")
     out_dir.mkdir(parents=True, exist_ok=True)
     stage = "preflight"
@@ -825,7 +922,8 @@ def run(spec_raw: Mapping[str, Any], device: str, *, log,
         walls["preflight"] = round(time.time() - t0, 3)
         stage = "train"
         t1 = time.time()
-        model, summary = train(spec, study, data, device, out_dir, log)
+        model, summary = train(spec, study, data, device, out_dir, log,
+                               identity=run_identity(spec, study, data))
         walls["train"] = round(time.time() - t1, 3)
         stage = "eval"
         t2 = time.time()
@@ -839,6 +937,8 @@ def run(spec_raw: Mapping[str, Any], device: str, *, log,
             torch.save(model.state_dict(), out_dir / "checkpoint.pt")
             ckpt_rel = f"{spec.out_dir}/checkpoint.pt"
         _finish(spec, study, data, logits, device, out_dir, summary, walls, t0, t2, ckpt_rel)
+        if (out_dir / RESUME_FILE).exists():
+            (out_dir / RESUME_FILE).unlink()
         log.info("%s done in %.1f s", spec.run_name, walls["total"])
         return EXIT_OK
     except BaseException as e:  # noqa: BLE001 - every failure leaves FAILED.json

@@ -151,6 +151,81 @@ def test_eval_failure_keeps_eval_inputs(tmp_path):
         T.rescore(_spec(), "cpu", log=LOG, loader=lambda *a: _data(), study=_study(), out_dir=out)
 
 
+def _epochs_wo_time(out):
+    rows = [json.loads(x) for x in (out / "epochs.jsonl").read_text().splitlines()]
+    for r in rows:
+        r.pop("seconds")
+    return rows
+
+
+def _interrupt_at(monkeypatch, call):
+    """Raise KeyboardInterrupt in the ``call``-th validation pass (epoch call - 1)."""
+    real, n = T.validation_bce, {"i": 0}
+
+    def flaky(*a, **k):
+        n["i"] += 1
+        if n["i"] == call:
+            raise KeyboardInterrupt
+        return real(*a, **k)
+    monkeypatch.setattr(T, "validation_bce", flaky)
+    return real
+
+
+@pytest.mark.parametrize("variant", ["V0", "V4"])
+def test_resume_reproduces_the_uninterrupted_run(tmp_path, monkeypatch, mini_norm, variant):
+    """Checkpoint-and-resume: a run interrupted after epoch 2 of 4 and resumed from
+    resume.pt gives the same epochs, eval.json and scores.npz as an uninterrupted run."""
+    from go_function import normforms as NF
+    monkeypatch.setattr(T, "RESUME_EVERY_S", 0.0)       # snapshot after every epoch
+
+    def data():
+        d = _data()
+        if variant == "V4":
+            vocab = ["GO:0000010", "GO:0000011", "GO:0000013", "GO:0000014", "GO:0000015",
+                     "GO:0000016"]
+            d.nf = NF.select(NF.load_normal_forms(mini_norm, {g: i for i, g in enumerate(vocab)},
+                                                  expected_unparsed=None, expected_nothing=None),
+                             "V4")
+            d.vocab_ids = vocab
+        return d
+    spec = _spec(epochs=4, variant=variant, lambda_el=1.0 if variant == "V4" else None)
+    code, ref = _run(tmp_path, "ref", spec=spec, data=data())
+    assert code == EXIT_OK and not (ref / T.RESUME_FILE).exists()
+
+    real = _interrupt_at(monkeypatch, 3)
+    with pytest.raises(KeyboardInterrupt):
+        _run(tmp_path, "cut", spec=spec, data=data())
+    cut = tmp_path / "cut"
+    assert (cut / T.RESUME_FILE).exists() and not (cut / "DONE.json").exists()
+    assert json.loads((cut / "FAILED.json").read_text())["error"] == "KeyboardInterrupt"
+    assert len((cut / "epochs.jsonl").read_text().splitlines()) == 2
+    assert T.resumable(cut)
+
+    monkeypatch.setattr(T, "validation_bce", real)
+    code, _ = _run(tmp_path, "cut", spec=spec, data=data())
+    assert code == EXIT_OK
+    assert not (cut / T.RESUME_FILE).exists() and (cut / "FAILED.interrupted1.json").exists()
+    assert _epochs_wo_time(cut) == _epochs_wo_time(ref)
+    assert (cut / "eval.json").read_bytes() == (ref / "eval.json").read_bytes()
+    assert (cut / "scores.npz").read_bytes() == (ref / "scores.npz").read_bytes()
+    assert json.loads((cut / "run.json").read_text())["train"]["resumed_at_epochs"] == [2]
+
+
+def test_resume_refuses_a_changed_spec_and_real_failures(tmp_path, monkeypatch):
+    monkeypatch.setattr(T, "RESUME_EVERY_S", 0.0)
+    _interrupt_at(monkeypatch, 2)
+    with pytest.raises(KeyboardInterrupt):
+        _run(tmp_path, "r", spec=_spec(epochs=3))
+    monkeypatch.undo()
+    code, out = _run(tmp_path, "r", spec=_spec(epochs=3, seed=21))   # different spec
+    assert code == EXIT_FATAL
+    f = json.loads((out / "FAILED.json").read_text())
+    assert f["stage"] == "train" and "different spec" in f["message"]
+    assert not T.resumable(out)                         # a real failure is not resumed
+    with pytest.raises(T.Refused):
+        _run(tmp_path, "r", spec=_spec(epochs=3))
+
+
 def test_refuses_non_empty_out_dir(tmp_path):
     (tmp_path / "r").mkdir()
     (tmp_path / "r" / "x").write_text("")

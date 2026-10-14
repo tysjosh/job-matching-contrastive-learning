@@ -113,6 +113,32 @@ def test_resume_skips_done_runs_and_device_is_forwarded(env):
     assert not list((tmp / "runs" / "bp" / "interpro").glob("*.CLAIM"))
 
 
+def test_a_run_dir_with_resume_pt_is_continued_in_place(env, monkeypatch, capsys):
+    """Checkpoint-and-resume: an interrupted dir (no FAILED.json) or one whose
+    FAILED.json is an interrupt is handed to run.py as is, not renamed aside, and
+    status --release-stale keeps it."""
+    tmp, calls, _ = env
+    for n, failed in (("V4__i", None), ("V4__k", "KeyboardInterrupt")):
+        d = tmp / "runs" / "bp" / "interpro" / n
+        d.mkdir(parents=True)
+        (d / "resume.pt").write_bytes(b"x")
+        if failed:
+            (d / "FAILED.json").write_text(json.dumps({"stage": "train", "error": failed}))
+    s = S.run_items(_items(["V4__i", "V4__k"]), "cpu", workers=1)
+    assert s["done"] == 2 and len(calls) == 2
+    assert not list((tmp / "runs" / "bp" / "interpro").glob("V4__*.interrupted*"))
+    assert not list((tmp / "runs" / "bp" / "interpro").glob("V4__*.attempt*"))
+    d = tmp / "runs" / "bp" / "interpro" / "V0__s"
+    d.mkdir(parents=True)
+    (d / "resume.pt").write_bytes(b"x")
+    S.claim_path(d).write_text(json.dumps({"pid": 999999999, "host": S.socket.gethostname(),
+                                           "boot": S.boot_id()}))
+    monkeypatch.setattr(S, "_items", lambda args, require_all=False: _items(["V0__s"]))
+    assert S.main(["status", "--release-stale"]) == EXIT_OK
+    assert json.loads(capsys.readouterr().out)["released"] == ["V0__s"]
+    assert d.is_dir() and (d / "resume.pt").exists() and not S.claim_path(d).exists()
+
+
 def test_two_failures_leave_failed_json_and_one_attempt_dir(env):
     tmp, calls, beh = env
     beh["V0__x"] = ["train", "train"]

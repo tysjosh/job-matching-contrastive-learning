@@ -152,7 +152,8 @@ class Pilot:
         out = self.dir / "runs" / name
         if (out / "DONE.json").exists():
             return out
-        if out.exists():
+        from go_function.resume import resumable       # not go_function.train (import probe)
+        if out.exists() and not resumable(out):
             raise FatalError(f"pilot run {name} exists without DONE.json; inspect and move it")
         spec = self.mat.make_spec(self.study(), aspect=self.aspect, feature=self.feature,
                                   variant=variant, regime="TP", rule="W2", pack=None, k="all",

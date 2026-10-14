@@ -53,7 +53,9 @@ $PY -c "import torch; assert torch.cuda.is_available(); print(torch.__version__,
 export HF_HUB_OFFLINE=1 PYTHONHASHSEED=0 CUBLAS_WORKSPACE_CONFIG=:4096:8
 ```
 
-Keep these exports in every shell (and in the tmux session of step 9). The G0 unit tests on the remote are a cheap check of the install:
+Keep these exports in every shell (and in the tmux session of step 9).
+
+**Hosts with a wall-time cap (for example a 10-hour VCL reservation).** Every training run snapshots its full state to `<run_dir>/resume.pt` after an epoch once 15 minutes have passed since the last snapshot (`GO_FUNCTION_RESUME_EVERY_S`, in seconds). Re-running the same `run.py --spec`, `pilot.py` or `sweep.py run` command on a run dir that holds `resume.pt` continues from that epoch, after checking that the spec, `study.json` and the input hashes are unchanged. Nothing is renamed aside, and `resume.pt` is deleted when the run writes `DONE.json`. Before a reservation ends, copy `results/go_function/` including the `resume.pt` files to the next host (for example a private Hugging Face dataset). Do not copy `*.CLAIM` files: a claim from another host is treated as live. The G0 unit tests on the remote are a cheap check of the install:
 
 ```bash
 GO_FUNCTION_SLOW=1 $PY -m pytest go_function/tests -q -p no:cacheprovider
