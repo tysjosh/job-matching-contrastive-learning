@@ -1,0 +1,236 @@
+{
+  "aspects": {
+    "bp": {
+      "comparison": [
+        {
+          "cell": "Table 4, row MLP, column Fmax",
+          "diff": -0.00042903977007191507,
+          "metric": "fmax",
+          "model": "mlp",
+          "ours": 0.4595709602299281,
+          "published": 0.46,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 4, row MLP, column Smin",
+          "diff": 0.00015529563991378836,
+          "metric": "smin",
+          "model": "mlp",
+          "ours": 43.987155295639916,
+          "published": 43.987,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 4, row MLP, column AUPR",
+          "diff": 0.00042795557523944705,
+          "metric": "aupr",
+          "model": "mlp",
+          "ours": 0.43542795557523944,
+          "published": 0.435,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 4, row MLP, column AUC",
+          "diff": 0.0004167945852424637,
+          "metric": "auc",
+          "model": "mlp",
+          "ours": 0.7934167945852425,
+          "published": 0.793,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 4, row DeepGOZero, column Fmax",
+          "diff": 0.0004266368913671825,
+          "metric": "fmax",
+          "model": "deepgozero",
+          "ours": 0.4514266368913672,
+          "published": 0.451,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 4, row DeepGOZero, column Smin",
+          "diff": 0.00041764213146677776,
+          "metric": "smin",
+          "model": "deepgozero",
+          "ours": 44.62141764213147,
+          "published": 44.621,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 4, row DeepGOZero, column AUPR",
+          "diff": -0.0001675580126134779,
+          "metric": "aupr",
+          "model": "deepgozero",
+          "ours": 0.4218324419873865,
+          "published": 0.422,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 4, row DeepGOZero, column AUC",
+          "diff": 0.0002490121317858529,
+          "metric": "auc",
+          "model": "deepgozero",
+          "ours": 0.7982490121317859,
+          "published": 0.798,
+          "within_tolerance": true
+        }
+      ],
+      "inputs": {
+        "dataset/go_function/dgz/bp/predictions_deepgozero.pkl": "cef31ed52b96bb3db0b4fc5d4750fd32e595c72e6fd3b89e20589e96e4173899",
+        "dataset/go_function/dgz/bp/predictions_mlp.pkl": "a60434acb5cf5cbb3191d8d57f5611d6f0fc690bd46adc019aab35fb5dc0a978",
+        "dataset/go_function/dgz/bp/terms.pkl": "2c79415a69c9d1cad4e1829331fcd0ba6446ae169e9d44efe5c8711c79a5d024",
+        "dataset/go_function/dgz/bp/train_data.pkl": "09bf45263f6c9227c07fba528c14332c1bfd6fcf801049b01b32b07acd47332e",
+        "dataset/go_function/dgz/bp/valid_data.pkl": "d679ce708fad727d6be0d8cde58c46b01cee8a4056a58420cbd70e1e0f1c628d",
+        "dataset/go_function/dgz/go.obo": "0a6b4876004554c7bfa784bba6e6e8558b5711eb1d1abf85a751e6c70909af83"
+      },
+      "mode": "DGZ-faithful (design §8.3)",
+      "passed": true,
+      "results": {
+        "deepgozero": {
+          "auc": 0.7982490121317859,
+          "aupr": 0.4218324419873865,
+          "fmax": 0.4514266368913672,
+          "n_auc_terms": 11653,
+          "n_eval": 5444,
+          "n_pred_columns": 21381,
+          "n_skipped_no_label": 0,
+          "n_test_rows": 5444,
+          "preds_dtype": "float64",
+          "smin": 44.62141764213147,
+          "tmax": 0.23
+        },
+        "mlp": {
+          "auc": 0.7934167945852425,
+          "aupr": 0.43542795557523944,
+          "fmax": 0.4595709602299281,
+          "n_auc_terms": 11653,
+          "n_eval": 5444,
+          "n_pred_columns": 21381,
+          "n_skipped_no_label": 0,
+          "n_test_rows": 5444,
+          "preds_dtype": "float64",
+          "smin": 43.987155295639916,
+          "tmax": 0.26
+        }
+      },
+      "tolerance": 0.005
+    },
+    "mf": {
+      "comparison": [
+        {
+          "cell": "Table 3, row MLP, column Fmax",
+          "diff": -0.00041142575729535835,
+          "metric": "fmax",
+          "model": "mlp",
+          "ours": 0.6565885742427047,
+          "published": 0.657,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 3, row MLP, column Smin",
+          "diff": 0.0003414759540234513,
+          "metric": "smin",
+          "model": "mlp",
+          "ours": 9.857341475954023,
+          "published": 9.857,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 3, row MLP, column AUPR",
+          "diff": 0.00015162271910174052,
+          "metric": "aupr",
+          "model": "mlp",
+          "ours": 0.6551516227191018,
+          "published": 0.655,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 3, row MLP, column AUC",
+          "diff": -0.00011405735261882377,
+          "metric": "auc",
+          "model": "mlp",
+          "ours": 0.8818859426473812,
+          "published": 0.882,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 3, row DeepGOZero, column Fmax",
+          "diff": -0.00021333519286959035,
+          "metric": "fmax",
+          "model": "deepgozero",
+          "ours": 0.6567866648071304,
+          "published": 0.657,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 3, row DeepGOZero, column Smin",
+          "diff": -7.530408948852596e-05,
+          "metric": "smin",
+          "model": "deepgozero",
+          "ours": 9.807924695910511,
+          "published": 9.808,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 3, row DeepGOZero, column AUPR",
+          "diff": -0.00015866097933070478,
+          "metric": "aupr",
+          "model": "deepgozero",
+          "ours": 0.6568413390206693,
+          "published": 0.657,
+          "within_tolerance": true
+        },
+        {
+          "cell": "Table 3, row DeepGOZero, column AUC",
+          "diff": -0.0002367661927912268,
+          "metric": "auc",
+          "model": "deepgozero",
+          "ours": 0.9027632338072088,
+          "published": 0.903,
+          "within_tolerance": true
+        }
+      ],
+      "inputs": {
+        "dataset/go_function/dgz/go.obo": "0a6b4876004554c7bfa784bba6e6e8558b5711eb1d1abf85a751e6c70909af83",
+        "dataset/go_function/dgz/mf/predictions_deepgozero.pkl": "d1bbd7e8e180482a1b577da4aa7a06ce3c77326656efc950eb979ad40afaa5e6",
+        "dataset/go_function/dgz/mf/predictions_mlp.pkl": "b7c0f448bf946f8ff1d8c077c8c9cbcb7f8b2c50c927330155a842520e8a2f08",
+        "dataset/go_function/dgz/mf/terms.pkl": "5dfa6627d52b1699d34db5de99cd0c429825a28d36ec74025995371667ee3e4c",
+        "dataset/go_function/dgz/mf/train_data.pkl": "87c0c5888364b8cde2be41180ec38d0a4295f74e370575335a735c1eeec7d4b5",
+        "dataset/go_function/dgz/mf/valid_data.pkl": "22ec90c2d94f02ca86aa42996aea078809bb82d14b0a2d2d79b3535945a934a0"
+      },
+      "mode": "DGZ-faithful (design §8.3)",
+      "passed": true,
+      "results": {
+        "deepgozero": {
+          "auc": 0.9027632338072088,
+          "aupr": 0.6568413390206693,
+          "fmax": 0.6567866648071304,
+          "n_auc_terms": 2679,
+          "n_eval": 4712,
+          "n_pred_columns": 6868,
+          "n_skipped_no_label": 0,
+          "n_test_rows": 4712,
+          "preds_dtype": "float64",
+          "smin": 9.807924695910511,
+          "tmax": 0.34
+        },
+        "mlp": {
+          "auc": 0.8818859426473812,
+          "aupr": 0.6551516227191018,
+          "fmax": 0.6565885742427047,
+          "n_auc_terms": 2679,
+          "n_eval": 4712,
+          "n_pred_columns": 6868,
+          "n_skipped_no_label": 0,
+          "n_test_rows": 4712,
+          "preds_dtype": "float64",
+          "smin": 9.857341475954023,
+          "tmax": 0.39
+        }
+      },
+      "tolerance": 0.005
+    }
+  },
+  "gate": "G2",
+  "schema": 1
+}

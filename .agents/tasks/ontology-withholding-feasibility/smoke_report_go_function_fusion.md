@@ -149,6 +149,10 @@ Outside that directory: `config/go_function_fusion/dgz_published_ds.json` (new, 
 
 Protected paths: `git status --porcelain` and `git diff --stat` are identical before and after the run. The pre-existing modifications under `go_function/` and `scripts/go_function/` predate this run (same diff hash), and no protected file has a newer mtime. In `protocol_go_function.md` the only fusion edit is the X1 row; the A6 row in the same diff is a GF amendment (DGZ MLP optimiser settings, user decision, tied to the earlier `go_function/train.py` change) and is not a fusion edit.
 
+## 8. Confirmatory Mac gates (runbook §0 steps 2, 3, 5, 6, 7; 2026-10-14, user decision A)
+
+Run into `results/go_function_fusion/` with the post-review code (CPU, no test read, no Diamond, no training). All 18 commands exited 0: G-R(b) × 4 pass, G-R(c) × 4 reported, G-V × 4 (0 guard violations, 4 done events), G-F, G-S2dry (F parity 12/12). The 256 per-term AUC arrays are byte-equal to the dev run, and every selection is unchanged; the only differences are code hashes (review fixes) and the `pass2_star` field now present on all four pairs. Frozen finalists are those in §3. Pins: `finalists_tierA.json` 5342268747cc…77f1, `code_pin.json` c212317fe73c…0140659 (equals the current code), `gates/gate_repro.json` 1e99cc3272b1…0aca; mirrored in protocol §13. G-R(a) stays on the remote (D1). Wall about 27 min; 13 MB, 92 files.
+
 ## 7. Code-review fixes (round 1, 2026-10-14)
 
 - Guard: every file under `results/go_function_fusion*/tp_bases/` is blocked in search mode except `checkpoint.pt` and `tp_base_provenance.json`; `search_valid.py` registers only `results/go_function/` checkpoints with `allow_checkpoints` (source (b) no longer crashes).

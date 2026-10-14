@@ -1,0 +1,158 @@
+[
+  {
+    "auc_V0_eval": 0.5495594000866504,
+    "info": {
+      "n_pa": 0,
+      "n_sib": 24,
+      "n_sib_candidates": 26,
+      "pa_dropped": true,
+      "sib_dropped": false
+    },
+    "run": "results/go_function/smoke/runs/bp/interpro/V0__TP__W2__p01__k0__s13",
+    "score_maxdiff_vs_fuse": 0.0,
+    "target": "GO:0002376"
+  },
+  {
+    "auc_V0_eval": 0.3949087782978317,
+    "info": {
+      "n_pa": 1,
+      "n_sib": 6,
+      "n_sib_candidates": 10,
+      "pa_dropped": false,
+      "sib_dropped": false
+    },
+    "run": "results/go_function/smoke/runs/bp/interpro/V0__TP__W2__p01__k0__s13",
+    "score_maxdiff_vs_fuse": 0.0,
+    "target": "GO:0006275"
+  },
+  {
+    "auc_V0_eval": 0.5804512668762716,
+    "info": {
+      "n_pa": 1,
+      "n_sib": 2,
+      "n_sib_candidates": 2,
+      "pa_dropped": false,
+      "sib_dropped": false
+    },
+    "run": "results/go_function/smoke/runs/bp/interpro/V0__TP__W2__p01__k0__s13",
+    "score_maxdiff_vs_fuse": 0.0,
+    "target": "GO:0007613"
+  },
+  {
+    "auc_V0_eval": 0.6063710435160643,
+    "info": {
+      "n_pa": 1,
+      "n_sib": 0,
+      "n_sib_candidates": 4,
+      "pa_dropped": false,
+      "sib_dropped": true
+    },
+    "run": "results/go_function/smoke/runs/bp/interpro/V0__TP__W2__p01__k0__s13",
+    "score_maxdiff_vs_fuse": 0.0,
+    "target": "GO:0019220"
+  },
+  {
+    "auc_V0_eval": 0.36218618175861084,
+    "info": {
+      "n_pa": 1,
+      "n_sib": 27,
+      "n_sib_candidates": 28,
+      "pa_dropped": false,
+      "sib_dropped": false
+    },
+    "run": "results/go_function/smoke/runs/bp/interpro/V0__TP__W2__p01__k0__s13",
+    "score_maxdiff_vs_fuse": 0.0,
+    "target": "GO:0051180"
+  },
+  {
+    "auc_V0_eval": 0.5091489081820574,
+    "info": {
+      "n_pa": 1,
+      "n_sib": 14,
+      "n_sib_candidates": 18,
+      "pa_dropped": false,
+      "sib_dropped": false
+    },
+    "run": "results/go_function/smoke/runs/bp/interpro/V0__TP__W2__p01__k0__s13",
+    "score_maxdiff_vs_fuse": 0.0,
+    "target": "GO:0060966"
+  },
+  {
+    "auc_V0_eval": 0.5495003894700694,
+    "info": {
+      "n_pa": 0,
+      "n_sib": 24,
+      "n_sib_candidates": 26,
+      "pa_dropped": true,
+      "sib_dropped": false
+    },
+    "run": "results/go_function/smoke/runs/bp/interpro/V0__TP__W2__p01__k5__s13",
+    "score_maxdiff_vs_fuse": 0.0,
+    "target": "GO:0002376"
+  },
+  {
+    "auc_V0_eval": 0.3947432101123953,
+    "info": {
+      "n_pa": 1,
+      "n_sib": 6,
+      "n_sib_candidates": 10,
+      "pa_dropped": false,
+      "sib_dropped": false
+    },
+    "run": "results/go_function/smoke/runs/bp/interpro/V0__TP__W2__p01__k5__s13",
+    "score_maxdiff_vs_fuse": 0.0,
+    "target": "GO:0006275"
+  },
+  {
+    "auc_V0_eval": 0.581216041267826,
+    "info": {
+      "n_pa": 1,
+      "n_sib": 2,
+      "n_sib_candidates": 2,
+      "pa_dropped": false,
+      "sib_dropped": false
+    },
+    "run": "results/go_function/smoke/runs/bp/interpro/V0__TP__W2__p01__k5__s13",
+    "score_maxdiff_vs_fuse": 0.0,
+    "target": "GO:0007613"
+  },
+  {
+    "auc_V0_eval": 0.6062728764356935,
+    "info": {
+      "n_pa": 1,
+      "n_sib": 0,
+      "n_sib_candidates": 4,
+      "pa_dropped": false,
+      "sib_dropped": true
+    },
+    "run": "results/go_function/smoke/runs/bp/interpro/V0__TP__W2__p01__k5__s13",
+    "score_maxdiff_vs_fuse": 0.0,
+    "target": "GO:0019220"
+  },
+  {
+    "auc_V0_eval": 0.36205307777368223,
+    "info": {
+      "n_pa": 1,
+      "n_sib": 27,
+      "n_sib_candidates": 28,
+      "pa_dropped": false,
+      "sib_dropped": false
+    },
+    "run": "results/go_function/smoke/runs/bp/interpro/V0__TP__W2__p01__k5__s13",
+    "score_maxdiff_vs_fuse": 0.0,
+    "target": "GO:0051180"
+  },
+  {
+    "auc_V0_eval": 0.50367666403578,
+    "info": {
+      "n_pa": 1,
+      "n_sib": 15,
+      "n_sib_candidates": 18,
+      "pa_dropped": false,
+      "sib_dropped": false
+    },
+    "run": "results/go_function/smoke/runs/bp/interpro/V0__TP__W2__p01__k5__s13",
+    "score_maxdiff_vs_fuse": 0.0,
+    "target": "GO:0060966"
+  }
+]

@@ -330,6 +330,14 @@ Pilot snapshot (spec §2; recorded at authoring; verified at G-R):
 
 Gate pins (filled by scripts): G-R (`gates/gate_repro.json`), G-F (`finalists_tierA.json`, `code_pin.json`), G-D (DIAMOND version, binary and output hashes), G-TP (checkpoint hashes, source a/b), G-F2 (`finalists_remote.json`), G-T (`test_read.json`).
 
+Recorded on the Mac (CPU), `results/go_function_fusion/`, 2026-10-14 (mirrored from `protocol_pins.json`):
+
+| pin | file | sha256 |
+|---|---|---|
+| G-R (b, c) | `gates/gate_repro.json` | 1e99cc3272b15cd7072065afbc97a84703cca18434404ab31ddd9afd74420aca |
+| G-F (UTC 2026-10-14T14:34:46Z) | `finalists_tierA.json` | 5342268747cc8b9eb7878edfba4cb5e57270a08801052c407c57bb12afcc77f1 |
+| G-F | `code_pin.json` (25 files) | c212317fe73c34700c0f0399836c92e39d6ead52b5d88bdcd39b03b040140659 |
+
 ## 14. Amendments
 
 | id | date | gate | change | cause | test output seen? |

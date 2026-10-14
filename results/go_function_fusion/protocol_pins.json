@@ -1,0 +1,91 @@
+{
+  "pins": {
+    "G-F": {
+      "code_pin.json": "c212317fe73c34700c0f0399836c92e39d6ead52b5d88bdcd39b03b040140659",
+      "finalists_tierA.json": "5342268747cc8b9eb7878edfba4cb5e57270a08801052c407c57bb12afcc77f1",
+      "utc": "2026-10-14T14:34:46Z"
+    },
+    "G-R": {
+      "b/bp/deepgozero": {
+        "gate_repro_section_keys": [
+          "passed",
+          "struct"
+        ],
+        "passed": true
+      },
+      "b/bp/mlp": {
+        "gate_repro_section_keys": [
+          "passed",
+          "pilot",
+          "struct"
+        ],
+        "passed": true
+      },
+      "b/mf/deepgozero": {
+        "gate_repro_section_keys": [
+          "passed",
+          "pilot",
+          "struct"
+        ],
+        "passed": true
+      },
+      "b/mf/mlp": {
+        "gate_repro_section_keys": [
+          "passed",
+          "pilot",
+          "struct"
+        ],
+        "passed": true
+      },
+      "c/bp/deepgozero": {
+        "gate_repro_section_keys": [
+          "changed_sets",
+          "n_alt_or_unprimary_removed",
+          "n_rows",
+          "n_terms",
+          "passed",
+          "permutation_report",
+          "variants"
+        ],
+        "passed": true
+      },
+      "c/bp/mlp": {
+        "gate_repro_section_keys": [
+          "changed_sets",
+          "n_alt_or_unprimary_removed",
+          "n_rows",
+          "n_terms",
+          "passed",
+          "permutation_report",
+          "variants"
+        ],
+        "passed": true
+      },
+      "c/mf/deepgozero": {
+        "gate_repro_section_keys": [
+          "changed_sets",
+          "n_alt_or_unprimary_removed",
+          "n_rows",
+          "n_terms",
+          "passed",
+          "permutation_report",
+          "variants"
+        ],
+        "passed": true
+      },
+      "c/mf/mlp": {
+        "gate_repro_section_keys": [
+          "changed_sets",
+          "n_alt_or_unprimary_removed",
+          "n_rows",
+          "n_terms",
+          "passed",
+          "permutation_report",
+          "variants"
+        ],
+        "passed": true
+      }
+    }
+  },
+  "schema": 1
+}
