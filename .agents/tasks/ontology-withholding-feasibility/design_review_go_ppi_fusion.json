@@ -1,0 +1,85 @@
+{
+  "verdict": "APPROVED",
+  "round": 3,
+  "protocol_version": "DRAFT v4",
+  "counts": {"HIGH": 0, "MEDIUM": 0, "NIT": 10},
+  "findings": [
+    {
+      "id": 1,
+      "severity": "NIT",
+      "section": "§5.2 2f",
+      "title": "Gate 2f near-tie exception has no reference set (test_results.json stores no validation curves) and no stated fallback comparison",
+      "fix": "Near-tie cells for 2f are computed from the scorer's own validation curve, logged and pinned as analysis.gate2f_near_tie_cells. Either top weight passes. If the non-reference weight is chosen, per-checkpoint Δ is compared after re-scoring at the reference theta. Name the 2f validation file: preprocess/go_ppi_splits/validation.jsonl with pruned URIs from the aligned masked validation file."
+    },
+    {
+      "id": 2,
+      "severity": "NIT",
+      "section": "§2.7",
+      "title": "'Δ = 0 for empty-φ anchors' is false at w = 1.0 (fused score constant, so all records tie)",
+      "fix": "Append '(for w < 1; at w = 1.0 the fused score is constant within these anchors and their metrics are the all-ties values)'."
+    },
+    {
+      "id": 3,
+      "severity": "NIT",
+      "section": "§12",
+      "title": "Change list omits editorial and consequential v3→v4 edits (§1.1, §1.4, §1.5 prediction wording, §2.3 feasibility, §3d, §4.6, §5.1, §5.2 2e, §6.1, headline text)",
+      "fix": "Add one §12 row listing these sections as consequential edits with no rule or threshold change."
+    },
+    {
+      "id": 4,
+      "severity": "NIT",
+      "section": "§0.3 item 9",
+      "title": "Lists Resnik/MF/CC as §2.2 variants and implies bias controls were scored; search_log has no Bz/C4/C5 arm",
+      "fix": "List §2.2 variants separately from the non-§2.2 ones, and add 'No Bz / C4 / C5 arm was scored'."
+    },
+    {
+      "id": 5,
+      "severity": "NIT",
+      "section": "§6.1, §2.3, §2.6",
+      "title": "Reuse source for the derangement (go_ppi_fusion.final.derange_anchors, verified equal to §2.3) is not named, and the nDCG@10 source is inconsistent (go_ppi_fusion vs epf.ranking_metrics)",
+      "fix": "Name derange_anchors as the port source and epf.ranking_metrics for selection. Add a label-free check that cohort-A maps reproduce the exploratory draw counts (7,2,9,4,1,4,4,1,1,5 / 69,1,2,9,1,4,3,1,1,1) and the 680/17 and 1,354/42 unit counts."
+    },
+    {
+      "id": 6,
+      "severity": "NIT",
+      "section": "§1.5, §4.5",
+      "title": "The exploration's fixed-w shuffle diagnostic is not carried forward. With w_S = 0, C2 reduces to LB95(Δ_X) > 0",
+      "fix": "Add a descriptive arm S_fixed_w: S at the same model's AZ-X selected w, with a four-state label, not in any label."
+    },
+    {
+      "id": 7,
+      "severity": "NIT",
+      "section": "§6.2 step −1",
+      "title": "go_ppi_fusion/ is untracked in git and results/go_ppi_fusion_best/ is git-ignored; transfer must include them explicitly",
+      "fix": "List both explicitly in the rsync path set and check them in verify_transfer.py."
+    },
+    {
+      "id": 8,
+      "severity": "NIT",
+      "section": "§2.2",
+      "title": "Duplicated table header row",
+      "fix": "Delete the second header and separator pair."
+    },
+    {
+      "id": 9,
+      "severity": "NIT",
+      "section": "§1.2b",
+      "title": "The head-to-head prediction cites AZ-X − PUB_ndcg_U numbers, but the comparison is AZ-X − GZ-P",
+      "fix": "Cite the AZ-X − GZ-P point differences +0.0061 (hard), +0.0083 (AP), −0.0089 (nDCG@10); paired CIs not computed."
+    },
+    {
+      "id": 10,
+      "severity": "NIT",
+      "section": "§2.6",
+      "title": "Selection rule for C4 and the C5 comparator (text + Bz) is only implicit",
+      "fix": "State: 1-D w_b selected by validation global pooled AUC (AZ), ties → smaller w_b."
+    }
+  ],
+  "round2_fixes_checked": {
+    "c2_rule": "go_pair_specific_v4: present and correct; 8 example rows hand-verified",
+    "c5_rule": "absorbed_share_v3: present and correct; 5 example rows hand-verified",
+    "final_label_rule": "ordered_7_label_v4: present and consistent"
+  },
+  "controls_form_check": "AZ-X controls (C1, C1a, C1t, C2/S, C3/UX, C4, C5, ZS) all use within-anchor z with their own w by global pooled AUC; GZ-P controls (S_P, U − P) use validation global z (S_P from the deranged validation) with nDCG@10",
+  "reviewDoc": "/Users/olukotunjosh/Downloads/CDCL/.agents/tasks/ontology-withholding-feasibility/design_review_go_ppi_fusion.md"
+}

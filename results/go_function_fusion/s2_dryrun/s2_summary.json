@@ -1,0 +1,31 @@
+{
+  "aspects": {
+    "bp": {
+      "n_runs": 6,
+      "params": {
+        "c": 3.0,
+        "label": "smoke, 2 epochs, non-informative",
+        "placeholder": false,
+        "remote_eligible": false,
+        "remote_ineligible_reason": "no_GF2_snapshot",
+        "source": "finalists_tierA.json",
+        "tau": 10.0,
+        "tierB_in_s2": false,
+        "wH_in_s2": false
+      }
+    }
+  },
+  "f_parity": {
+    "auc_F_checked": false,
+    "misses": [],
+    "n_compared": 12,
+    "n_reference_rows": 12,
+    "passed": true
+  },
+  "label": "smoke, 2 epochs, non-informative",
+  "n_rows": 36,
+  "n_v0_rows_with_apt": 12,
+  "reg_skipped_pairs": 18,
+  "runs_dir": "results/go_function/smoke/runs",
+  "schema_complete": true
+}

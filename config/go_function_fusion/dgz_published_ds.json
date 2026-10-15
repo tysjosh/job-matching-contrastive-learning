@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "source": "Kulmanov and Hoehndorf, DeepGOZero: improving protein function prediction from sequence and zero-shot learning based on ontology axioms. Bioinformatics 38(Supplement_1):i238-i245 (2022). https://pmc.ncbi.nlm.nih.gov/articles/PMC9235501/",
+  "note": "Protocol §6.3 DGZ-faithful check (descriptive, does not gate). UniProtKB-SwissProt similarity split, test set. MFO = Table 3, BPO = Table 4. Rows 'MLP + DiamondScore' (key mlp) and 'DeepGOZero + DiamondScore' (key deepgozero). Fmax, Smin, AUPR protein-centric; AUC class-centric average. Transcribed at G-R (Mac dev run), before G-F.",
+  "values": {
+    "mf": {
+      "mlp": {
+        "fmax": {"value": 0.670, "cell": "Table 3, row MLP + DiamondScore, column Fmax"},
+        "smin": {"value": 9.551, "cell": "Table 3, row MLP + DiamondScore, column Smin"},
+        "aupr": {"value": 0.649, "cell": "Table 3, row MLP + DiamondScore, column AUPR"},
+        "auc": {"value": 0.886, "cell": "Table 3, row MLP + DiamondScore, column AUC"}
+      },
+      "deepgozero": {
+        "fmax": {"value": 0.668, "cell": "Table 3, row DeepGOZero + DiamondScore, column Fmax"},
+        "smin": {"value": 9.595, "cell": "Table 3, row DeepGOZero + DiamondScore, column Smin"},
+        "aupr": {"value": 0.673, "cell": "Table 3, row DeepGOZero + DiamondScore, column AUPR"},
+        "auc": {"value": 0.906, "cell": "Table 3, row DeepGOZero + DiamondScore, column AUC"}
+      }
+    },
+    "bp": {
+      "mlp": {
+        "fmax": {"value": 0.486, "cell": "Table 4, row MLP + DiamondScore, column Fmax"},
+        "smin": {"value": 43.822, "cell": "Table 4, row MLP + DiamondScore, column Smin"},
+        "aupr": {"value": 0.449, "cell": "Table 4, row MLP + DiamondScore, column AUPR"},
+        "auc": {"value": 0.797, "cell": "Table 4, row MLP + DiamondScore, column AUC"}
+      },
+      "deepgozero": {
+        "fmax": {"value": 0.482, "cell": "Table 4, row DeepGOZero + DiamondScore, column Fmax"},
+        "smin": {"value": 44.058, "cell": "Table 4, row DeepGOZero + DiamondScore, column Smin"},
+        "aupr": {"value": 0.446, "cell": "Table 4, row DeepGOZero + DiamondScore, column AUPR"},
+        "auc": {"value": 0.803, "cell": "Table 4, row DeepGOZero + DiamondScore, column AUC"}
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-10-12T22:24:19",
+  "before_test_scoring": true,
+  "test_plan_sha256": "5c764ce3f42f003ef4f1c8ca432dd62ab18c5744e187413e27eb1b4cb6896638",
+  "amends": "winner",
+  "old_winner": {
+    "label": "F2_P",
+    "id": "57515cc164be",
+    "rule": "declared before test: the frozen leak-free finalist slot F2, i.e. the highest CV composite over all leak-pruned variants of the search; it stays the headline whatever the test numbers show"
+  },
+  "winner": {
+    "label": "F3_P",
+    "id": "239fcb00f573",
+    "rule": "declared before test: the leak-pruned planned variant with the highest protein-disjoint CV composite on validation (the CV whose FIT records share no protein with the held-out fold, which is the test condition: test shares no protein with validation). It stays the headline whatever the test numbers show.",
+    "candidates_protein_disjoint_composite": {
+      "PUB_ndcg_P": 0.006297654143905449,
+      "PUB_pooled_P": -0.0064470430059664924,
+      "F1_P": -0.0301791761440542,
+      "F2_P": -0.020929727239996466,
+      "F3_P": 0.013491772658161144
+    }
+  },
+  "why": "Validation-only evidence obtained after test_plan.json was written and before any test scoring: every HGB stacker loses its CV advantage when FIT records share no protein with the held-out fold (F2_P composite +0.0254 -> -0.0209). A size-matched random FIT subset (fold_sensitivity_sizematched.json) gives F2_P -0.0032, so part of the drop is the 5x smaller fit set and part (about -0.018) is partner overlap, which cannot help on test. The non-learned anchor-z exact form keeps its gain under all three fold designs. Finalists F1-F3 are unchanged and all are still scored and reported.",
+  "diagnostics_winner_only": {
+    "shuffled": "protocol section 2.3 derangement of anchor-side GO, own validation w selection",
+    "hierarchy_vs_exact": "the winner already uses exact-term overlap, so the comparison arm is the same anchor-z form with simGIC_P_pruned (search-log id 2ef31536a048), own validation w selection"
+  }
+}

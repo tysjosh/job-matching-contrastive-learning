@@ -1,0 +1,1713 @@
+{
+  "schema": "go_ppi_fusion_confirm/build_manifest/v1",
+  "created_utc": "2026-10-13T06:17:11Z",
+  "protocol": {
+    "path": ".agents/tasks/ontology-withholding-feasibility/protocol_go_ppi_fusion.md",
+    "sha256": "9dc31d7a1b4a9386cb01d810babe9fcacb0c17cc16dff39c85f0d6366d733851"
+  },
+  "label_free": "no text score or fused score is computed by this script",
+  "alignment": {
+    "records": {
+      "train": 15708,
+      "validation": 5587,
+      "test": 22341
+    },
+    "protein_uris": {
+      "n_proteins": 15155,
+      "mismatches": 0,
+      "examples": [],
+      "ok": true
+    }
+  },
+  "cohortA": {
+    "row_counts": {
+      "10": 1571,
+      "25": 3927,
+      "50": 7854,
+      "75": 11781,
+      "100": 15708
+    },
+    "validation_positive": 321
+  },
+  "cohortB": {
+    "group_counts": {
+      "groups": 14,
+      "proteins": 31,
+      "max_size": 4
+    },
+    "fold_sizes": [
+      3031,
+      3031,
+      3031,
+      3031,
+      3031
+    ],
+    "two_build_identical": true,
+    "exposure_counts": {
+      "exposed": 4471,
+      "exposed_closed": 4481
+    },
+    "bclean": {
+      "sha256": "e891158129ea13775ea0eb20b2493ece34734377a528858746995848b302fa56",
+      "n_anchors": 4942,
+      "hard_defined": 2669,
+      "all_B_test_anchors": 7041,
+      "all_B_hard_defined": 3834,
+      "bclean_records_with_exposed_partner": 23758,
+      "bclean_anchors_with_exposed_partner": 4891
+    }
+  },
+  "huri": {
+    "anchors": 768,
+    "grade2_directed_pairs": 2850,
+    "grade0": 12776,
+    "unmatched_grade0_draws": 2584,
+    "grade1_counts": {
+      "huri_observed_only": 1302,
+      "unrestricted": 2924
+    },
+    "hard_defined_anchors": {
+      "huri_observed_only": 395,
+      "unrestricted": 415
+    },
+    "huri_observed": 6249,
+    "partition_huri_observed": 1234,
+    "huri_positives_that_are_string_grade2": 63
+  },
+  "shuffle": {
+    "A_validation": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 68,
+          "draws": 7,
+          "closure_size_range": [
+            3,
+            16
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 68,
+          "draws": 2,
+          "closure_size_range": [
+            16,
+            21
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 68,
+          "draws": 9,
+          "closure_size_range": [
+            21,
+            28
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 68,
+          "draws": 4,
+          "closure_size_range": [
+            28,
+            36
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 68,
+          "draws": 1,
+          "closure_size_range": [
+            36,
+            44
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 68,
+          "draws": 4,
+          "closure_size_range": [
+            44,
+            54
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 68,
+          "draws": 4,
+          "closure_size_range": [
+            55,
+            65
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 68,
+          "draws": 1,
+          "closure_size_range": [
+            66,
+            86
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 68,
+          "draws": 1,
+          "closure_size_range": [
+            86,
+            123
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 68,
+          "draws": 5,
+          "closure_size_range": [
+            123,
+            475
+          ]
+        }
+      ],
+      "n_units": 680,
+      "n_kept_empty": 17,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 11,
+      "seed": 11,
+      "file": "preprocess/go_withholding/splits/validation.jsonl",
+      "file_sha256": "90c0b7df9851cae23866e3101201981f7339727582276ae459d3d34cbfe31fd7"
+    },
+    "A_test": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 136,
+          "draws": 69,
+          "closure_size_range": [
+            4,
+            15
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 136,
+          "draws": 1,
+          "closure_size_range": [
+            15,
+            22
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 136,
+          "draws": 2,
+          "closure_size_range": [
+            22,
+            28
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 136,
+          "draws": 9,
+          "closure_size_range": [
+            28,
+            36
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 135,
+          "draws": 1,
+          "closure_size_range": [
+            36,
+            45
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 135,
+          "draws": 4,
+          "closure_size_range": [
+            45,
+            56
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 135,
+          "draws": 3,
+          "closure_size_range": [
+            56,
+            68
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 135,
+          "draws": 1,
+          "closure_size_range": [
+            68,
+            89
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 135,
+          "draws": 1,
+          "closure_size_range": [
+            89,
+            125
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 135,
+          "draws": 1,
+          "closure_size_range": [
+            125,
+            597
+          ]
+        }
+      ],
+      "n_units": 1354,
+      "n_kept_empty": 42,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 16,
+      "seed": 11,
+      "file": "preprocess/go_withholding/splits/test.jsonl",
+      "file_sha256": "4027e9a0a3cc6ec173fe468e90ff48e013efb8f61dc8eb2ce61d5b7a346bbb2a"
+    },
+    "huri_test": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 71,
+          "draws": 14,
+          "closure_size_range": [
+            3,
+            13
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 71,
+          "draws": 91,
+          "closure_size_range": [
+            13,
+            19
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 71,
+          "draws": 75,
+          "closure_size_range": [
+            19,
+            24
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 71,
+          "draws": 36,
+          "closure_size_range": [
+            24,
+            30
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 71,
+          "draws": 7,
+          "closure_size_range": [
+            30,
+            38
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 71,
+          "draws": 9,
+          "closure_size_range": [
+            38,
+            48
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 71,
+          "draws": 53,
+          "closure_size_range": [
+            48,
+            60
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 70,
+          "draws": 3,
+          "closure_size_range": [
+            60,
+            77
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 70,
+          "draws": 1,
+          "closure_size_range": [
+            78,
+            110
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 70,
+          "draws": 364,
+          "closure_size_range": [
+            111,
+            597
+          ]
+        }
+      ],
+      "n_units": 707,
+      "n_kept_empty": 61,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 23,
+      "seed": 11,
+      "file": "preprocess/go_ppi_fusion_confirm/huri/test.jsonl",
+      "file_sha256": "1f4b1c489b4c36018e4a2870e40735860ae857fff3c92b4c7897964ce6935a12"
+    },
+    "huri_test_grade1_unrestricted": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 71,
+          "draws": 14,
+          "closure_size_range": [
+            3,
+            13
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 71,
+          "draws": 91,
+          "closure_size_range": [
+            13,
+            19
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 71,
+          "draws": 75,
+          "closure_size_range": [
+            19,
+            24
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 71,
+          "draws": 36,
+          "closure_size_range": [
+            24,
+            30
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 71,
+          "draws": 7,
+          "closure_size_range": [
+            30,
+            38
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 71,
+          "draws": 9,
+          "closure_size_range": [
+            38,
+            48
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 71,
+          "draws": 53,
+          "closure_size_range": [
+            48,
+            60
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 70,
+          "draws": 3,
+          "closure_size_range": [
+            60,
+            77
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 70,
+          "draws": 1,
+          "closure_size_range": [
+            78,
+            110
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 70,
+          "draws": 364,
+          "closure_size_range": [
+            111,
+            597
+          ]
+        }
+      ],
+      "n_units": 707,
+      "n_kept_empty": 61,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 24,
+      "seed": 11,
+      "file": "preprocess/go_ppi_fusion_confirm/huri/test_grade1_unrestricted.jsonl",
+      "file_sha256": "e952b6744455c9db2403289138b03f91a74da7bffc6b2204b7fe985138d5dd26"
+    },
+    "B_fold0_validation": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 134,
+          "draws": 49,
+          "closure_size_range": [
+            3,
+            15
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 134,
+          "draws": 5,
+          "closure_size_range": [
+            15,
+            23
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 134,
+          "draws": 26,
+          "closure_size_range": [
+            23,
+            30
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 134,
+          "draws": 5,
+          "closure_size_range": [
+            30,
+            37
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            37,
+            45
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            45,
+            55
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 134,
+          "draws": 2,
+          "closure_size_range": [
+            55,
+            69
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            69,
+            92
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            93,
+            132
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            132,
+            597
+          ]
+        }
+      ],
+      "n_units": 1340,
+      "n_kept_empty": 35,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 15,
+      "seed": 11,
+      "file": "preprocess/go_ppi_fusion_confirm/cv/fold_0/validation.jsonl",
+      "file_sha256": "058d0091dae3f426895eb7b560bb62d05d390ff401c70413312f968dac8808a4"
+    },
+    "B_fold0_test": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 145,
+          "draws": 41,
+          "closure_size_range": [
+            2,
+            15
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 145,
+          "draws": 9,
+          "closure_size_range": [
+            15,
+            21
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 145,
+          "draws": 11,
+          "closure_size_range": [
+            21,
+            28
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 145,
+          "draws": 16,
+          "closure_size_range": [
+            28,
+            35
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 145,
+          "draws": 4,
+          "closure_size_range": [
+            35,
+            43
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 145,
+          "draws": 7,
+          "closure_size_range": [
+            43,
+            53
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 144,
+          "draws": 1,
+          "closure_size_range": [
+            53,
+            69
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 144,
+          "draws": 2,
+          "closure_size_range": [
+            69,
+            87
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 144,
+          "draws": 7,
+          "closure_size_range": [
+            87,
+            125
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 144,
+          "draws": 3,
+          "closure_size_range": [
+            125,
+            493
+          ]
+        }
+      ],
+      "n_units": 1446,
+      "n_kept_empty": 43,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 18,
+      "seed": 11,
+      "file": "preprocess/go_ppi_fusion_confirm/cv/fold_0/test.jsonl",
+      "file_sha256": "969f00064a82a64d2aa9ffd3ef479744d3482d63be3d2b92c61aa5a806bb609e"
+    },
+    "B_fold1_validation": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 135,
+          "draws": 17,
+          "closure_size_range": [
+            4,
+            15
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 135,
+          "draws": 8,
+          "closure_size_range": [
+            15,
+            22
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 135,
+          "draws": 196,
+          "closure_size_range": [
+            22,
+            29
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            29,
+            37
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 134,
+          "draws": 8,
+          "closure_size_range": [
+            37,
+            46
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 134,
+          "draws": 7,
+          "closure_size_range": [
+            46,
+            55
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            55,
+            70
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            71,
+            93
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 134,
+          "draws": 2,
+          "closure_size_range": [
+            93,
+            142
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 134,
+          "draws": 12,
+          "closure_size_range": [
+            143,
+            449
+          ]
+        }
+      ],
+      "n_units": 1343,
+      "n_kept_empty": 40,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 16,
+      "seed": 11,
+      "file": "preprocess/go_ppi_fusion_confirm/cv/fold_1/validation.jsonl",
+      "file_sha256": "8db8ff50e66caebd6e4f7718920071e5dbcd0cd84ef70a71a2b52e6626477524"
+    },
+    "B_fold1_test": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 134,
+          "draws": 49,
+          "closure_size_range": [
+            3,
+            15
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 134,
+          "draws": 5,
+          "closure_size_range": [
+            15,
+            23
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 134,
+          "draws": 26,
+          "closure_size_range": [
+            23,
+            30
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 134,
+          "draws": 5,
+          "closure_size_range": [
+            30,
+            37
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            37,
+            45
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            45,
+            55
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 134,
+          "draws": 2,
+          "closure_size_range": [
+            55,
+            69
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            69,
+            92
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            93,
+            132
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            132,
+            597
+          ]
+        }
+      ],
+      "n_units": 1340,
+      "n_kept_empty": 35,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 15,
+      "seed": 11,
+      "file": "preprocess/go_ppi_fusion_confirm/cv/fold_1/test.jsonl",
+      "file_sha256": "92a46b4bb8d755af8f2940edc8d0da2e56eb3d638f54408ce1905f710b2cc425"
+    },
+    "B_fold2_validation": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 135,
+          "draws": 2,
+          "closure_size_range": [
+            3,
+            15
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 135,
+          "draws": 31,
+          "closure_size_range": [
+            15,
+            22
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 135,
+          "draws": 18,
+          "closure_size_range": [
+            22,
+            29
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 135,
+          "draws": 2,
+          "closure_size_range": [
+            29,
+            37
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 135,
+          "draws": 2,
+          "closure_size_range": [
+            37,
+            45
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 135,
+          "draws": 1,
+          "closure_size_range": [
+            45,
+            56
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 134,
+          "draws": 2,
+          "closure_size_range": [
+            56,
+            67
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 134,
+          "draws": 2,
+          "closure_size_range": [
+            67,
+            86
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 134,
+          "draws": 3,
+          "closure_size_range": [
+            87,
+            121
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 134,
+          "draws": 3,
+          "closure_size_range": [
+            123,
+            434
+          ]
+        }
+      ],
+      "n_units": 1346,
+      "n_kept_empty": 38,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 17,
+      "seed": 11,
+      "file": "preprocess/go_ppi_fusion_confirm/cv/fold_2/validation.jsonl",
+      "file_sha256": "6188fc6688afef0cb337052166b58787bd05ce21a9696a25277adaebd6d5f9dd"
+    },
+    "B_fold2_test": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 135,
+          "draws": 17,
+          "closure_size_range": [
+            4,
+            15
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 135,
+          "draws": 8,
+          "closure_size_range": [
+            15,
+            22
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 135,
+          "draws": 196,
+          "closure_size_range": [
+            22,
+            29
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            29,
+            37
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 134,
+          "draws": 8,
+          "closure_size_range": [
+            37,
+            46
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 134,
+          "draws": 7,
+          "closure_size_range": [
+            46,
+            55
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            55,
+            70
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 134,
+          "draws": 1,
+          "closure_size_range": [
+            71,
+            93
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 134,
+          "draws": 2,
+          "closure_size_range": [
+            93,
+            142
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 134,
+          "draws": 12,
+          "closure_size_range": [
+            143,
+            449
+          ]
+        }
+      ],
+      "n_units": 1343,
+      "n_kept_empty": 40,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 16,
+      "seed": 11,
+      "file": "preprocess/go_ppi_fusion_confirm/cv/fold_2/test.jsonl",
+      "file_sha256": "b8bf043d8b19e608e12b282172ae9e9eaabb2b2930c67b3d45e8472e68d9cb15"
+    },
+    "B_fold3_validation": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 137,
+          "draws": 16,
+          "closure_size_range": [
+            3,
+            16
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 137,
+          "draws": 8,
+          "closure_size_range": [
+            16,
+            23
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 137,
+          "draws": 8,
+          "closure_size_range": [
+            23,
+            31
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 137,
+          "draws": 6,
+          "closure_size_range": [
+            31,
+            38
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 137,
+          "draws": 1,
+          "closure_size_range": [
+            38,
+            47
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 137,
+          "draws": 1,
+          "closure_size_range": [
+            47,
+            57
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 137,
+          "draws": 2,
+          "closure_size_range": [
+            57,
+            70
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 136,
+          "draws": 8,
+          "closure_size_range": [
+            71,
+            92
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 136,
+          "draws": 1,
+          "closure_size_range": [
+            92,
+            132
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 136,
+          "draws": 5,
+          "closure_size_range": [
+            132,
+            422
+          ]
+        }
+      ],
+      "n_units": 1367,
+      "n_kept_empty": 43,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 15,
+      "seed": 11,
+      "file": "preprocess/go_ppi_fusion_confirm/cv/fold_3/validation.jsonl",
+      "file_sha256": "e9c5bcf9120a2dd5ebfb62484588cfdbcbff8994e7ea21c85f9370811ce54b62"
+    },
+    "B_fold3_test": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 135,
+          "draws": 2,
+          "closure_size_range": [
+            3,
+            15
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 135,
+          "draws": 31,
+          "closure_size_range": [
+            15,
+            22
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 135,
+          "draws": 18,
+          "closure_size_range": [
+            22,
+            29
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 135,
+          "draws": 2,
+          "closure_size_range": [
+            29,
+            37
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 135,
+          "draws": 2,
+          "closure_size_range": [
+            37,
+            45
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 135,
+          "draws": 1,
+          "closure_size_range": [
+            45,
+            56
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 134,
+          "draws": 2,
+          "closure_size_range": [
+            56,
+            67
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 134,
+          "draws": 2,
+          "closure_size_range": [
+            67,
+            86
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 134,
+          "draws": 3,
+          "closure_size_range": [
+            87,
+            121
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 134,
+          "draws": 3,
+          "closure_size_range": [
+            123,
+            434
+          ]
+        }
+      ],
+      "n_units": 1346,
+      "n_kept_empty": 38,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 17,
+      "seed": 11,
+      "file": "preprocess/go_ppi_fusion_confirm/cv/fold_3/test.jsonl",
+      "file_sha256": "a45cdae29d88205477969c0c3a9797dac92e234bb1f1fed6f0e0e9aea691b47f"
+    },
+    "B_fold4_validation": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 145,
+          "draws": 41,
+          "closure_size_range": [
+            2,
+            15
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 145,
+          "draws": 9,
+          "closure_size_range": [
+            15,
+            21
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 145,
+          "draws": 11,
+          "closure_size_range": [
+            21,
+            28
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 145,
+          "draws": 16,
+          "closure_size_range": [
+            28,
+            35
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 145,
+          "draws": 4,
+          "closure_size_range": [
+            35,
+            43
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 145,
+          "draws": 7,
+          "closure_size_range": [
+            43,
+            53
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 144,
+          "draws": 1,
+          "closure_size_range": [
+            53,
+            69
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 144,
+          "draws": 2,
+          "closure_size_range": [
+            69,
+            87
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 144,
+          "draws": 7,
+          "closure_size_range": [
+            87,
+            125
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 144,
+          "draws": 3,
+          "closure_size_range": [
+            125,
+            493
+          ]
+        }
+      ],
+      "n_units": 1446,
+      "n_kept_empty": 43,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 18,
+      "seed": 11,
+      "file": "preprocess/go_ppi_fusion_confirm/cv/fold_4/validation.jsonl",
+      "file_sha256": "0e35bdc7283f0f39944391cc36d0ec898b5d2add2ad19f9ce8a921d0ee720d6d"
+    },
+    "B_fold4_test": {
+      "strata": [
+        {
+          "stratum": 0,
+          "size": 137,
+          "draws": 16,
+          "closure_size_range": [
+            3,
+            16
+          ]
+        },
+        {
+          "stratum": 1,
+          "size": 137,
+          "draws": 8,
+          "closure_size_range": [
+            16,
+            23
+          ]
+        },
+        {
+          "stratum": 2,
+          "size": 137,
+          "draws": 8,
+          "closure_size_range": [
+            23,
+            31
+          ]
+        },
+        {
+          "stratum": 3,
+          "size": 137,
+          "draws": 6,
+          "closure_size_range": [
+            31,
+            38
+          ]
+        },
+        {
+          "stratum": 4,
+          "size": 137,
+          "draws": 1,
+          "closure_size_range": [
+            38,
+            47
+          ]
+        },
+        {
+          "stratum": 5,
+          "size": 137,
+          "draws": 1,
+          "closure_size_range": [
+            47,
+            57
+          ]
+        },
+        {
+          "stratum": 6,
+          "size": 137,
+          "draws": 2,
+          "closure_size_range": [
+            57,
+            70
+          ]
+        },
+        {
+          "stratum": 7,
+          "size": 136,
+          "draws": 8,
+          "closure_size_range": [
+            71,
+            92
+          ]
+        },
+        {
+          "stratum": 8,
+          "size": 136,
+          "draws": 1,
+          "closure_size_range": [
+            92,
+            132
+          ]
+        },
+        {
+          "stratum": 9,
+          "size": 136,
+          "draws": 5,
+          "closure_size_range": [
+            132,
+            422
+          ]
+        }
+      ],
+      "n_units": 1367,
+      "n_kept_empty": 43,
+      "n_receiver_partner_sets_with_donor_simgic_ge_0.5": 15,
+      "seed": 11,
+      "file": "preprocess/go_ppi_fusion_confirm/cv/fold_4/test.jsonl",
+      "file_sha256": "2774a840eb9f7bbf2ee1b0bebfd7e83a94391bc655dc1f579cbe0bf916e8d17c"
+    }
+  },
+  "n_pmid": {
+    "proteins": 15155,
+    "zero": 941
+  },
+  "typed_check": {
+    "passed": true,
+    "n_terms": 23974,
+    "n_ic_terms": 13066,
+    "ancestor_mismatches": 0,
+    "ic_mismatches": 0,
+    "examples": []
+  },
+  "isa_index": {
+    "path": "results/go_ppi_fusion_confirm/phi/go_index_P_isa_only.pkl",
+    "genes_annotated": 17648,
+    "terms": 23974
+  },
+  "ux_to_x_changed_records_A_test": 1662,
+  "mention_flags": {
+    "2": 147,
+    "1": 19,
+    "0": 0
+  },
+  "configs": {
+    "base": {
+      "path": "config/lc_go_ppi_baseline.json",
+      "sha256": "0a385d97f145c3b6deda4295b247580468c97d449185d0c4e1894280231da48a"
+    },
+    "derived": {
+      "results/go_ppi_fusion_confirm/configs/lc_go_ppi_baseline_masked.json": {
+        "sha256": "d31b8b5c11f2cd6e279dfe87d0acc9c0108840b96b8d62d8501862176c4dcb86",
+        "diff_vs_base": {
+          "embedding_cache_path": [
+            "embedding_cache/go_ppi_text_embeddings.pt",
+            "results/go_ppi_fusion_confirm/cache/go_withholding_text_embeddings.pt"
+          ],
+          "go_ppi_converted_dir": [
+            "preprocess/go_ppi",
+            "preprocess/go_withholding/converted"
+          ],
+          "go_ppi_split_dir": [
+            "preprocess/go_ppi_splits",
+            "preprocess/go_withholding/splits"
+          ]
+        },
+        "expected_unexpected_fields": [
+          "embedding_cache_path",
+          "go_ppi_converted_dir",
+          "go_ppi_split_dir"
+        ]
+      },
+      "results/go_ppi_fusion_confirm/configs/lc_go_ppi_baseline_cv_fold0.json": {
+        "sha256": "a744a7dbef90c004e526b7eaa2b41328e03954a617514b3af39a9c9ca96880c0",
+        "diff_vs_base": {
+          "embedding_cache_path": [
+            "embedding_cache/go_ppi_text_embeddings.pt",
+            "results/go_ppi_fusion_confirm/cache/go_withholding_text_embeddings.pt"
+          ],
+          "go_ppi_converted_dir": [
+            "preprocess/go_ppi",
+            "preprocess/go_withholding/converted"
+          ],
+          "go_ppi_split_dir": [
+            "preprocess/go_ppi_splits",
+            "preprocess/go_ppi_fusion_confirm/cv/fold_0"
+          ]
+        },
+        "expected_unexpected_fields": [
+          "embedding_cache_path",
+          "go_ppi_converted_dir",
+          "go_ppi_split_dir"
+        ]
+      },
+      "results/go_ppi_fusion_confirm/configs/lc_go_ppi_baseline_cv_fold1.json": {
+        "sha256": "1218c5a14a38e0ddcf454654d3887ad26c905cef279dc4cabae144c5ccaed89a",
+        "diff_vs_base": {
+          "embedding_cache_path": [
+            "embedding_cache/go_ppi_text_embeddings.pt",
+            "results/go_ppi_fusion_confirm/cache/go_withholding_text_embeddings.pt"
+          ],
+          "go_ppi_converted_dir": [
+            "preprocess/go_ppi",
+            "preprocess/go_withholding/converted"
+          ],
+          "go_ppi_split_dir": [
+            "preprocess/go_ppi_splits",
+            "preprocess/go_ppi_fusion_confirm/cv/fold_1"
+          ]
+        },
+        "expected_unexpected_fields": [
+          "embedding_cache_path",
+          "go_ppi_converted_dir",
+          "go_ppi_split_dir"
+        ]
+      },
+      "results/go_ppi_fusion_confirm/configs/lc_go_ppi_baseline_cv_fold2.json": {
+        "sha256": "4dc0335108fa77894ddd9b6956c691a801f789dbf3f1df67defb66904f6efe4a",
+        "diff_vs_base": {
+          "embedding_cache_path": [
+            "embedding_cache/go_ppi_text_embeddings.pt",
+            "results/go_ppi_fusion_confirm/cache/go_withholding_text_embeddings.pt"
+          ],
+          "go_ppi_converted_dir": [
+            "preprocess/go_ppi",
+            "preprocess/go_withholding/converted"
+          ],
+          "go_ppi_split_dir": [
+            "preprocess/go_ppi_splits",
+            "preprocess/go_ppi_fusion_confirm/cv/fold_2"
+          ]
+        },
+        "expected_unexpected_fields": [
+          "embedding_cache_path",
+          "go_ppi_converted_dir",
+          "go_ppi_split_dir"
+        ]
+      },
+      "results/go_ppi_fusion_confirm/configs/lc_go_ppi_baseline_cv_fold3.json": {
+        "sha256": "21a1d50787d6fd922a397eb8ea4ec86131191ae6bce35cfb77be33af14ccf2f0",
+        "diff_vs_base": {
+          "embedding_cache_path": [
+            "embedding_cache/go_ppi_text_embeddings.pt",
+            "results/go_ppi_fusion_confirm/cache/go_withholding_text_embeddings.pt"
+          ],
+          "go_ppi_converted_dir": [
+            "preprocess/go_ppi",
+            "preprocess/go_withholding/converted"
+          ],
+          "go_ppi_split_dir": [
+            "preprocess/go_ppi_splits",
+            "preprocess/go_ppi_fusion_confirm/cv/fold_3"
+          ]
+        },
+        "expected_unexpected_fields": [
+          "embedding_cache_path",
+          "go_ppi_converted_dir",
+          "go_ppi_split_dir"
+        ]
+      },
+      "results/go_ppi_fusion_confirm/configs/lc_go_ppi_baseline_cv_fold4.json": {
+        "sha256": "8a6b38a38b13eea1cad31daf93e3611ac66d861bba280058cdc2cecc9b875b3b",
+        "diff_vs_base": {
+          "embedding_cache_path": [
+            "embedding_cache/go_ppi_text_embeddings.pt",
+            "results/go_ppi_fusion_confirm/cache/go_withholding_text_embeddings.pt"
+          ],
+          "go_ppi_converted_dir": [
+            "preprocess/go_ppi",
+            "preprocess/go_withholding/converted"
+          ],
+          "go_ppi_split_dir": [
+            "preprocess/go_ppi_splits",
+            "preprocess/go_ppi_fusion_confirm/cv/fold_4"
+          ]
+        },
+        "expected_unexpected_fields": [
+          "embedding_cache_path",
+          "go_ppi_converted_dir",
+          "go_ppi_split_dir"
+        ]
+      }
+    }
+  },
+  "files": {
+    "preprocess/go_ppi_fusion_confirm/cohortA/frac_10/train.jsonl": "8c3e6af2a83c53deb8c31d926c4a6417da8de7f22d2b13e4b531fcebb5434688",
+    "preprocess/go_ppi_fusion_confirm/cohortA/frac_100/train.jsonl": "c38f89c2dd795121b6e04bc0d8768c6076969cf237ffb18c5e1479d980856d1d",
+    "preprocess/go_ppi_fusion_confirm/cohortA/frac_25/train.jsonl": "cb458d13575b89ea6642e0aa149667d636d0ac5c0e904adaca266425fffe3ed5",
+    "preprocess/go_ppi_fusion_confirm/cohortA/frac_50/train.jsonl": "2cc3e37c5f1fca11572dd0b15780534110943d9cfbdc95300e319ed49613fcbf",
+    "preprocess/go_ppi_fusion_confirm/cohortA/frac_75/train.jsonl": "a27152899109007bb3c7e5281b3c703768ee6b5c1b53156e5c0b7fcaeb72eb14",
+    "preprocess/go_ppi_fusion_confirm/cohortA/validation_positive.jsonl": "14e1662b4c8226b0f123cad312571db95abf9b0a5d771c2eeed82187facc278c",
+    "preprocess/go_ppi_fusion_confirm/cv/cv_manifest.json": "1698dda90afd77bddd162bdfa2308517691df866f098df4b5ab2d485459dd6f5",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_0/fold_manifest.json": "582bff3f365da73d04d083b8201921c547f625d193deac7342be5f580733e6a1",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_0/negative_pools.jsonl": "84571d955b5e0f6636deba60ead38f037e851ed685218625f5bdee831a95eed5",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_0/test.jsonl": "969f00064a82a64d2aa9ffd3ef479744d3482d63be3d2b92c61aa5a806bb609e",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_0/train.jsonl": "1b73b62fca11c722eee0a1d3c2dac12c13d9f11be1c1da698ae64f0578da8d85",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_0/validation.jsonl": "058d0091dae3f426895eb7b560bb62d05d390ff401c70413312f968dac8808a4",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_0/validation_positive.jsonl": "4ceab62a913796db330bac1b773f710e70176fbbb994365fae5f6cc1df65f31d",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_1/fold_manifest.json": "3b275686c179275919563ccc1772e424efcc5bc7104a15ec06e6b168ffb06358",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_1/negative_pools.jsonl": "c3bb58478c3b441d693706ebc193e8d1f9851393a75042cbd245faba801f84cd",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_1/test.jsonl": "92a46b4bb8d755af8f2940edc8d0da2e56eb3d638f54408ce1905f710b2cc425",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_1/train.jsonl": "9657272409e85659c6f21ffc6a8bb24af53665ba02c9ba0cc017953e50eab1c6",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_1/validation.jsonl": "8db8ff50e66caebd6e4f7718920071e5dbcd0cd84ef70a71a2b52e6626477524",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_1/validation_positive.jsonl": "02fd2421497537ae34c4918ed9c9ed472c9a3b450e901b54cd3d54ecb5828244",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_2/fold_manifest.json": "92b52ce2742637d4fc0c7e8d7dcec9520a278f9eaebbd13177fb2ac297722501",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_2/negative_pools.jsonl": "2e59dc23cda2fdbcf821c26f61101118fdf8613845921cf78d8abfd8a887efa0",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_2/test.jsonl": "b8bf043d8b19e608e12b282172ae9e9eaabb2b2930c67b3d45e8472e68d9cb15",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_2/train.jsonl": "fcbfdff5c3fcd2191abb602404a7379a40c8691fc99f1cba437067867ec08e20",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_2/validation.jsonl": "6188fc6688afef0cb337052166b58787bd05ce21a9696a25277adaebd6d5f9dd",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_2/validation_positive.jsonl": "8d567f9a3eaf816131ef7a92b5d8cae33ced246b806ec1195b83ad94042009ec",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_3/fold_manifest.json": "4bf223cf066c680ae0ffa6a57252874d2d6d9390b03205d6316a9fc82dbf883a",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_3/negative_pools.jsonl": "89f8f3195b7179de9f603b901a24fed9b2f5df859a577d9b958c3877e38acbdf",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_3/test.jsonl": "a45cdae29d88205477969c0c3a9797dac92e234bb1f1fed6f0e0e9aea691b47f",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_3/train.jsonl": "7454edbdcff1ea4286e292e99109c03d7ad32364cb9e52dbae9bfb165d698bd9",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_3/validation.jsonl": "e9c5bcf9120a2dd5ebfb62484588cfdbcbff8994e7ea21c85f9370811ce54b62",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_3/validation_positive.jsonl": "d69b2ad096e965b26187a8c98a95fa5df8933372a8feacac814660539bed7375",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_4/fold_manifest.json": "21f87acd29887ebc72f6834d96839574450fbc06fbfdf7d177276483c840f365",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_4/negative_pools.jsonl": "7b94cd93b31e09dcd21489882c4bf6a4ae46e978e887c3b18801f5488d8e73b5",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_4/test.jsonl": "2774a840eb9f7bbf2ee1b0bebfd7e83a94391bc655dc1f579cbe0bf916e8d17c",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_4/train.jsonl": "f24b5067a067ef89687ee7e8faab8b233c2c3be380e63f5a22f914417354b87c",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_4/validation.jsonl": "0e35bdc7283f0f39944391cc36d0ec898b5d2add2ad19f9ce8a921d0ee720d6d",
+    "preprocess/go_ppi_fusion_confirm/cv/fold_4/validation_positive.jsonl": "573c962956f84665cf0f6e16ebec57bfd113dd31cedd442a14a1fb0d73ac0cdb",
+    "preprocess/go_ppi_fusion_confirm/huri/huri_manifest.json": "c1d6cac038c466d51a051251466fe1b0673315513c3ea1c877840755dcabdc1c",
+    "preprocess/go_ppi_fusion_confirm/huri/test.jsonl": "1f4b1c489b4c36018e4a2870e40735860ae857fff3c92b4c7897964ce6935a12",
+    "preprocess/go_ppi_fusion_confirm/huri/test_grade1_unrestricted.jsonl": "e952b6744455c9db2403289138b03f91a74da7bffc6b2204b7fe985138d5dd26",
+    "results/go_ppi_fusion_confirm/configs/lc_go_ppi_baseline_cv_fold0.json": "a744a7dbef90c004e526b7eaa2b41328e03954a617514b3af39a9c9ca96880c0",
+    "results/go_ppi_fusion_confirm/configs/lc_go_ppi_baseline_cv_fold1.json": "1218c5a14a38e0ddcf454654d3887ad26c905cef279dc4cabae144c5ccaed89a",
+    "results/go_ppi_fusion_confirm/configs/lc_go_ppi_baseline_cv_fold2.json": "4dc0335108fa77894ddd9b6956c691a801f789dbf3f1df67defb66904f6efe4a",
+    "results/go_ppi_fusion_confirm/configs/lc_go_ppi_baseline_cv_fold3.json": "21a1d50787d6fd922a397eb8ea4ec86131191ae6bce35cfb77be33af14ccf2f0",
+    "results/go_ppi_fusion_confirm/configs/lc_go_ppi_baseline_cv_fold4.json": "8a6b38a38b13eea1cad31daf93e3611ac66d861bba280058cdc2cecc9b875b3b",
+    "results/go_ppi_fusion_confirm/configs/lc_go_ppi_baseline_masked.json": "d31b8b5c11f2cd6e279dfe87d0acc9c0108840b96b8d62d8501862176c4dcb86",
+    "results/go_ppi_fusion_confirm/phi/go_index_P_isa_only.pkl": "d800b88610d6dc0677a60a04526db660299c7451ac42333e358da02f99215e05",
+    "results/go_ppi_fusion_confirm/phi/mention_flags_A_test.json": "b5a5c0298370af14abadfa91246bc5c5a76f90fba3f74f8ba3eba5cac2eb386e",
+    "results/go_ppi_fusion_confirm/phi/n_pmid.json": "70b5873cdd35a16f62a23a9caf767216581e62e33b155dbe3a38aad4eeb29fff",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/A_test.json": "ce50442c800076ee533b23d236f72837d8daabf1491624718929d0cc8740b2e3",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/A_validation.json": "ba35d38667cb2073e7832ca3bf5befd7a3ff963c896f3d5e175a2847af1a2976",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/B_fold0_test.json": "0d2a558fe749db29bce81c9dbe232236aa4642541d9ee683a4b24e052d4a3aef",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/B_fold0_validation.json": "39977557334d2f668af39902ac796273bfa1dc7da4f1ae6f992a8f9c6e02b047",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/B_fold1_test.json": "7a89420b04a603f609415931e5f971400bcfbce9671791abc152e952f961254a",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/B_fold1_validation.json": "0ea1c8268eba49dac9f5897b24de23a78555bd06b7dab2c91cb3ff516a1651fe",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/B_fold2_test.json": "b6562859717f7c59c484aae9913cd06f4d4225a6ea89960daac8eebee822a4cc",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/B_fold2_validation.json": "8db461c568daa01065b976281e19ce399b9f17c9a068b17a0d5493b0e73fa846",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/B_fold3_test.json": "c7e00d292690472d51113ae125cf388117b76d847bb7271ccc8cfde2548e8ed2",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/B_fold3_validation.json": "28bafe1c581c68f06905f51e0db760c1e27b3e023a87b74f40537b710b387530",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/B_fold4_test.json": "4388d8d0615e218654130641075319b0b7f0f507d4cf87b5effc9181b95d4f5a",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/B_fold4_validation.json": "f269f5b0331737a18d4648ab26d90da728e062f7390ebb28f361c608e82051a2",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/huri_test.json": "b0b2366543de095f4671531d3c0111632c312448da5a726c800f0b0bfea5957a",
+    "results/go_ppi_fusion_confirm/phi/shuffle_maps/huri_test_grade1_unrestricted.json": "f4c88a15b26bbfd656332596585f6b2ec13422882bee1a08dd967090dd534fa1"
+  },
+  "seconds": 94.1,
+  "run_env": {
+    "PYTHONHASHSEED": "0",
+    "HF_HUB_OFFLINE": "1",
+    "CUDA_VISIBLE_DEVICES": ""
+  }
+}

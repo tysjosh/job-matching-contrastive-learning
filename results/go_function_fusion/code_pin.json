@@ -1,0 +1,29 @@
+{
+  "code": {
+    "config/go_function_fusion/study.json": "408cc756bcc1b97ef75b029459a4de62263eed1aa2a127fcc7a9fb13888e016c",
+    "go_function_fusion/__init__.py": "b2a8f0f15e2a2233447dde230d68317035f499aab862b82c8b059db75ce0e28c",
+    "go_function_fusion/data.py": "fb3704b96653ca7000878d1cabd02b575ed1e864ad14ab456b2848462511a4c6",
+    "go_function_fusion/fuse.py": "e911aff9e0469169aa1bb4f4a95ad7cde30e2ae89858fd322f6cffd078dd3c90",
+    "go_function_fusion/guard.py": "2f226df5ed6356a4dc34f92a545fb7e8e3f86c30a400fce3f608b1f09bc0b566",
+    "go_function_fusion/metrics.py": "17e1f8a62ac0ee6bb6327c9c55053c7ee5386ea4c12ce7d680e4470fb8978310",
+    "go_function_fusion/priors.py": "cd67a2bf6a296ecc34d3e504a29f98a4c19f47f030f1c4e7e19bc04f78bd0f5c",
+    "go_function_fusion/stats.py": "0a830a8069081ab0b9dd4eb692852e7d59afc00c015ff75f36f60e2ce3c63439",
+    "go_function_fusion/tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "go_function_fusion/tests/conftest.py": "516ba6756e84c9888b7ba13cf18026e6ee3a6aedf3e57d4971ecb9783e7700cb",
+    "go_function_fusion/tests/test_fuse_metrics.py": "0193a5a6b188b91509749ac0f7a8ab04e1eb3ae32365458df68d04c11ae27801",
+    "go_function_fusion/tests/test_guard.py": "cf63e71ebda9d8db14223d708f1b9e480897af8c0610453df6bbc927840c2903",
+    "go_function_fusion/tests/test_priors.py": "5bb720f0abe193b91c7b7d8384fdb1620df7d6b1b427416f63fbe2fae0be25ee",
+    "go_function_fusion/tests/test_s2_parity.py": "07c92ae60ea8c94dac9a04b338b16fc271cffe20f0447977606da8c651ea2078",
+    "go_function_fusion/tests/test_stats.py": "fc429ca396f71fb664b521f8e895852a17523cb4a05e4e706298fca24c69c9d9",
+    "scripts/go_function_fusion/diamond_valid.sh": "94f4bf6e2dc776daaf7a827240b4f3be3ba88e398a8711292dfaf178c5284a0f",
+    "scripts/go_function_fusion/freeze_finalists.py": "1292f0eae5910a8777b9d087be228ff5490e69fb5a3bdd0b0d86d3a1e9a1638a",
+    "scripts/go_function_fusion/gate_repro.py": "01b40aa5a9edaba8d669a060a3cd718e85e1800d45b9a22ce1bf7916c562ef51",
+    "scripts/go_function_fusion/make_pins.py": "3c07266cc1beae08b6a49ab64539ee4499512f2f0a2323768aadaa2c4dac3153",
+    "scripts/go_function_fusion/report.py": "7028becf9b15c055a2fd7d9352086858b1605febe7c1a5e4926a11959ba7408a",
+    "scripts/go_function_fusion/s2_grid_fusion.py": "67084f31ec9922a4429f8b6061a9c4ebbbeaef567356d8f8f5ba8cfe47e92fed",
+    "scripts/go_function_fusion/score_test.py": "fcd8418986f8ec4de0483c62f1c3ed7de0e2ba4bc6874e0b1684d79c7119e214",
+    "scripts/go_function_fusion/search_valid.py": "36fba3e454bec2d324be5940426aae4abe534561f61ea4d9faa4f7f5abdbe918",
+    "scripts/go_function_fusion/train_tp_base.py": "41a87f7486d259418f013d48978dac9398fcd011607a361e9e606186a4c101c1",
+    "scripts/go_function_fusion/verify_tp_bases.py": "7cc3e5a62a7a7bca8017cb920cd5d3336d61b59633fd4a5c5e73fc126f126d83"
+  }
+}

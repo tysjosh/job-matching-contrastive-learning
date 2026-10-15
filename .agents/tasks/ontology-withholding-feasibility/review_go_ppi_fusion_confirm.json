@@ -1,0 +1,13 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {"id": 1, "severity": "LOW", "confidence": "confirmed", "label": "Incomplete §0.3 disclosures in report.md", "detail": "analyze.DISCLOSURES has 5 strings; §0.3 items 8 and 10 (Mac dev smoke) are not printed although §0.3 says all are printed in report.md. Print all ten items (e.g. embed the pinned protocol's §0.3 text)."},
+    {"id": 2, "severity": "LOW", "confidence": "confirmed", "label": "Missing report counts", "detail": "§6.4 asks report.md for every near tie and the unmatched HuRI draw count; analyze.py scans near ties for cohort A only and never reports huri_manifest counts.unmatched_grade0_draws. Add both."},
+    {"id": 3, "severity": "LOW", "confidence": "likely", "label": "Study-bias tertiles cohort A only", "detail": "§4.5 n_PMID / STRING-degree tertiles ('cut points from the cohort's test anchors') are computed only for cohort A. Add Bclean or state A-only in the report. Descriptive."},
+    {"id": 4, "severity": "NIT", "confidence": "confirmed", "label": "TOST 'not equivalent' boundary", "detail": "tost_state uses >=/<= while §4.2 says 'entirely outside [−δ, +δ]'; use strict comparisons. Label text only, exact-boundary only."},
+    {"id": 5, "severity": "NIT", "confidence": "confirmed", "label": "Gate-2 pass not enforced by train/score", "detail": "train.py and score.py do not require a passing gate_reproduction*.json for the pins revision; ordering relies on the runbook (same as trials). Add a check."},
+    {"id": 6, "severity": "NIT", "confidence": "confirmed", "label": "Silent φ exceptions", "detail": "phi_array maps matcher exceptions to 0.0 (as epf); gate 2e's reference uses the same rule, so it cannot detect them. Count exceptions per file."},
+    {"id": 7, "severity": "NIT", "confidence": "confirmed", "label": "Zero-shot Bclean rng fallback", "detail": "With an incomplete cohort-B fold, Bclean/all_B zero-shot draws use default_rng([31415,2,0])/[31415,4,0] instead of the cohort's a* draws (§4.1). Descriptive only; disclose if it fires."}
+  ],
+  "reviewDoc": "/Users/olukotunjosh/Downloads/CDCL/.agents/tasks/ontology-withholding-feasibility/review_go_ppi_fusion_confirm.md"
+}
