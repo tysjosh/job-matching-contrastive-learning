@@ -383,6 +383,8 @@ def test_import_coverage(tmp_path):
     pin = tmp_path / "code_pin.json"
     pin.write_text(json.dumps({"files": {"go_function/train.py": sha256_file(ROOT / "go_function" / "train.py")}}))
     assert T.check_import_coverage("study", pin, [mine, "/elsewhere/x.py"])["n_modules"] == 1
+    # torch.classes / torch.ops report a bare relative __file__: not a repo module
+    assert T.check_import_coverage("study", pin, [mine, "_classes.py", "_ops.py"])["n_modules"] == 1
     pin.write_text(json.dumps({"files": {"go_function/train.py": "0" * 64}}))
     with pytest.raises(FatalError):
         T.check_import_coverage("study", pin, [mine])

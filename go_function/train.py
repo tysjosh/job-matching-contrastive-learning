@@ -349,7 +349,10 @@ def check_import_coverage(mode: str, code_pin_path: Optional[Path] = None,
     if module_files is None:
         module_files = [getattr(m, "__file__", None) for m in list(sys.modules.values())]
     venv = (ROOT / ".venv").resolve()
+    # only real files: torch registers pseudo-modules (torch.classes, torch.ops) whose
+    # __file__ is a bare relative name ("_classes.py"), which would resolve into ROOT
     inside = sorted({Path(f).resolve() for f in module_files if f
+                     and Path(f).is_absolute()
                      and Path(f).resolve().is_relative_to(ROOT)
                      and not Path(f).resolve().is_relative_to(venv)})
     bad = [repo_rel(p) for p in inside if _under(p, PROTECTED_IMPORTS)]
