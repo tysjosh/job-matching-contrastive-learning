@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Run a subset of the G7 pilots in parallel on this host, e.g.
 #   PILOTS="bp_interpro mf_esm2_650m" bash ~/gof_pilots.sh
+# STAGE=estar|lambda|text|all (default all) is passed to pilot.py --stage.
 # VERIFY=1 first runs the unit tests and the pin-verified rebuild (fresh host).
 # Each pilot continues its runs from resume.pt; re-running a finished pilot trains
 # nothing. When the pilots are split over two hosts, each host writes only its own
@@ -30,7 +31,7 @@ fi
 pids=()
 for P in $PILOTS; do
   A=${P%%_*}; F=${P#*_}
-  step "pilot_$P" $PY scripts/go_function/pilot.py --aspect "$A" --feature "$F" --device cuda &
+  step "pilot_${P}_${STAGE:-all}" $PY scripts/go_function/pilot.py --aspect "$A" --feature "$F" --stage "${STAGE:-all}" --device cuda &
   pids+=($!)
 done
 rc=0; for p in "${pids[@]}"; do wait "$p" || rc=1; done

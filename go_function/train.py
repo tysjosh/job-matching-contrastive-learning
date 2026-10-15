@@ -30,7 +30,8 @@ written atomically to ``resume.pt`` after an epoch once ``RESUME_EVERY_S`` secon
 (env ``GO_FUNCTION_RESUME_EVERY_S``, default 900; 0 = every epoch) have passed
 since the last save. ``run`` on an out dir that holds ``resume.pt`` (and no
 DONE.json, and no FAILED.json other than an interrupt) continues from it after
-checking that the spec, study.json and input hashes are unchanged; epochs.jsonl
+checking that the spec, study.json (except ``epochs_star``, which the G7
+pilots write while other runs train) and input hashes are unchanged; epochs.jsonl
 is cut back to the saved epoch and appended. The resumed trajectory is the
 uninterrupted one (asserted on CPU in test_train.py). ``resume.pt`` is deleted
 once DONE.json is written. Results never depend on when snapshots were taken.
@@ -544,8 +545,23 @@ def build_run_model(spec: RunSpec, study: Mapping[str, Any], data: RunData, devi
     return model.to(device)
 
 
+#: study.json fields a resume snapshot does not depend on. epochs_star is written by
+#: the G7 pilots while other runs train; a run's epoch count is its spec's `epochs`
+#: (study mode checks it equals E* at validation), which is in the identity.
+RESUME_IGNORED_STUDY_FIELDS = ("epochs_star",)
+
+
 def run_identity(spec: RunSpec, study: Mapping[str, Any], data: RunData) -> str:
-    """What a resume snapshot must match: the spec, study.json and the input hashes."""
+    """What a resume snapshot must match: the spec, study.json (without
+    RESUME_IGNORED_STUDY_FIELDS) and the input hashes."""
+    s = {k: v for k, v in study.items() if k not in RESUME_IGNORED_STUDY_FIELDS}
+    return sha256_bytes(canonical_json({"spec": spec.to_json(),
+                                        "study_sha256": sha256_bytes(canonical_json(s)),
+                                        "inputs": data.hashes}))
+
+
+def run_identity_v1(spec: RunSpec, study: Mapping[str, Any], data: RunData) -> str:
+    """Identity of snapshots written before 2026-10-15 (whole study.json hashed)."""
     return sha256_bytes(canonical_json({"spec": spec.to_json(),
                                         "study_sha256": sha256_bytes(canonical_json(study)),
                                         "inputs": data.hashes}))
@@ -581,19 +597,21 @@ def save_resume(path: Path, identity: str, next_epoch: int, model, opt, sched, g
     tmp.replace(path)
 
 
-def load_resume(path: Path, identity: str) -> Dict[str, Any]:
+def load_resume(path: Path, identity: str, legacy: Sequence[str] = ()) -> Dict[str, Any]:
+    """``legacy``: older identities of the same run that are also accepted."""
     import torch
     # CPU first: RNG states must be CPU tensors; load_state_dict moves weights and
     # Adam moments to the parameters' device
     st = torch.load(path, map_location="cpu", weights_only=False)
-    if st.get("schema") != 1 or st.get("identity") != identity:
+    if st.get("schema") != 1 or st.get("identity") not in (identity, *legacy):
         raise FatalError(f"{path.name} belongs to a different spec, study.json or input set; "
                          "move the run dir aside to start the run again")
     return st
 
 
 def train(spec: RunSpec, study: Mapping[str, Any], data: RunData, device: str, out_dir: Path,
-          log, identity: Optional[str] = None) -> Tuple[Any, Dict[str, Any]]:
+          log, identity: Optional[str] = None,
+          legacy_identities: Sequence[str] = ()) -> Tuple[Any, Dict[str, Any]]:
     """Train; returns (model with the selected weights, summary). Writes
     ``epochs.jsonl`` line by line. A non-finite loss or gradient raises. With an
     ``identity``, the training state is snapshotted to ``resume.pt`` and an existing
@@ -625,7 +643,7 @@ def train(spec: RunSpec, study: Mapping[str, Any], data: RunData, device: str, o
     epochs_path = out_dir / "epochs.jsonl"
     lines: List[str] = []
     if identity is not None and resume_path.exists():
-        st = load_resume(resume_path, identity)
+        st = load_resume(resume_path, identity, legacy_identities)
         model.load_state_dict(st["model"])
         opt.load_state_dict(st["opt"])
         sched.load_state_dict(st["sched"])
@@ -946,7 +964,8 @@ def run(spec_raw: Mapping[str, Any], device: str, *, log,
         stage = "train"
         t1 = time.time()
         model, summary = train(spec, study, data, device, out_dir, log,
-                               identity=run_identity(spec, study, data))
+                               identity=run_identity(spec, study, data),
+                               legacy_identities=(run_identity_v1(spec, study, data),))
         walls["train"] = round(time.time() - t1, 3)
         stage = "eval"
         t2 = time.time()

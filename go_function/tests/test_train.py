@@ -226,6 +226,41 @@ def test_resume_refuses_a_changed_spec_and_real_failures(tmp_path, monkeypatch):
         _run(tmp_path, "r", spec=_spec(epochs=3))
 
 
+def test_resume_ignores_epochs_star_written_meanwhile(tmp_path, monkeypatch):
+    """A pilot writes another key's E* into study.json while this run is snapshotted:
+    the run still resumes (2026-10-15, BP InterPro refused on a new host). Any other
+    study.json change is still refused. Pre-fix snapshots (whole study.json hashed)
+    resume when study.json is unchanged."""
+    monkeypatch.setattr(T, "RESUME_EVERY_S", 0.0)
+    _interrupt_at(monkeypatch, 2)
+    with pytest.raises(KeyboardInterrupt):
+        _run(tmp_path, "r", spec=_spec(epochs=3))
+    monkeypatch.undo()
+    code, out = _run(tmp_path, "r", spec=_spec(epochs=3),
+                     study=_study(epochs_star={"bp_interpro": 2, "mf_esm2_650m": 36}))
+    assert code == EXIT_OK
+    assert json.loads((out / "run.json").read_text())["train"]["resumed_at_epochs"] == [1]
+
+    monkeypatch.setattr(T, "RESUME_EVERY_S", 0.0)
+    _interrupt_at(monkeypatch, 2)
+    with pytest.raises(KeyboardInterrupt):
+        _run(tmp_path, "d", spec=_spec(epochs=3))
+    monkeypatch.undo()
+    code, out = _run(tmp_path, "d", spec=_spec(epochs=3), study=_study(margin=0.2))
+    assert code == EXIT_FATAL and "different spec" in json.loads(
+        (out / "FAILED.json").read_text())["message"]
+
+    # a snapshot carrying the v1 identity resumes under unchanged study.json
+    monkeypatch.setattr(T, "RESUME_EVERY_S", 0.0)
+    monkeypatch.setattr(T, "run_identity", T.run_identity_v1)
+    _interrupt_at(monkeypatch, 2)
+    with pytest.raises(KeyboardInterrupt):
+        _run(tmp_path, "v1", spec=_spec(epochs=3))
+    monkeypatch.undo()
+    code, out = _run(tmp_path, "v1", spec=_spec(epochs=3))
+    assert code == EXIT_OK
+
+
 def test_refuses_non_empty_out_dir(tmp_path):
     (tmp_path / "r").mkdir()
     (tmp_path / "r" / "x").write_text("")
