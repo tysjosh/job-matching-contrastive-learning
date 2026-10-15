@@ -3,6 +3,7 @@
 # restore results/ and preprocess/ from the private HF dataset and start the pipeline.
 set -euo pipefail
 LOG=~/gof_logs; mkdir -p $LOG
+if [ "${RESTORE_ONLY:-0}" = 1 ]; then cd ~/CDCL; PY=.venv/bin/python; else
 curl -LsSf https://astral.sh/uv/0.8.17/install.sh | env UV_NO_MODIFY_PATH=1 sh > $LOG/uv.log 2>&1
 ~/.local/bin/uv python install 3.13.5 >> $LOG/uv.log 2>&1
 cd ~; [ -d CDCL ] || GIT_TERMINAL_PROMPT=0 git clone -q --branch orca-experiments-and-runner https://github.com/tysjosh/job-matching-contrastive-learning.git CDCL
@@ -19,8 +20,10 @@ $PY scripts/go_function/download_dgz.py > $LOG/download_dgz.log 2>&1
 $PY scripts/go_function/download_dgz_gate.py --only all > $LOG/download_gate.log 2>&1
 $PY scripts/go_function/pin_inputs.py --gate > $LOG/pin_inputs.log 2>&1
 $PY -c "import torch; x=torch.randn(2048,2048,device='cuda'); print('cuda ok', torch.cuda.get_device_name(0))"
+fi
 echo "waiting for the Hugging Face login"
-until .venv/bin/hf auth whoami > /dev/null 2>&1; do sleep 15; done
+# `hf auth whoami` exits 0 even when not logged in: ask the API instead
+until $PY -c "from huggingface_hub import HfApi; HfApi().whoami()" > /dev/null 2>&1; do sleep 15; done
 echo "restoring from Hugging Face"
 $PY - <<'PY'
 from huggingface_hub import snapshot_download
