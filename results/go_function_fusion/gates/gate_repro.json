@@ -2,6 +2,128 @@
   "gate": "G-R",
   "schema": 1,
   "sections": {
+    "a/bp": {
+      "comparison": [
+        {
+          "metric": "fmax",
+          "model": "mlp",
+          "ok": true,
+          "ours": 0.4595709602299281,
+          "ref": 0.4595709602299281
+        },
+        {
+          "metric": "smin",
+          "model": "mlp",
+          "ok": true,
+          "ours": 43.987155295639916,
+          "ref": 43.987155295639916
+        },
+        {
+          "metric": "aupr",
+          "model": "mlp",
+          "ok": true,
+          "ours": 0.43542795557523944,
+          "ref": 0.43542795557523944
+        },
+        {
+          "metric": "auc",
+          "model": "mlp",
+          "ok": true,
+          "ours": 0.7934167945852425,
+          "ref": 0.7934167945852425
+        },
+        {
+          "metric": "fmax",
+          "model": "deepgozero",
+          "ok": true,
+          "ours": 0.4514266368913672,
+          "ref": 0.4514266368913672
+        },
+        {
+          "metric": "smin",
+          "model": "deepgozero",
+          "ok": true,
+          "ours": 44.62141764213147,
+          "ref": 44.62141764213147
+        },
+        {
+          "metric": "aupr",
+          "model": "deepgozero",
+          "ok": true,
+          "ours": 0.4218324419873865,
+          "ref": 0.4218324419873865
+        },
+        {
+          "metric": "auc",
+          "model": "deepgozero",
+          "ok": true,
+          "ours": 0.7982490121317859,
+          "ref": 0.7982490121317859
+        }
+      ],
+      "passed": true
+    },
+    "a/mf": {
+      "comparison": [
+        {
+          "metric": "fmax",
+          "model": "mlp",
+          "ok": true,
+          "ours": 0.6565885742427047,
+          "ref": 0.6565885742427047
+        },
+        {
+          "metric": "smin",
+          "model": "mlp",
+          "ok": true,
+          "ours": 9.857341475954023,
+          "ref": 9.857341475954023
+        },
+        {
+          "metric": "aupr",
+          "model": "mlp",
+          "ok": true,
+          "ours": 0.6551516227191018,
+          "ref": 0.6551516227191018
+        },
+        {
+          "metric": "auc",
+          "model": "mlp",
+          "ok": true,
+          "ours": 0.8818859426473812,
+          "ref": 0.8818859426473812
+        },
+        {
+          "metric": "fmax",
+          "model": "deepgozero",
+          "ok": true,
+          "ours": 0.6567866648071304,
+          "ref": 0.6567866648071304
+        },
+        {
+          "metric": "smin",
+          "model": "deepgozero",
+          "ok": true,
+          "ours": 9.807924695910511,
+          "ref": 9.807924695910511
+        },
+        {
+          "metric": "aupr",
+          "model": "deepgozero",
+          "ok": true,
+          "ours": 0.6568413390206693,
+          "ref": 0.6568413390206693
+        },
+        {
+          "metric": "auc",
+          "model": "deepgozero",
+          "ok": true,
+          "ours": 0.9027632338072088,
+          "ref": 0.9027632338072088
+        }
+      ],
+      "passed": true
+    },
     "b/bp/deepgozero": {
       "passed": true,
       "struct": {

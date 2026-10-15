@@ -1,34 +1,96 @@
 {
-  "schema": 1,
-  "note": "Fusion-study inputs beyond config/go_function/input_hashes.json (DGZ release; reused and verified with go_function.pins.verify_inputs). Paths are repo-relative or logical names; no absolute path is recorded. The diamond_valid slots are filled at G-D on the remote by scripts/go_function_fusion/make_pins.py.",
-  "reused": "config/go_function/input_hashes.json",
-  "files": {
-    "swissprot_exp.sim": {
-      "sha256": "a143b3896954a4a794d4715205a5db09b6d7ee391d41cea6bd626194576c3101",
-      "size": 31161064,
-      "role": "Mac exploratory H_sim only (protocol 4.3); never enters a finalist, a confirmatory contrast or S2",
-      "source": "DGZ release on bio2vec (swissprot_exp.sim); scratch copy passed with --sim"
-    }
-  },
   "diamond_valid": {
-    "status": "pending G-D (remote)",
-    "diamond_version": null,
     "diamond_binary_sha256": null,
-    "train_fasta": {
-      "path": "results/go_function_fusion/diamond/<aspect>/train_data.fa",
+    "diamond_version": null,
+    "status": "filled at G-D (see diamond_valid_by_aspect)",
+    "test_res": {
+      "path": "results/go_function_fusion/diamond/<aspect>/test_diamond_trainonly.res",
       "sha256": null
     },
     "train_db": {
       "path": "results/go_function_fusion/diamond/<aspect>/train_only.dmnd",
       "sha256": null
     },
+    "train_fasta": {
+      "path": "results/go_function_fusion/diamond/<aspect>/train_data.fa",
+      "sha256": null
+    },
     "valid_res": {
       "path": "results/go_function_fusion/diamond/<aspect>/valid_diamond_trainonly.res",
       "sha256": null
-    },
-    "test_res": {
-      "path": "results/go_function_fusion/diamond/<aspect>/test_diamond_trainonly.res",
-      "sha256": null
     }
-  }
+  },
+  "diamond_valid_by_aspect": {
+    "bp": {
+      "checks": {
+        "test": {
+          "n_hits": 58442,
+          "n_queries": 5444
+        },
+        "valid": {
+          "n_hits": 57624,
+          "n_queries": 5552
+        }
+      },
+      "diamond_binary_sha256": "d3d72578fa97e87cc0846a06d2f9d7dc481a2106265f9546bc91512972fcd1f1",
+      "diamond_version": "diamond version 2.2.8",
+      "test_res": {
+        "path": "results/go_function_fusion/diamond/bp/test_diamond_trainonly.res",
+        "sha256": "8d97a371ea0487accda5208a6ec1edf870c0948333fa0e71d111e5b421b78f1f"
+      },
+      "train_db": {
+        "path": "results/go_function_fusion/diamond/bp/train_only.dmnd",
+        "sha256": "17e567b6c60cc53b960620ef7f52801a123461df33d9684459bd6a45522a82dd"
+      },
+      "train_fasta": {
+        "path": "results/go_function_fusion/diamond/bp/train_data.fa",
+        "sha256": "a5e0888c771207e122ae6384c79798ba8a13938fb98c02d686d311035b3c2fd0"
+      },
+      "valid_res": {
+        "path": "results/go_function_fusion/diamond/bp/valid_diamond_trainonly.res",
+        "sha256": "9ee5aa44e518d9d5c446664d5e0def33709a115484d655e31937c8c052a985b5"
+      }
+    },
+    "mf": {
+      "checks": {
+        "test": {
+          "n_hits": 48235,
+          "n_queries": 4712
+        },
+        "valid": {
+          "n_hits": 36582,
+          "n_queries": 3851
+        }
+      },
+      "diamond_binary_sha256": "d3d72578fa97e87cc0846a06d2f9d7dc481a2106265f9546bc91512972fcd1f1",
+      "diamond_version": "diamond version 2.2.8",
+      "test_res": {
+        "path": "results/go_function_fusion/diamond/mf/test_diamond_trainonly.res",
+        "sha256": "d41ce8ceb3068519b8cbcead847c962efef57a74d6ee2a2decf51fffbce2f812"
+      },
+      "train_db": {
+        "path": "results/go_function_fusion/diamond/mf/train_only.dmnd",
+        "sha256": "59d3c2af6a9ba44fa42c82ddfcfef19d83b2e1e54b24693fa46a99a5656afe63"
+      },
+      "train_fasta": {
+        "path": "results/go_function_fusion/diamond/mf/train_data.fa",
+        "sha256": "11bd83a6968683624cd518dc2e421aa41a95c012cd5965134b1544ec99aa8fa0"
+      },
+      "valid_res": {
+        "path": "results/go_function_fusion/diamond/mf/valid_diamond_trainonly.res",
+        "sha256": "de49cd9778f1449505660c7ea4f706c78a68784d55fde5f8f9009547cf236dd4"
+      }
+    }
+  },
+  "files": {
+    "swissprot_exp.sim": {
+      "role": "Mac exploratory H_sim only (protocol 4.3); never enters a finalist, a confirmatory contrast or S2",
+      "sha256": "a143b3896954a4a794d4715205a5db09b6d7ee391d41cea6bd626194576c3101",
+      "size": 31161064,
+      "source": "DGZ release on bio2vec (swissprot_exp.sim); scratch copy passed with --sim"
+    }
+  },
+  "note": "Fusion-study inputs beyond config/go_function/input_hashes.json (DGZ release; reused and verified with go_function.pins.verify_inputs). Paths are repo-relative or logical names; no absolute path is recorded. The diamond_valid slots are filled at G-D on the remote by scripts/go_function_fusion/make_pins.py.",
+  "reused": "config/go_function/input_hashes.json",
+  "schema": 1
 }
