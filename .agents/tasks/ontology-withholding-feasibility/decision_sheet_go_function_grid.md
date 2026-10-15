@@ -1,5 +1,7 @@
 # Decision sheet: GO function grid size and the E* rule (2026-10-15)
 
+**Decision (user, 2026-10-15): Core A, shared E* — recorded as protocol amendment A7.**
+
 For the user and supervisor, before G8. Nothing here changes the protocol; any option other than "full grid, shared E*" needs a §14 amendment (A7) before G8. No grid run exists, so an amendment is still allowed.
 
 ## E* (G7 E* stage, complete: 24 runs, validation BCE only, no test data)

@@ -10,8 +10,11 @@ ANALYSIS_SEED = 20261011
 # ---------------------------------------------------------------- withholding (§4.10)
 RETENTION_SEED = 20261011
 RETENTION_SEED_2 = 20261012
-SEEDS = (13, 21, 42, 87, 123)
-KS = (0, 1, 5, 10, 25, "all")
+#: study seeds and retention levels of the grid (protocol A7, Core A; preregistered
+#: v4 had seeds 13, 21, 42, 87, 123 and k 0, 1, 5, 10, 25, all). Conditions for
+#: k = 10 and 25 still exist (G6) and remain valid spec values (train.SPEC_KS).
+SEEDS = (13, 21, 42)
+KS = (0, 1, 5, "all")
 
 # ---------------------------------------------------------------- GO
 ASPECTS = ("bp", "mf")

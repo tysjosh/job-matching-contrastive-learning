@@ -81,7 +81,7 @@ def test_planted_effect_recovered_and_null_is_practically_null():
     assert c2["ci_low"] <= 0.05 <= c2["ci_high"] and c2["S1"]["ci_low"] <= 0.05 <= c2["S1"]["ci_high"]
     assert c2["classification"] == "supported"
     assert c1["classification"] == "practically null"
-    assert c1["n_defined_cells"] == 48 * 5
+    assert c1["n_defined_cells"] == 48 * len(SEEDS)
 
 
 def test_delta_small_needs_all_three_ks_and_vbest_tie_rule():
@@ -92,7 +92,9 @@ def test_delta_small_needs_all_three_ks_and_vbest_tie_rule():
         ST.v_auc(at, ("esm2_650m", "V1", "TP", "W2", 1), k),
         ST.v_auc(at, ("esm2_650m", "V0", "TP", "W2", 1), k))))
     assert np.isnan(X).all()                       # k = 5 missing -> undefined
-    assert ST.choose_vbest({"V1": 0.02, "V2": 0.03, "V3": 0.03, "V4": None}) == "V2"
+    # A7: Vbest among V3..V6; a tie keeps the earlier-listed arm; V1/V2 are not candidates
+    assert ST.choose_vbest({"V3": 0.02, "V4": 0.03, "V5": 0.03, "V6": None}) == "V4"
+    assert ST.choose_vbest({"V1": 0.09, "V2": 0.09, "V3": 0.01}) == "V3"
     assert ST.choose_vbest({}) is None
 
 
@@ -113,7 +115,7 @@ def test_c3_decomposition_identity_and_both_c3_values():
                                    ("V4", "DGZ", "W2"), ("V4", "TP", "W2")], val))
     d = ST.decomposition(at, units, "esm2_650m", B, 20261011)
     assert d["identity_max_abs_residual"] <= 1e-12
-    assert d["n_common_cells"] == 48 * 5 - 1 and d["n_own_cells"] == 48 * 5
+    assert d["n_common_cells"] == 48 * len(SEEDS) - 1 and d["n_own_cells"] == 48 * len(SEEDS)
     assert d["cell_sets_differ"] is True
     parts = sum(d[k]["estimate"] for k in ("C3_leak", "C3_col", "C3_reg"))
     assert abs(parts - d["C3_common"]["estimate"]) < 1e-12
@@ -148,7 +150,7 @@ def test_channel_reads_match_hand_aucs_and_empty_sets_are_counted():
     cells = {(tt, s): reads[tt] for tt in (t, t2) for s in SEEDS}
     est = ST.channel_estimates(cells, units, B, 20261011)
     assert est["C3_leak_X"]["n_targets_empty"] == 1 and est["C3_leak_X"]["n_targets_nonempty"] == 47
-    assert est["C3_leak_X"]["n_defined_cells"] == 5               # only t2 has an X read
+    assert est["C3_leak_X"]["n_defined_cells"] == len(SEEDS)      # only t2 has an X read
     assert abs(est["C3_leak_desc"]["estimate"] - np.mean([reads[t]["Desc"], reads[t2]["Desc"]])) < 1e-12
     # |Desc| strata: target 0 has 8 columns (> 5), target 1 has 3 (<= 5)
     assert abs(est["C3_leak_desc_desc_gt_5"]["estimate"] - reads[t]["Desc"]) < 1e-12
@@ -258,4 +260,4 @@ def test_collateral_harm_and_missing_share():
     assert c["classification"] == "harm"
     at = ST.AucTable([])
     m = ST.missing_share(at, units, "esm2_650m")
-    assert m["needed"] == 48 * 6 * 5 * 8 and m["share_missing"] == 1.0
+    assert m["needed"] == 48 * len(ST.ALL_KS) * len(SEEDS) * len(ST.MAIN_ARMS) and m["share_missing"] == 1.0

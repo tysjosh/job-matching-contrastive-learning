@@ -129,7 +129,7 @@ for A in bp mf; do for F in esm2_650m interpro; do
 done; done
 ```
 
-This writes 2,522 + 260 = 2,782 BP and 2,897 + 260 = 3,157 MF specs under `results/go_function/specs/<aspect>/<feature>/`, asserts the per-block counts and runs the single-factor audit (exit 2 on any undeclared difference). Without E* it exits 4.
+Under protocol A7 (Core A) this writes 522 + 2 = 524 BP and 1 + 2 = 3 MF specs (the preregistered v4 grid was 2,782 BP and 3,157 MF) under `results/go_function/specs/<aspect>/<feature>/`, asserts the per-block counts and runs the single-factor audit (exit 2 on any undeclared difference). Without E* it exits 4.
 
 After the D19 sign-off and the user's commit (study code plus `study.json`):
 

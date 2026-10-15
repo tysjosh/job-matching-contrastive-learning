@@ -32,21 +32,31 @@ def _study(**star):
     return s
 
 
-def test_block_counts_total_2782_bp_and_3157_mf():
+def test_block_counts_core_a_total_524_bp_and_3_mf():
+    """Protocol A7 (Core A): BP ESM-2 main block (6 arms x (all + 8 packs x k 0/1/5)
+    x 3 seeds = 450) + the three V4 C3 cells at k = 0 (3 x 24), and the fusion study's
+    Tier B `all` / seed-13 bases as ordinary cells."""
     s = _study()
-    per = {}
+    per, names = {}, {}
     for a in ("bp", "mf"):
         for f in ("esm2_650m", "interpro"):
             items, counts = M.build_specs(s, a, f)
             assert all(c["n"] == c["expected"] for c in counts.values())
             per[(a, f)] = len(items)
-    assert per[("bp", "esm2_650m")] + per[("bp", "interpro")] == 2782
-    assert per[("mf", "esm2_650m")] + per[("mf", "interpro")] == 3157
-    assert per[("bp", "interpro")] == per[("mf", "interpro")] == 260
-    items, counts = M.build_specs(s, "mf", "esm2_650m")
-    assert counts["mf_noipi"] == {"n": 375, "expected": 375}
-    assert all(sp["epochs"] == 11 for _, _, sp in items)
-    assert len({n for _, n, _ in items}) == len(items)
+            names[(a, f)] = {n for _, n, _ in items}
+            assert len(names[(a, f)]) == len(items)
+    assert per == {("bp", "esm2_650m"): 522, ("bp", "interpro"): 2,
+                   ("mf", "esm2_650m"): 1, ("mf", "interpro"): 2}
+    items, counts = M.build_specs(s, "bp", "esm2_650m")
+    assert counts["main"] == {"n": 450, "expected": 450}
+    assert {sp["variant"] for _, _, sp in items} == {"V0", "V3", "V3c", "V4", "V5", "V6"}
+    assert {sp["k"] for _, _, sp in items} == {0, 1, 5, "all"}
+    assert {sp["seed"] for _, _, sp in items} == {13, 21, 42}
+    assert all(sp["epochs"] == 12 for _, _, sp in items)
+    tier_b = "__TP__W2__all__kall__s13"
+    assert f"V0{tier_b}" in names[("bp", "esm2_650m")]
+    assert names[("bp", "interpro")] == names[("mf", "interpro")] == {f"V0{tier_b}", f"V4{tier_b}"}
+    assert names[("mf", "esm2_650m")] == {f"V0{tier_b}"}
 
 
 def test_refused_without_estar(tmp_path):
@@ -60,10 +70,10 @@ def test_refused_without_estar(tmp_path):
 
 
 def test_audit_passes_on_the_grid_and_trips_on_a_planted_difference():
-    items, _ = M.build_specs(_study(), "bp", "interpro")
+    items, _ = M.build_specs(_study(), "bp", "esm2_650m")
     specs = [dict(s) for _, _, s in items]
     rows = {r["contrast"]: r for r in M.audit(specs)}
-    assert rows["C3 (DGZ/WDGZrel - TP/W2)"]["n_pairs"] == 40
+    assert rows["C3 (DGZ/WDGZrel - TP/W2)"]["n_pairs"] == 24
     assert rows["C3 (DGZ/WDGZrel - TP/W2)"]["declared"] == ["regime", "rule"]
     # planted: one V0 spec gets a different learning rate
     bad = [dict(s) for s in specs]
@@ -97,12 +107,12 @@ def test_lambda_difference_implied_by_variant_is_not_a_second_factor():
 def test_materialize_writes_or_verifies_and_is_repo_relative(tmp_path):
     s = _study()
     r1 = M.materialize(s, "mf", "interpro", tmp_path, LOG)
-    assert r1["n_specs"] == 260 and r1["status"]["written"] == 260
+    assert r1["n_specs"] == 2 and r1["status"]["written"] == 2
     r2 = M.materialize(s, "mf", "interpro", tmp_path, LOG)
-    assert r2["status"]["unchanged"] == 260 and r2["index"] == "unchanged"
+    assert r2["status"]["unchanged"] == 2 and r2["index"] == "unchanged"
     assert r1["spec_set_sha256"] == r2["spec_set_sha256"]
     idx = json.loads((tmp_path / "mf" / "interpro" / "index.json").read_text())
-    assert idx["blocks"]["interpro_replicate"]["n"] == 180
+    assert idx["blocks"]["s1_tier_b_interpro"]["n"] == 2
     for p in (tmp_path / "mf" / "interpro").iterdir():
         txt = p.read_text()
         assert "/Users/" not in txt and str(ROOT) not in txt

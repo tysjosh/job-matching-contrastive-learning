@@ -33,26 +33,26 @@ def _index(root: Path, aspect: str, feature: str, names_seeds):
 
 
 def _grid(tmp_path, monkeypatch):
-    """A fake materialised grid of 4 x 10 specs inside the repo-relative namespace."""
+    """A fake materialised grid of 4 x 6 specs inside the repo-relative namespace."""
     root = tmp_path / "specs"
     for a in ("bp", "mf"):
         for f in ("esm2_650m", "interpro"):
             _index(root, a, f, [(f"V{i % 2}__TP__W2__p01__k0__s{s}", s)
-                                for s in (13, 21, 42, 87, 123) for i in range(2)])
+                                for s in (13, 21, 42) for i in range(2)])
     monkeypatch.setattr(S, "repo_rel", lambda p: Path(p).relative_to(tmp_path).as_posix())
     return S.load_grid(root)
 
 
 def test_grid_is_seed_major_and_shards_are_disjoint_and_exhaustive(tmp_path, monkeypatch):
     items = _grid(tmp_path, monkeypatch)
-    assert len(items) == 40
+    assert len(items) == 24
     seeds = [r["seed"] for r in items]
-    assert seeds == sorted(seeds, key=(13, 21, 42, 87, 123).index)
-    assert [r["index"] for r in items] == list(range(40))
+    assert seeds == sorted(seeds, key=(13, 21, 42).index)
+    assert [r["index"] for r in items] == list(range(24))
     for n in (1, 3, 7):
         parts = [S.select(items, shard=(i, n)) for i in range(1, n + 1)]
         idx = [r["index"] for p in parts for r in p]
-        assert sorted(idx) == list(range(40)) and len(idx) == len(set(idx))
+        assert sorted(idx) == list(range(24)) and len(idx) == len(set(idx))
     # the shard is over the full grid, independent of filters
     a = {r["index"] for r in S.select(items, shard=(2, 3), aspect="mf")}
     assert a == {r["index"] for r in S.select(items, shard=(2, 3)) if r["aspect"] == "mf"}

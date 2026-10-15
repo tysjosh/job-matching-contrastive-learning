@@ -29,9 +29,11 @@ from go_function.constants import ALPHA, FLOOR, SEEDS, UNSTABLE_SHARE
 from go_function.runtime import FatalError
 
 SMALL_KS = (0, 1, 5)
-ALL_KS = (0, 1, 5, 10, 25, "all")
-ARMS_BEST = ("V1", "V2", "V3", "V4", "V5", "V6")
-MAIN_ARMS = ("V0", "V1", "V2", "V3", "V3c", "V4", "V5", "V6")
+#: protocol A7 (Core A): the grid's retention levels and main-block arms. Vbest (D11)
+#: is chosen among the A7 arms {V3, V4, V5, V6}; V1/V2 (the ladder) are descoped.
+ALL_KS = (0, 1, 5, "all")
+ARMS_BEST = ("V3", "V4", "V5", "V6")
+MAIN_ARMS = ("V0", "V3", "V3c", "V4", "V5", "V6")
 IDENTITY_TOL = 1e-12
 DESC_SMALL = 5
 

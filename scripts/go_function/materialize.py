@@ -9,8 +9,8 @@ results/go_function/specs/<aspect>/<feature>/<run_name>.json and an
 audit table, the spec-set sha256). Specs are write-or-verify: a re-run is
 byte-identical ("unchanged"); a different existing spec is fatal.
 
-Block counts are asserted per block; over both features they total BP 2,782 and
-MF 3,157 runs. The single-factor audit pairs the specs of every preregistered
+Block counts are asserted per block; over both features they total BP 524 and
+MF 3 runs (protocol A7, Core A; preregistered v4: BP 2,782 and MF 3,157). The single-factor audit pairs the specs of every preregistered
 contrast and descriptive component and requires that they differ in exactly the
 declared fields (out_dir always differs; lambda_el differs only as implied by
 the variant, null for V0/V5 and study lambda for EL arms). Any other difference
@@ -45,10 +45,8 @@ FEATURES = ("esm2_650m", "interpro")
 EL_ARMS = ("V1", "V2", "V3", "V3c", "V4", "V6")
 PACKS = tuple(f"p{i:02d}" for i in range(1, 9))
 ALL = [(None, "all")]
-K_ALL5 = [(p, k) for p in PACKS for k in (0, 1, 5, 10, 25)]
 K015 = [(p, k) for p in PACKS for k in (0, 1, 5)]
 K0 = [(p, 0) for p in PACKS]
-K15 = [(p, k) for p in PACKS for k in (1, 5)]
 
 
 class Block:
@@ -67,25 +65,28 @@ class Block:
                         yield v, regime, pack, k, s
 
 
-#: protocol §6.2 (order = materialisation order within a feature)
+#: protocol §6.2 as amended by A7 (Core A; order = materialisation order within a
+#: feature; ``expected`` is per aspect). BP, ESM-2: the main block on k 0, 1, 5 and
+#: ``all`` and the three V4 cells of C3 at k = 0. The s1_* blocks are the GO function
+#: fusion study's Tier B bases (`all`, seed 13; fusion protocol §4.2), kept so that
+#: they are ordinary grid cells (source a); BP V0-ESM is already in the main block.
+#: Descoped by A7: V1/V2, k 10/25, W1, re-draw, V0 under DGZ/W2, the InterPro
+#: replicate, MF (except the s1_* cells) and the MF noIPI block.
 BLOCKS = (
-    Block("main", "esm2_650m", ("V0", "V1", "V2", "V3", "V3c", "V4", "V5", "V6"), ("TP",), "W2",
-          ALL + K_ALL5, expected=1640),
-    Block("propagation_control", "esm2_650m", ("V0", "V4"), ("DGZ",), "W2", ALL + K_ALL5,
-          expected=410),
-    Block("W1", "esm2_650m", ("V0", "V4", "V5"), ("TP",), "W1", K015, expected=360),
-    Block("dgz_protocol", "esm2_650m", ("V4",), ("DGZ",), "WDGZrel", K0, expected=40),
-    Block("c3_decomposition", "esm2_650m", ("V4",), ("DGZ",), "W2drop", K0, expected=40),
-    Block("interpro_replicate", "interpro", ("V0", "V4"), ("TP", "DGZ"), "W2", ALL + K0,
-          expected=180),
-    Block("interpro_dgz_protocol", "interpro", ("V4",), ("DGZ",), "WDGZrel", K0, expected=40),
-    Block("interpro_c3_decomposition", "interpro", ("V4",), ("DGZ",), "W2drop", K0, expected=40),
-    Block("redraw", "esm2_650m", ("V0", "V4"), ("TP",), "W2", K15, seeds=(13,), draw=2,
-          expected=32),
-    Block("mf_noipi", "esm2_650m", ("V0", "V4", "V5"), ("TPnoIPI",), "W2", ALL + K015,
-          aspects=("mf",), expected=375),
+    Block("main", "esm2_650m", ("V0", "V3", "V3c", "V4", "V5", "V6"), ("TP",), "W2",
+          ALL + K015, aspects=("bp",), expected=450),
+    Block("propagation_control", "esm2_650m", ("V4",), ("DGZ",), "W2", K0, aspects=("bp",),
+          expected=24),
+    Block("dgz_protocol", "esm2_650m", ("V4",), ("DGZ",), "WDGZrel", K0, aspects=("bp",),
+          expected=24),
+    Block("c3_decomposition", "esm2_650m", ("V4",), ("DGZ",), "W2drop", K0, aspects=("bp",),
+          expected=24),
+    Block("s1_tier_b_interpro", "interpro", ("V0", "V4"), ("TP",), "W2", ALL, seeds=(13,),
+          expected=2),
+    Block("s1_tier_b_esm_mf", "esm2_650m", ("V0",), ("TP",), "W2", ALL, seeds=(13,),
+          aspects=("mf",), expected=1),
 )
-TOTALS = {"bp": 2782, "mf": 3157}
+TOTALS = {"bp": 524, "mf": 3}
 
 
 def run_name(variant, regime, rule, pack, k, seed, draw=1) -> str:
@@ -159,7 +160,8 @@ Pred = Callable[[Mapping[str, Any]], bool]
 AUDIT: Tuple[Tuple[str, Pred, Dict[str, Any], Set[str]], ...] = (
     ("C1 (V3 - V3c)", lambda s: s["variant"] == "V3", {"variant": "V3c"}, {"variant"}),
     ("C2/C4/C6/C7/ladder (X - V0)",
-     lambda s: s["variant"] in ("V1", "V2", "V3", "V4", "V5", "V6") and s["rule"] in ("W2", "W1"),
+     lambda s: s["variant"] in ("V1", "V2", "V3", "V4", "V5", "V6") and s["rule"] in ("W2", "W1")
+     and s["regime"] != "DGZ",           # A7: V0 under DGZ/W2 is descoped (C3 needs V4 only)
      {"variant": "V0"}, {"variant"}),
     ("C5 (V6 - V5)", lambda s: s["variant"] == "V6", {"variant": "V5"}, {"variant"}),
     ("C3 (DGZ/WDGZrel - TP/W2)", lambda s: s["rule"] == "WDGZrel",

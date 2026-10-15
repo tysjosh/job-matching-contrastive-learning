@@ -363,9 +363,11 @@ def test_study_json_values():
     s = T.load_study()
     assert (s["batch_size"], s["lr"], s["milestones"], s["gamma"], s["dropout"], s["dim"],
             s["margin"], s["lambda_el"]) == (37, 5e-4, [5, 20], 0.1, 0.1, 1024, 0.1, 1.0)
-    assert s["seeds"] == [13, 21, 42, 87, 123] and s["ks"] == [0, 1, 5, 10, 25, "all"]
+    assert s["seeds"] == [13, 21, 42] and s["ks"] == [0, 1, 5, "all"]      # protocol A7
     assert s["retention_seeds"] == {"draw1": 20261011, "draw2": 20261012}
-    assert s["analysis_seed"] == 20261011 and s["epochs_star"] == {}
+    assert s["analysis_seed"] == 20261011
+    assert s["epochs_star"] == {"bp_esm2_650m": 32, "bp_interpro": 11, "mf_esm2_650m": 36,
+                                "mf_interpro": 33}                       # G7 E* stage
 
 
 # ------------------------------------------------------------------ code pin (§13.1)

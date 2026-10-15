@@ -105,7 +105,7 @@ RUN_PY = "scripts/go_function/run.py"
 SMOKE_INTERPRO = {"epochs": 2, "max_train_batches": 40}
 PROJECTION_LIMIT_DAYS = 10.0
 PREFLIGHT_STOP = 3          # consecutive runs failed at stage preflight -> stop the invocation
-GRID_RUNS = 2782 + 3157
+GRID_RUNS = 524 + 3          # materialize.TOTALS (protocol A7, Core A)
 
 log = setup_logging("sweep")
 
