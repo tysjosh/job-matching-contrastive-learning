@@ -26,8 +26,10 @@ $PY - <<'PY'
 from huggingface_hub import snapshot_download
 snapshot_download("olukotunjosh/cdcl-go-function-results", repo_type="dataset", local_dir=".",
     allow_patterns=["preprocess/go_function/**", "results/go_function/**"],
-    ignore_patterns=["*.CLAIM", "*.tmp", "results/go_function/gates/runs/*_V0_s42/resume.pt"])
+    ignore_patterns=["*.CLAIM", "*.tmp"])
 PY
 rm -rf .cache/huggingface/download
+# a finished run never needs its snapshot (train.run deletes it after DONE.json)
+for d in $(find results/go_function -name DONE.json -printf '%h\n'); do rm -f "$d/resume.pt"; done
 ls results/go_function/gates/runs/
 echo SETUP DONE
