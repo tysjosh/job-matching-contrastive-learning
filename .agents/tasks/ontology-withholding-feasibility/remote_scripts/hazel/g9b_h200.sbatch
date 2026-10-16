@@ -23,7 +23,5 @@ if [ $rc -eq 0 ] || [ $rc -eq 3 ]; then
   $PY scripts/go_function/analyze.py --runs results/go_function/smoke/runs --out results/go_function/smoke/analysis --smoke
   cat results/go_function/smoke/smoke_report_esm2_650m.json
 fi
-unset HF_HUB_OFFLINE
-.venv/bin/hf upload olukotunjosh/cdcl-go-function-results results/go_function/smoke results/go_function/smoke_hazel_h200 \
-  --repo-type dataset --exclude "*.CLAIM" "*.tmp" --commit-message "G9b H200 $(date +%F_%H%M)" | tail -1
+# uploads run from the xfer node (upload_xfer.sbatch): GPU nodes have no outbound internet
 exit $rc
